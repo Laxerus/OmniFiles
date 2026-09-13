@@ -1,0 +1,107 @@
+name: Build OmniFiles APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".source/**"
+      - ".github/workflows/build-apk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout build payload
+        uses: actions/checkout@v4
+
+      - name: Reconstruct and verify OmniFiles source
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib
+
+          parts = [Path(f'.source/xz0{i}.b64').read_text(encoding='utf-8') for i in range(7)]
+          s = ''.join(parts)
+          # One historical chunk contains a stray '=' plus whitespace at its end.
+          # Remove chunk-local padding/whitespace, then restore canonical final padding.
+          s = ''.join(s.split()).replace('=', '')
+          s += '=' * (-len(s) % 4)
+          data = base64.b64decode(s, validate=True)
+          digest = hashlib.sha256(data).hexdigest()
+          expected = '2026b823767ffab4ad0fc42940e25a3e31087778a375f58caf06970bda3c655c'
+          print('source.tar.xz sha256:', digest)
+          if digest != expected:
+              raise SystemExit(f'Source archive checksum mismatch: {digest} != {expected}')
+          Path('source.tar.xz').write_bytes(data)
+          PY
+          tar -xJf source.tar.xz
+          test -f OmniFiles/app/build.gradle
+          test -f OmniFiles/scripts/source_sanity.py
+
+      - name: Fast source/resource sanity
+        working-directory: OmniFiles
+        run: python3 scripts/source_sanity.py
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 36 platform
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Unit tests
+        working-directory: OmniFiles
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest
+
+      - name: Android Lint
+        working-directory: OmniFiles
+        run: gradle --no-daemon --stacktrace :app:lintDebug
+
+      - name: Build debug APK
+        working-directory: OmniFiles
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Verify APK archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find OmniFiles/app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -type f | head -n 1)"
+          test -n "$APK"
+          unzip -t "$APK"
+          sha256sum "$APK" | tee OmniFiles-debug-apk.sha256
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniFiles-debug-apk
+          path: |
+            OmniFiles/app/build/outputs/apk/debug/*.apk
+            OmniFiles-debug-apk.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniFiles-lint-report
+          path: OmniFiles/app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore
+          retention-days: 14
