@@ -1,0 +1,1 @@
+Rebuild trigger after GitHub Actions permissions were enabled on 2026-09-14.
