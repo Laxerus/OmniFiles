@@ -27,6 +27,8 @@ En güncel debug APK, repository'nin `main` dalından Render build hattıyla ür
 - Kopyalamada mevcut kullanıcı dosyasının üzerine yazmama; isim çakışmasında güvenli yeni ad üretme.
 - Kopyaları önce gizli staging alanında tamamlama; başarıdan önce yarım hedef dosya/klasör göstermeme.
 - Kopyalanan her dosyada **boyut + SHA-256 içerik doğrulaması**; doğrulama başarısızsa staging çıktısını geri alma.
+- Ani kapanma veya süreç ölümü nedeniyle kalabilecek yeni nesil transfer staging öğelerini hedef klasörde sonraki aktarım öncesi **yaş + ad içi zaman damgası + gerçek mtime + canonical-path** kontrolleriyle güvenli biçimde temizleme.
+- Staging temizliğinde yalnız OmniFiles'ın `.omnifiles-transfer-v2-<zaman>-<token>` biçimini kabul etme; taze, eski-format veya bozuk/benzer isimli öğelere otomatik dokunmama.
 - Klasörün kendi altına kopyalanmasını/taşınmasını ve depolama kökünün tamamının yanlışlıkla transfer edilmesini engelleyen path politikaları.
 - Dosya/klasör adlarında yol ayırıcılarına ek olarak satır sonu ve kontrol karakterlerini reddederek yanıltıcı adları engelleme.
 - Büyük veya çok öğeli transferlerde ana UI thread'ini bloklamayan coroutine tabanlı dosya işlemleri ve işlem göstergesi.
@@ -58,6 +60,8 @@ OmniFiles, Android sandbox'ını atlatıyormuş gibi davranmaz. Kablosuz ADB kul
 
 Yerel kopyala/taşı katmanı canonical path doğrulamasından geçer. Transfer hedefinde sessiz overwrite yapılmaz; klasör kendi altına gönderilemez. Kopya önce aynı hedef klasörde gizli bir staging öğesine yazılır. Her dosyanın kaynak akışından hesaplanan SHA-256 değeri staging kopyasının tekrar okunmasıyla doğrulanır; ancak bundan sonra staging öğesi görünür hedef adına geçirilir. Kopya sırasında hata oluşursa bu işlem tarafından yeni oluşturulan kısmi staging öğeleri geri alınmaya çalışılır. Taşıma farklı dosya sistemi nedeniyle doğrudan rename kullanamazsa aynı doğrulanmış kopya akışına düşer ve hedef kopya doğrulanmadan eski konumu temizlemez.
 
+Yeni staging adları oluşturulma zamanını içerir. Sonraki kopyala/taşı işleminde hedef klasör taranırken ancak ad içindeki zaman damgası ve dosya sistemindeki değiştirilme zamanı varsayılan altı saatlik eşiği birlikte aşmışsa temizlik adayı olur. Aday ağacı silinmeden önce canonical/direct-entry politikasıyla tamamen doğrulanır; sembolik bağlantı veya güvenli alan dışına yönlenme görülürse otomatik temizleme yapılmaz.
+
 ADB pull akışı, mümkün olduğunda uzak dosyayı aynı parent dizininden transfer öncesi ve sonrası tekrar stat ederek boyut, değiştirilme zamanı ve mode bilgisini karşılaştırır. Dosya aktarım sırasında değişmiş veya kaybolmuşsa önizleme/dışa aktarma kopyası güvenilir kabul edilmez ve silinir.
 
 SHA-256 aracı seçilen belgeyi değiştirmez; dosyayı yalnızca `ContentResolver` üzerinden salt okunur akış olarak okur. Hash hesaplaması UI thread'i dışında yapılır ve ekran döndürmede tamamlanmış sonuç korunur.
@@ -83,7 +87,7 @@ Aktif GitHub Actions akışı doğrudan repository kökündeki güncel kaynak a�
 4. `:app:assembleDebug`
 5. APK ZIP bütünlük kontrolü ve SHA-256 çıktısı
 
-`FileOperationsTest`, klasör oluşturma/yeniden adlandırmaya ek olarak dosya kopyalama, binary içerik doğruluğu, staging commit temizliği, klasör ağacı kopyalama, isim çakışması, klasörün kendi içine transfer edilmesinin engellenmesi ve taşıma davranışını doğrular. `DigestUtilsTest`, bağımsız SHA-256 aracının bilinen test vektörünü ve binary byte dönüşümünü doğrular.
+`FileOperationsTest`, klasör oluşturma/yeniden adlandırmaya ek olarak dosya kopyalama, binary içerik doğruluğu, staging commit temizliği, stale staging kurtarma filtresi, taze staging koruması, klasör ağacı kopyalama, isim çakışması, klasörün kendi içine transfer edilmesinin engellenmesi ve taşıma davranışını doğrular. `DigestUtilsTest`, bağımsız SHA-256 aracının bilinen test vektörünü ve binary byte dönüşümünü doğrular.
 
 Render build hattı, GitHub-hosted runner erişilemediğinde aynı `main` kaynağından taşınabilir Android toolchain kurarak APK'yı üretir ve sabit indirme adresinde yayınlar. Render hattı da unit test, Android Lint ve APK assemble kapılarını geçmeden artifact yayınlamaz.
 
