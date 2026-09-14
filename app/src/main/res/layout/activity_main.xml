@@ -18,14 +18,14 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/home_title"
+            android:text="@string/settings_hub_title"
             android:textAppearance="?attr/textAppearanceHeadlineLarge" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="@string/home_subtitle"
+            android:text="@string/settings_hub_subtitle"
             android:textAppearance="?attr/textAppearanceBodyLarge" />
 
         <TextView
@@ -35,10 +35,18 @@
             android:layout_marginTop="8dp"
             android:textAppearance="?attr/textAppearanceLabelLarge" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/openFilesButton"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/back_to_files" />
+
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="16dp"
             app:cardCornerRadius="24dp">
 
             <LinearLayout
@@ -96,12 +104,12 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/openFilesButton"
-            style="@style/Widget.Material3.Button"
+            android:id="@+id/grantAccessButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/open_files" />
+            android:layout_marginTop="16dp"
+            android:text="@string/grant_all_files" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/storageAnalyzerButton"
@@ -126,14 +134,6 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="@string/checksum_tool" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/grantAccessButton"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/grant_all_files" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/adbButton"
