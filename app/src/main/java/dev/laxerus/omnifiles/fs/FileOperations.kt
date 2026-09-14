@@ -4,6 +4,8 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.ArrayDeque
 
+class TransferCancelledException : RuntimeException("Aktarım iptal edildi")
+
 object FileOperations {
     private const val MIN_FREE_SPACE_RESERVE_BYTES = 8L * 1024L * 1024L
     private const val MAX_FREE_SPACE_RESERVE_BYTES = 64L * 1024L * 1024L
@@ -46,7 +48,11 @@ object FileOperations {
         return destination.canonicalFile
     }
 
-    fun estimateTransferBytes(source: File, sharedRoot: File): Long {
+    fun estimateTransferBytes(
+        source: File,
+        sharedRoot: File,
+        isCancelled: (() -> Boolean)? = null
+    ): Long {
         val root = FilePathPolicy.canonical(sharedRoot)
         val safeSource = FilePathPolicy.requireDirectEntry(source, root)
         require(safeSource.exists()) { "Kaynak öğe artık mevcut değil" }
@@ -58,6 +64,7 @@ object FileOperations {
         pending.add(safeSource)
 
         while (pending.isNotEmpty()) {
+            checkCancelled(isCancelled)
             val current = FilePathPolicy.requireDirectEntry(pending.removeFirst(), root)
             require(current.exists()) { "Kaynak öğe tarama sırasında kayboldu: ${current.name}" }
             if (current.isFile) {
@@ -69,9 +76,11 @@ object FileOperations {
             require(visitedDirectories.add(canonicalPath)) { "Döngüsel klasör bağlantısı algılandı" }
             val children = current.listFiles() ?: error("Klasör okunamadı: ${current.name}")
             children.forEach { child ->
+                checkCancelled(isCancelled)
                 pending.addLast(FilePathPolicy.requireDirectEntry(child, root))
             }
         }
+        checkCancelled(isCancelled)
         return total
     }
 
@@ -102,16 +111,27 @@ object FileOperations {
         return removed
     }
 
-    fun copy(source: File, destinationDirectory: File, sharedRoot: File): File {
+    fun copy(
+        source: File,
+        destinationDirectory: File,
+        sharedRoot: File,
+        onProgress: ((Long, Long) -> Unit)? = null,
+        isCancelled: (() -> Boolean)? = null
+    ): File {
         val root = FilePathPolicy.canonical(sharedRoot)
         val safeSource = FilePathPolicy.requireDirectEntry(source, root)
         require(safeSource.exists()) { "Kaynak öğe artık mevcut değil" }
         require(safeSource.path != root.path) { "Depolama kökünün tamamı kopyalanamaz" }
+        checkCancelled(isCancelled)
 
         val safeDestinationDirectory = requireDestinationDirectory(destinationDirectory, root)
         cleanupStaleStaging(safeDestinationDirectory, root)
         requireNotInsideSource(safeSource, safeDestinationDirectory)
-        requireEnoughFreeSpace(safeSource, safeDestinationDirectory, root)
+        val requiredBytes = estimateTransferBytes(safeSource, root, isCancelled)
+        requireEnoughFreeSpace(requiredBytes, safeDestinationDirectory)
+        onProgress?.invoke(0L, requiredBytes)
+        checkCancelled(isCancelled)
+
         val preferredDestination = nextAvailableDestination(safeDestinationDirectory, safeSource)
         val staging = nextStagingDestination(safeDestinationDirectory)
         val created = mutableListOf<File>()
@@ -121,22 +141,35 @@ object FileOperations {
                 source = safeSource,
                 destination = staging,
                 allowedRoot = root,
-                created = created
+                created = created,
+                totalBytes = requiredBytes,
+                onProgress = onProgress,
+                isCancelled = isCancelled
             )
-            commitStagingCopy(staging, preferredDestination, safeDestinationDirectory, safeSource)
+            checkCancelled(isCancelled)
+            val committed = commitStagingCopy(staging, preferredDestination, safeDestinationDirectory, safeSource)
+            onProgress?.invoke(requiredBytes, requiredBytes)
+            committed
         } catch (error: Throwable) {
             rollbackCreated(created)
             throw error
         }
     }
 
-    fun move(source: File, destinationDirectory: File, sharedRoot: File): File {
+    fun move(
+        source: File,
+        destinationDirectory: File,
+        sharedRoot: File,
+        onProgress: ((Long, Long) -> Unit)? = null,
+        isCancelled: (() -> Boolean)? = null
+    ): File {
         val root = FilePathPolicy.canonical(sharedRoot)
         val safeSource = FilePathPolicy.requireMutableTarget(source, root)
         require(safeSource.exists()) { "Kaynak öğe artık mevcut değil" }
         val safeDestinationDirectory = requireDestinationDirectory(destinationDirectory, root)
         cleanupStaleStaging(safeDestinationDirectory, root)
         requireNotInsideSource(safeSource, safeDestinationDirectory)
+        checkCancelled(isCancelled)
 
         val sourceParent = safeSource.parentFile?.canonicalFile ?: error("Kaynak üst klasörü bulunamadı")
         require(sourceParent.path != safeDestinationDirectory.path) { "Öğe zaten bu klasörde" }
@@ -145,9 +178,17 @@ object FileOperations {
         require(!destination.exists()) { "Hedef klasörde aynı adda bir öğe zaten var" }
         FilePathPolicy.requireInside(destination, root)
 
-        if (safeSource.renameTo(destination)) return destination.canonicalFile
+        onProgress?.invoke(0L, 0L)
+        checkCancelled(isCancelled)
+        if (safeSource.renameTo(destination)) {
+            onProgress?.invoke(1L, 1L)
+            return destination.canonicalFile
+        }
 
-        requireEnoughFreeSpace(safeSource, safeDestinationDirectory, root)
+        val requiredBytes = estimateTransferBytes(safeSource, root, isCancelled)
+        requireEnoughFreeSpace(requiredBytes, safeDestinationDirectory)
+        onProgress?.invoke(0L, requiredBytes)
+        checkCancelled(isCancelled)
         val staging = nextStagingDestination(safeDestinationDirectory)
         val created = mutableListOf<File>()
         val committed = try {
@@ -155,10 +196,15 @@ object FileOperations {
                 source = safeSource,
                 destination = staging,
                 allowedRoot = root,
-                created = created
+                created = created,
+                totalBytes = requiredBytes,
+                onProgress = onProgress,
+                isCancelled = isCancelled
             )
+            checkCancelled(isCancelled)
             require(!destination.exists()) { "Hedef klasörde aynı adda bir öğe işlem sırasında oluşturuldu" }
             check(staging.renameTo(destination)) { "Doğrulanan geçici kopya hedefe taşınamadı" }
+            onProgress?.invoke(requiredBytes, requiredBytes)
             destination.canonicalFile
         } catch (error: Throwable) {
             rollbackCreated(created)
@@ -183,8 +229,7 @@ object FileOperations {
         ) { "Klasör kendi içine kopyalanamaz veya taşınamaz" }
     }
 
-    private fun requireEnoughFreeSpace(source: File, destinationDirectory: File, root: File) {
-        val requiredBytes = estimateTransferBytes(source, root)
+    private fun requireEnoughFreeSpace(requiredBytes: Long, destinationDirectory: File) {
         if (requiredBytes <= 0L) return
 
         val usableBytes = destinationDirectory.usableSpace
@@ -287,13 +332,18 @@ object FileOperations {
         source: File,
         destination: File,
         allowedRoot: File,
-        created: MutableList<File>
+        created: MutableList<File>,
+        totalBytes: Long,
+        onProgress: ((Long, Long) -> Unit)?,
+        isCancelled: (() -> Boolean)?
     ) {
         val pending = ArrayDeque<CopyTask>()
         val visitedDirectories = mutableSetOf<String>()
+        var copiedBytes = 0L
         pending.addLast(CopyTask(source, destination))
 
         while (pending.isNotEmpty()) {
+            checkCancelled(isCancelled)
             val task = pending.removeFirst()
             val safeSource = FilePathPolicy.requireDirectEntry(task.source, allowedRoot)
 
@@ -316,7 +366,15 @@ object FileOperations {
             require(!task.destination.exists()) { "Kopya hedefi zaten mevcut: ${task.destination.name}" }
 
             if (!safeSource.isDirectory) {
-                val sourceModifiedAt = copyFileVerified(safeSource, task.destination, created)
+                val sourceModifiedAt = copyFileVerified(
+                    source = safeSource,
+                    destination = task.destination,
+                    created = created,
+                    isCancelled = isCancelled
+                ) { delta ->
+                    copiedBytes = saturatingAdd(copiedBytes, delta)
+                    onProgress?.invoke(copiedBytes.coerceAtMost(totalBytes), totalBytes)
+                }
                 task.destination.setLastModified(sourceModifiedAt)
                 continue
             }
@@ -329,6 +387,7 @@ object FileOperations {
                 childNames = children.mapTo(mutableSetOf()) { it.name }
             )
 
+            checkCancelled(isCancelled)
             check(task.destination.mkdir()) { "Hedef klasör oluşturulamadı: ${task.destination.name}" }
             created += task.destination
             pending.addFirst(
@@ -340,14 +399,22 @@ object FileOperations {
                 )
             )
             for (index in children.indices.reversed()) {
+                checkCancelled(isCancelled)
                 val safeChild = FilePathPolicy.requireDirectEntry(children[index], allowedRoot)
                 pending.addFirst(CopyTask(safeChild, File(task.destination, safeChild.name)))
             }
         }
     }
 
-    private fun copyFileVerified(source: File, destination: File, created: MutableList<File>): Long {
+    private fun copyFileVerified(
+        source: File,
+        destination: File,
+        created: MutableList<File>,
+        isCancelled: (() -> Boolean)?,
+        onChunkCopied: (Long) -> Unit
+    ): Long {
         require(source.isFile) { "Kaynak normal bir dosya değil: ${source.name}" }
+        checkCancelled(isCancelled)
         val before = FileSnapshot(source.length(), source.lastModified())
         val sourceDigest = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(COPY_BUFFER_BYTES)
@@ -356,38 +423,44 @@ object FileOperations {
             created += destination
             source.inputStream().buffered(COPY_BUFFER_BYTES).use { input ->
                 while (true) {
+                    checkCancelled(isCancelled)
                     val read = input.read(buffer)
                     if (read < 0) break
                     if (read == 0) continue
                     sourceDigest.update(buffer, 0, read)
                     output.write(buffer, 0, read)
+                    onChunkCopied(read.toLong())
                 }
             }
             output.flush()
         }
 
+        checkCancelled(isCancelled)
         require(source.exists() && source.isFile) { "Kaynak dosya kopyalama sırasında kayboldu: ${source.name}" }
         val after = FileSnapshot(source.length(), source.lastModified())
         check(after == before) { "Kaynak dosya kopyalama sırasında değişti: ${source.name}" }
         check(destination.length() == before.length) { "Dosya kopyası boyut doğrulamasından geçmedi: ${source.name}" }
-        val copiedDigest = sha256(destination)
+        val copiedDigest = sha256(destination, isCancelled)
+        checkCancelled(isCancelled)
         check(sourceDigest.digest().contentEquals(copiedDigest)) {
             "Dosya kopyası SHA-256 doğrulamasından geçmedi: ${source.name}"
         }
         return before.modifiedAt
     }
 
-    private fun sha256(file: File): ByteArray {
+    private fun sha256(file: File, isCancelled: (() -> Boolean)?): ByteArray {
         val digest = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(COPY_BUFFER_BYTES)
         file.inputStream().buffered(COPY_BUFFER_BYTES).use { input ->
             while (true) {
+                checkCancelled(isCancelled)
                 val read = input.read(buffer)
                 if (read < 0) break
                 if (read == 0) continue
                 digest.update(buffer, 0, read)
             }
         }
+        checkCancelled(isCancelled)
         return digest.digest()
     }
 
@@ -406,6 +479,10 @@ object FileOperations {
                 "Kopya oluşturuldu ancak eski konum tamamen temizlenemedi; hedef kopya korundu"
             }
         }
+    }
+
+    private fun checkCancelled(isCancelled: (() -> Boolean)?) {
+        if (isCancelled?.invoke() == true) throw TransferCancelledException()
     }
 
     private fun saturatingAdd(left: Long, right: Long): Long {
