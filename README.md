@@ -10,6 +10,13 @@ Aktif geliştirme sürümü `0.8.0-dev` olarak sabit tutulur. Normal özellik ve
 
 Repository kökündeki normal Android/Gradle ağacı kaynak kodun tek güncel kaynağıdır. `.source/` klasörü yalnızca tarihsel kurtarma snapshot'ı olarak korunur ve aktif APK build'i tarafından kullanılmaz.
 
+## Güncel APK
+
+En güncel debug APK, repository'nin `main` dalından Render build hattıyla üretilir:
+
+- [OmniFiles-0.8.0-dev-debug.apk](https://omnifiles-apk.onrender.com/OmniFiles-0.8.0-dev-debug.apk)
+- [SHA-256](https://omnifiles-apk.onrender.com/OmniFiles-0.8.0-dev-debug.apk.sha256)
+
 ## Mevcut özellikler
 
 - Android 11+ için **Tüm dosyalara erişim** ayar akışı; eski Android sürümlerinde uygun legacy izin akışı.
@@ -42,9 +49,10 @@ SQLite düzenleme doğrudan kaynak üzerinde yapılmaz. Önce uygulama cache ala
 Gereksinimler:
 
 - JDK 17+
-- Android SDK 36
-- Android Gradle Plugin 8.10.1
-- Gradle 8.11.1
+- Android SDK 37.0
+- Android Build Tools 36.0.0
+- Android Gradle Plugin 9.1.1
+- Gradle 9.3.1
 - Kotlin 2.4.0
 
 Aktif GitHub Actions akışı doğrudan repository kökündeki güncel kaynak ağacını kullanır ve şu gate'leri uygular:
@@ -54,6 +62,8 @@ Aktif GitHub Actions akışı doğrudan repository kökündeki güncel kaynak a�
 3. `:app:lintDebug`
 4. `:app:assembleDebug`
 5. APK ZIP bütünlük kontrolü ve SHA-256 çıktısı
+
+Render build hattı, GitHub-hosted runner erişilemediğinde aynı `main` kaynağından taşınabilir Android toolchain kurarak APK'yı üretir ve sabit indirme adresinde yayınlar.
 
 `source_sanity.py`, aktif workflow'un eski `.source` snapshot'ını yeniden build kaynağı yapmasını özellikle hata kabul eder.
 
