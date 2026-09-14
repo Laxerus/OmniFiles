@@ -9,9 +9,15 @@ object FilePathPolicy {
 
     fun requireInside(target: File, allowedRoot: File): File {
         val root = canonical(allowedRoot)
-        val item = canonical(target)
+        val absolute = target.absoluteFile
+        val item = canonical(absolute)
         require(item.path == root.path || item.path.startsWith(root.path + File.separator)) {
             "İşlem izin verilen alanın dışında"
+        }
+        if (item.path != root.path && absolute.exists()) {
+            require(absolute.path == item.path) {
+                "Sembolik bağlantı veya dolaylı dosya yolu güvenli depolama işlemlerinde kullanılamaz"
+            }
         }
         return item
     }
@@ -20,8 +26,10 @@ object FilePathPolicy {
         val root = canonical(allowedRoot)
         val absolute = target.absoluteFile
         val item = requireInside(absolute, root)
-        require(absolute.path == item.path) {
-            "Sembolik bağlantı veya dolaylı dosya yolu bu işlem için kullanılamaz"
+        if (item.path != root.path) {
+            require(absolute.path == item.path) {
+                "Sembolik bağlantı veya dolaylı dosya yolu bu işlem için kullanılamaz"
+            }
         }
         return item
     }
