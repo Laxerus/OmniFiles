@@ -67,6 +67,36 @@ if workflow.is_file():
     if "gradle --no-daemon --stacktrace :app:assembleDebug" not in text:
         errors.append("build workflow must assemble the debug APK")
 
+file_operations = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt"
+if file_operations.is_file():
+    text = file_operations.read_text(encoding="utf-8")
+    for signature in ("fun copy(", "fun move(", "requireNotInsideSource", "rollbackCreated"):
+        if signature not in text:
+            errors.append(f"safe transfer primitive missing from FileOperations: {signature}")
+    if "overwrite = true" in text:
+        errors.append("file transfer must not silently overwrite existing user files")
+
+file_browser = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserActivity.kt"
+if file_browser.is_file():
+    text = file_browser.read_text(encoding="utf-8")
+    for token in ("TransferMode.COPY", "TransferMode.MOVE", "pastePendingTransfer", "STATE_CURRENT_PATH"):
+        if token not in text:
+            errors.append(f"file browser transfer/state wiring missing: {token}")
+
+browser_layout = ROOT / "app/src/main/res/layout/activity_file_browser.xml"
+if browser_layout.is_file():
+    text = browser_layout.read_text(encoding="utf-8")
+    for view_id in ("@+id/pasteButton", "@+id/cancelTransferButton", "@+id/operationProgress"):
+        if view_id not in text:
+            errors.append(f"file browser transfer control missing: {view_id}")
+
+workflow_render = ROOT / "scripts/render_build_apk.sh"
+if workflow_render.is_file():
+    text = workflow_render.read_text(encoding="utf-8")
+    for task in (":app:testDebugUnitTest", ":app:lintDebug", ":app:assembleDebug"):
+        if task not in text:
+            errors.append(f"Render APK pipeline missing gate: {task}")
+
 for path in ROOT.glob("app/src/main/java/**/*.kt"):
     text = path.read_text(encoding="utf-8")
     if "Runtime.getRuntime().exec" in text or "ProcessBuilder(\"su\"" in text:
