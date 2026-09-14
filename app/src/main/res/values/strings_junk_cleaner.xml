@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="junk_cleaner_title">Gereksiz Dosya Temizliği</string>
-    <string name="junk_cleaner_toolbar_subtitle">Güvenli tarama ve geri alınabilir temizlik</string>
+    <string name="junk_cleaner_toolbar_subtitle">Güvenli tarama ve kontrollü otomatik silme</string>
     <string name="junk_cleaner_header">Alan aç, dosyalarını koru</string>
     <string name="junk_cleaner_help">OmniFiles yalnız düşük riskli geçici artıkları tarar. Fotoğraf, video ve belgeleri gereksiz dosya olarak tahmin etmez.</string>
     <string name="junk_cleaner_idle">Tarama hazır</string>
     <string name="junk_cleaner_idle_hint">Eski geçici dosyalar, yarım indirmeler, metadata artıkları ve boş cache/temp klasörleri aranır.</string>
     <string name="junk_cleaner_scan">Gereksiz dosyaları tara</string>
     <string name="junk_cleaner_scanning">Depolama taranıyor…</string>
-    <string name="junk_cleaner_clean_now">Güvenli olanları otomatik temizle</string>
-    <string name="junk_cleaner_cleaning">Adaylar Çöp Kutusu’na taşınıyor…</string>
+    <string name="junk_cleaner_clean_now">Güvenli adayları otomatik sil</string>
+    <string name="junk_cleaner_cleaning">Adaylar tekrar doğrulanıp siliniyor…</string>
     <string name="junk_cleaner_open_trash">Çöp Kutusu’nu aç</string>
-    <string name="junk_cleaner_safety_note">Güvenlik: Android/ ve LOST.DIR tarama dışında tutulur. Temizlik kalıcı silme yapmaz; adayları OmniFiles Çöp Kutusu’na taşır.</string>
+    <string name="junk_cleaner_safety_note">Güvenlik: Android/ ve LOST.DIR tarama dışında tutulur. Fotoğraf, video ve belgeler adına bakılarak gereksiz sayılmaz. Klasörlerde recursive silme yapılmaz; yalnız gerçekten boş cache/temp klasörleri silinebilir.</string>
     <string name="junk_cleaner_storage_required">Temizlik taraması için önce tüm dosyalara erişim izni gerekli.</string>
     <string name="junk_cleaner_scan_summary">%1$d aday • %2$s temizlenebilir • %3$d öğe tarandı</string>
     <string name="junk_cleaner_clean_state">Güvenli temizlik adayı bulunamadı. Depolaman şu an temiz görünüyor.</string>
@@ -20,16 +20,16 @@
     <string name="junk_cleaner_more_items">…ve %1$d aday daha</string>
     <string name="junk_cleaner_scan_failed">Tarama tamamlanamadı.</string>
     <string name="junk_cleaner_scan_failed_hint">Depolama iznini ve erişilebilir alanları kontrol edip tekrar dene.</string>
-    <string name="junk_cleaner_confirm_title">Güvenli temizliği başlat?</string>
-    <string name="junk_cleaner_confirm_message">%1$d aday (%2$s) yeniden doğrulanacak ve uygun olanlar kalıcı silinmek yerine Çöp Kutusu’na taşınacak.</string>
-    <string name="junk_cleaner_done">%1$d öğe çöpe taşındı • %2$d başarısız • yaklaşık %3$s temizlendi</string>
+    <string name="junk_cleaner_confirm_title">Otomatik temizliği başlat?</string>
+    <string name="junk_cleaner_confirm_message">%1$d aday (%2$s) silme anında tekrar doğrulanacak. Taramadan sonra değişen öğeler atlanacak. Uygun adayların silinmesi geri alınamaz.</string>
+    <string name="junk_cleaner_done">%1$d öğe silindi • %2$d atlandı/başarısız • %3$s alan açıldı</string>
     <string name="junk_cleaner_clean_failed">Temizlik tamamlanamadı.</string>
     <string name="junk_kind_temp">Eski geçici dosya</string>
     <string name="junk_kind_partial">Yarım/eski indirme</string>
     <string name="junk_kind_metadata">Metadata artığı</string>
     <string name="junk_kind_empty_cache">Boş cache/temp klasörü</string>
     <string name="junk_kind_empty_log">Eski boş log</string>
-    <string name="settings_junk_cleaner_summary">Gereksiz dosyaları güvenli biçimde tara ve tek dokunuşla Çöp Kutusu’na taşı.</string>
+    <string name="settings_junk_cleaner_summary">Gereksiz dosyaları güvenli kurallarla tara ve doğrulanan adayları tek dokunuşla sil.</string>
     <string name="settings_junk_cleaner_needs_access">Temizlik için önce tüm dosyalara erişim gerekli.</string>
     <string name="toolbar_junk_cleaner">Gereksiz dosya temizliği</string>
 </resources>
