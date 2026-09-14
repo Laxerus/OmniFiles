@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.io.File
+import java.nio.file.Files
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.createTempFile
 
@@ -15,6 +16,7 @@ class FilePathPolicyTest {
             child.parentFile!!.mkdirs()
             child.writeText("x")
             assertEquals(child.canonicalPath, FilePathPolicy.requireInside(child, root).canonicalPath)
+            assertEquals(child.canonicalPath, FilePathPolicy.requireDirectEntry(child, root).canonicalPath)
         } finally {
             root.deleteRecursively()
         }
@@ -30,6 +32,37 @@ class FilePathPolicyTest {
         } finally {
             root.deleteRecursively()
             outside.delete()
+        }
+    }
+
+    @Test fun directEntryRejectsDotDotAlias() {
+        val root = createTempDirectory("omnifiles-direct-").toFile()
+        try {
+            val folder = File(root, "folder").apply { mkdir() }
+            val target = File(root, "target.txt").apply { writeText("x") }
+            val alias = File(folder, "../target.txt")
+            assertEquals(target.canonicalPath, FilePathPolicy.requireInside(alias, root).canonicalPath)
+            assertThrows(IllegalArgumentException::class.java) {
+                FilePathPolicy.requireDirectEntry(alias, root)
+            }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun mutableTargetRejectsSymbolicLink() {
+        val root = createTempDirectory("omnifiles-link-").toFile()
+        try {
+            val target = File(root, "target.txt").apply { writeText("payload") }
+            val link = File(root, "link.txt")
+            Files.createSymbolicLink(link.toPath(), target.toPath())
+
+            assertEquals(target.canonicalPath, FilePathPolicy.requireInside(link, root).canonicalPath)
+            assertThrows(IllegalArgumentException::class.java) {
+                FilePathPolicy.requireMutableTarget(link, root)
+            }
+        } finally {
+            root.deleteRecursively()
         }
     }
 
