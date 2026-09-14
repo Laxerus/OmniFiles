@@ -1,14 +1,38 @@
-name: Actions Smoke Test
+name: Actions Runner Probe
 
 on:
   push:
     branches:
       - main
+    paths:
+      - ".github/workflows/smoke.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  smoke:
-    runs-on: ubuntu-latest
+  ubuntu-24:
+    runs-on: ubuntu-24.04
     steps:
-      - name: Smoke
-        run: echo "GitHub Actions runner is available"
+      - name: Runner probe
+        run: |
+          echo "runner=ubuntu-24.04"
+          uname -a
+
+  ubuntu-22:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Runner probe
+        run: |
+          echo "runner=ubuntu-22.04"
+          uname -a
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Runner probe
+        shell: pwsh
+        run: |
+          Write-Host "runner=windows-latest"
+          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsArchitecture
