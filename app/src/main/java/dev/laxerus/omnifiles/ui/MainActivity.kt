@@ -3,11 +3,13 @@ package dev.laxerus.omnifiles.ui
 import android.content.Intent
 import android.os.Bundle
 import android.os.StatFs
+import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import dev.laxerus.omnifiles.BuildConfig
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.AccessSnapshot
 import dev.laxerus.omnifiles.access.StorageAccessController
+import dev.laxerus.omnifiles.access.SystemSettingsNavigator
 import dev.laxerus.omnifiles.adb.AdbSessionManager
 import dev.laxerus.omnifiles.databinding.ActivityMainBinding
 import dev.laxerus.omnifiles.fs.TrashManager
@@ -28,16 +30,46 @@ class MainActivity : OmniActivity() {
         setContentView(binding.root)
         applySystemBarInsets(binding.root)
 
+        binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
+        binding.toolbar.setNavigationOnClickListener { finish() }
         binding.versionText.text = getString(R.string.version_label, BuildConfig.VERSION_NAME)
-        binding.openFilesButton.setOnClickListener { finish() }
-        binding.storageAnalyzerButton.setOnClickListener { startActivity(Intent(this, StorageAnalyzerActivity::class.java)) }
-        binding.trashButton.setOnClickListener { startActivity(Intent(this, TrashActivity::class.java)) }
-        binding.checksumButton.setOnClickListener { startActivity(Intent(this, ChecksumActivity::class.java)) }
-        binding.grantAccessButton.setOnClickListener { StorageAccessController.requestSharedStorageAccess(this) }
-        binding.adbButton.setOnClickListener { startActivity(Intent(this, AdbPairingActivity::class.java)) }
-        binding.adbFilesButton.setOnClickListener { startActivity(Intent(this, AdbBrowserActivity::class.java)) }
-        binding.saveScoutButton.setOnClickListener { startActivity(Intent(this, SaveScoutActivity::class.java)) }
-        binding.sqliteStudioButton.setOnClickListener { startActivity(Intent(this, SqliteStudioActivity::class.java)) }
+
+        binding.grantAccessButton.setOnClickListener {
+            if (!StorageAccessController.requestSharedStorageAccess(this)) {
+                Toast.makeText(this, R.string.settings_open_failed, Toast.LENGTH_LONG).show()
+            }
+        }
+        binding.developerSettingsButton.setOnClickListener {
+            openSystemSettings(SystemSettingsNavigator.Destination.DEVELOPER_OPTIONS)
+        }
+        binding.wifiSettingsButton.setOnClickListener {
+            openSystemSettings(SystemSettingsNavigator.Destination.WIFI)
+        }
+        binding.appDetailsButton.setOnClickListener {
+            openSystemSettings(SystemSettingsNavigator.Destination.APP_DETAILS)
+        }
+
+        binding.storageAnalyzerButton.setOnClickListener {
+            startActivity(Intent(this, StorageAnalyzerActivity::class.java))
+        }
+        binding.trashButton.setOnClickListener {
+            startActivity(Intent(this, TrashActivity::class.java))
+        }
+        binding.checksumButton.setOnClickListener {
+            startActivity(Intent(this, ChecksumActivity::class.java))
+        }
+        binding.adbButton.setOnClickListener {
+            startActivity(Intent(this, AdbPairingActivity::class.java))
+        }
+        binding.adbFilesButton.setOnClickListener {
+            startActivity(Intent(this, AdbBrowserActivity::class.java))
+        }
+        binding.saveScoutButton.setOnClickListener {
+            startActivity(Intent(this, SaveScoutActivity::class.java))
+        }
+        binding.sqliteStudioButton.setOnClickListener {
+            startActivity(Intent(this, SqliteStudioActivity::class.java))
+        }
     }
 
     override fun onResume() {
@@ -47,12 +79,23 @@ class MainActivity : OmniActivity() {
         renderTrashCount()
     }
 
+    private fun openSystemSettings(destination: SystemSettingsNavigator.Destination) {
+        if (!SystemSettingsNavigator.open(this, destination)) {
+            Toast.makeText(this, R.string.settings_open_failed, Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun renderStatus() {
         val state = AccessSnapshot.read(this)
-        binding.storageStatus.text = "${getString(R.string.direct_storage)}: ${if (state.sharedStorage) "Hazır" else "İzin gerekli"}"
-        binding.rootStatus.text = "${getString(R.string.root_status)}: ${if (state.rootBinaryPresent) "Algılandı" else "Yok / bilinmiyor"}"
-        binding.grantAccessButton.isEnabled = !state.sharedStorage
-        binding.grantAccessButton.setText(if (state.sharedStorage) R.string.storage_access_ready else R.string.grant_all_files)
+        val storageState = getString(
+            if (state.sharedStorage) R.string.settings_status_ready else R.string.settings_status_attention
+        )
+        val rootState = getString(
+            if (state.rootBinaryPresent) R.string.settings_status_detected else R.string.settings_status_unknown
+        )
+        binding.storageStatus.text = "${getString(R.string.direct_storage)}: $storageState"
+        binding.rootStatus.text = "${getString(R.string.root_status)}: $rootState"
+        binding.grantAccessButton.setText(R.string.settings_storage_access_open)
         binding.storageAnalyzerButton.isEnabled = state.sharedStorage
         binding.adbFilesButton.isEnabled = state.adbEndpointConfigured
         binding.saveScoutButton.isEnabled = state.adbEndpointConfigured
