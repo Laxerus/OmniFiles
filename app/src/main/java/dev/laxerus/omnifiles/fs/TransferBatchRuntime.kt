@@ -87,7 +87,6 @@ object TransferBatchRuntime {
             if (active.id != id || active.phase == Phase.FINISHED) return
             active.copy(
                 totalBytes = totalBytes.coerceAtLeast(0L),
-                preparedBytes = active.preparedBytes.coerceAtMost(totalBytes.coerceAtLeast(active.preparedBytes)),
                 cancelRequested = cancelledId == id
             ).also { current = it }
         }
