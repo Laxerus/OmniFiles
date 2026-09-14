@@ -1,6 +1,9 @@
 package dev.laxerus.omnifiles.ui
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -12,6 +15,7 @@ import androidx.core.content.FileProvider
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.adb.AdbRemoteEntry
 import dev.laxerus.omnifiles.adb.AdbSessionManager
@@ -21,6 +25,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.DateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
@@ -82,10 +88,13 @@ class AdbBrowserActivity : OmniActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = navigateUpOrFinish()
         })
-        adapter = AdbFileListAdapter(::openEntry, ::exportEntry)
+        adapter = AdbFileListAdapter(::openEntry, ::handleLongPress, ::showEntryActions)
         binding.list.layoutManager = LinearLayoutManager(this)
         binding.list.adapter = adapter
         binding.newFolderButton.visibility = View.GONE
+        binding.favoriteButton.visibility = View.GONE
+        binding.favoritesButton.visibility = View.GONE
+        binding.selectionBar.visibility = View.GONE
         binding.transferText.visibility = View.GONE
         binding.pasteButton.visibility = View.GONE
         binding.cancelTransferButton.visibility = View.GONE
@@ -233,6 +242,69 @@ class AdbBrowserActivity : OmniActivity() {
         }
     }
 
+    private fun handleLongPress(entry: AdbRemoteEntry) {
+        if (loading) return
+        if (!entry.isDirectory && !entry.isSymlink) exportEntry(entry) else showEntryActions(entry)
+    }
+
+    private fun showEntryActions(entry: AdbRemoteEntry) {
+        if (loading) return
+        val actions = buildList {
+            add(R.string.details)
+            add(R.string.copy_path)
+            if (!entry.isDirectory && !entry.isSymlink) add(R.string.export_file)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(entry.name.ifBlank { entry.path })
+            .setItems(actions.map(::getString).toTypedArray()) { _, which ->
+                when (actions[which]) {
+                    R.string.details -> showEntryDetails(entry)
+                    R.string.copy_path -> copyRemotePath(entry)
+                    R.string.export_file -> exportEntry(entry)
+                }
+            }
+            .show()
+    }
+
+    private fun showEntryDetails(entry: AdbRemoteEntry) {
+        val type = when {
+            entry.isDirectory -> "Klasör"
+            entry.isSymlink -> "Sembolik bağlantı"
+            else -> MimeTypeMap.getSingleton()
+                .getMimeTypeFromExtension(entry.name.substringAfterLast('.', "").lowercase(Locale.ROOT))
+                ?: "Dosya"
+        }
+        val lines = buildList {
+            add(getString(R.string.detail_type, type))
+            if (!entry.isDirectory) add(getString(R.string.detail_size, formatBytes(entry.size.coerceAtLeast(0L))))
+            add(
+                getString(
+                    R.string.detail_modified,
+                    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                        .format(Date(entry.modifiedAtMillis))
+                )
+            )
+            add(getString(R.string.adb_mode, String.format(Locale.ROOT, "%04o", entry.mode and 0xFFF)))
+            add(getString(R.string.detail_path, entry.path))
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(entry.name.ifBlank { entry.path })
+            .setMessage(lines.joinToString("\n"))
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    private fun copyRemotePath(entry: AdbRemoteEntry) {
+        val safePath = runCatching { RemotePathPolicy.normalizeAbsolute(entry.path) }
+            .getOrElse {
+                Toast.makeText(this, "ADB yolu doğrulanamadı.", Toast.LENGTH_LONG).show()
+                return
+            }
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("OmniFiles ADB path", safePath))
+        Toast.makeText(this, R.string.path_copied, Toast.LENGTH_SHORT).show()
+    }
+
     private fun exportEntry(entry: AdbRemoteEntry) {
         if (entry.isDirectory || entry.isSymlink || loading) return
         setLoading(true)
@@ -285,6 +357,7 @@ class AdbBrowserActivity : OmniActivity() {
         val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase(Locale.ROOT)) ?: "application/octet-stream"
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mime)
+            clipData = ClipData.newUri(contentResolver, file.name, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         try {
@@ -313,6 +386,18 @@ class AdbBrowserActivity : OmniActivity() {
 
     private fun sanitize(name: String): String =
         name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(96).ifBlank { "preview.bin" }
+
+    private fun formatBytes(bytes: Long): String {
+        if (bytes < 1024L) return "$bytes B"
+        val units = arrayOf("KB", "MB", "GB", "TB")
+        var value = bytes.toDouble()
+        var index = -1
+        while (value >= 1024.0 && index < units.lastIndex) {
+            value /= 1024.0
+            index++
+        }
+        return "%.1f %s".format(Locale.ROOT, value, units[index])
+    }
 
     override fun onDestroy() {
         if (!isChangingConfigurations) {
