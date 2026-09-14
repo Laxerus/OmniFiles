@@ -18,4 +18,11 @@
     <string name="storage_analyzer_largest_folders">En büyük klasörler</string>
     <string name="storage_analyzer_none">Gösterilecek sonuç yok.</string>
     <string name="storage_analyzer_entry_meta">%1$s • %2$s</string>
+    <string name="storage_analyzer_entry_action_hint">%1$s, %2$s. İşlemler için dokun; yolu kopyalamak için uzun bas.</string>
+    <string name="storage_analyzer_open_file">Dosyayı aç</string>
+    <string name="storage_analyzer_sha256">SHA-256 hesapla</string>
+    <string name="storage_analyzer_type_folder">Klasör</string>
+    <string name="storage_analyzer_entry_stale">Bu öğe taramadan sonra değişmiş, taşınmış veya artık güvenli biçimde erişilebilir değil. Yeniden tara.</string>
+    <string name="storage_analyzer_no_viewer">Bu dosya türünü açabilecek uygulama bulunamadı.</string>
+    <string name="storage_analyzer_share_failed">Paylaşım ekranı açılamadı.</string>
 </resources>
