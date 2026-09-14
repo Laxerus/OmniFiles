@@ -6,10 +6,11 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import kotlin.io.path.createTempDirectory
 
 class FileOperationsTest {
     @Test fun createsDirectoryInsideRoot() {
-        val root = createTempDir(prefix = "omnifiles-ops-")
+        val root = createTempDirectory("omnifiles-ops-").toFile()
         try {
             val created = FileOperations.createDirectory(root, "Yeni Klasor", root)
             assertTrue(created.isDirectory)
@@ -20,7 +21,7 @@ class FileOperationsTest {
     }
 
     @Test fun renamesFileWithoutLeavingParent() {
-        val root = createTempDir(prefix = "omnifiles-ops-")
+        val root = createTempDirectory("omnifiles-ops-").toFile()
         try {
             val source = File(root, "old.txt").apply { writeText("data") }
             val renamed = FileOperations.rename(source, "new.txt", root)
@@ -33,7 +34,7 @@ class FileOperationsTest {
     }
 
     @Test fun rejectsTraversalAndCollisions() {
-        val root = createTempDir(prefix = "omnifiles-ops-")
+        val root = createTempDirectory("omnifiles-ops-").toFile()
         try {
             File(root, "exists").mkdir()
             assertThrows(IllegalArgumentException::class.java) {
@@ -48,7 +49,7 @@ class FileOperationsTest {
     }
 
     @Test fun copiesFilesWithoutReplacingExistingNames() {
-        val root = createTempDir(prefix = "omnifiles-copy-")
+        val root = createTempDirectory("omnifiles-copy-").toFile()
         try {
             val source = File(root, "save.dat").apply { writeText("slot-a") }
             val destination = File(root, "Backup").apply { mkdir() }
@@ -67,7 +68,7 @@ class FileOperationsTest {
     }
 
     @Test fun copiesDirectoryTreesAndKeepsSource() {
-        val root = createTempDir(prefix = "omnifiles-copy-tree-")
+        val root = createTempDirectory("omnifiles-copy-tree-").toFile()
         try {
             val source = File(root, "World").apply { mkdir() }
             File(source, "level.dat").writeText("world-data")
@@ -86,7 +87,7 @@ class FileOperationsTest {
     }
 
     @Test fun rejectsDirectoryTransferIntoItself() {
-        val root = createTempDir(prefix = "omnifiles-cycle-")
+        val root = createTempDirectory("omnifiles-cycle-").toFile()
         try {
             val source = File(root, "Folder").apply { mkdir() }
             val child = File(source, "Child").apply { mkdir() }
@@ -103,7 +104,7 @@ class FileOperationsTest {
     }
 
     @Test fun movesFileToAnotherDirectory() {
-        val root = createTempDir(prefix = "omnifiles-move-")
+        val root = createTempDirectory("omnifiles-move-").toFile()
         try {
             val source = File(root, "move.txt").apply { writeText("payload") }
             val destination = File(root, "Target").apply { mkdir() }
