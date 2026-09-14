@@ -78,7 +78,18 @@ require(
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbPairingActivity.kt",
+    "binding.settingsButton.setOnClickListener",
+    "binding.wifiSettingsButton.setOnClickListener",
     "SystemSettingsNavigator.Destination.DEVELOPER_OPTIONS",
+    "SystemSettingsNavigator.Destination.WIFI",
+)
+require(
+    "app/src/main/res/layout/activity_adb_pairing.xml",
+    '@+id/settingsButton',
+    '@+id/wifiSettingsButton',
+    '@string/settings_developer_open',
+    '@string/settings_wifi_open',
+    'app:cardCornerRadius="24dp"',
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/MainActivity.kt",
