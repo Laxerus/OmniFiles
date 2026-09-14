@@ -33,10 +33,77 @@ class MainActivity : OmniActivity() {
         binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
         binding.toolbar.setNavigationOnClickListener { finish() }
         binding.versionText.text = BuildConfig.VERSION_NAME
+        bindActionCards()
+        bindActions()
+    }
 
-        binding.storageAccessCard.setOnClickListener {
-            openStorageAccessSettings()
-        }
+    override fun onResume() {
+        super.onResume()
+        renderStatus()
+        renderStorageUsage()
+        renderTrashCount()
+    }
+
+    private fun bindActionCards() {
+        binding.storageAccessCard.bind(
+            R.string.settings_storage_access_title,
+            R.string.settings_storage_access_summary,
+            R.drawable.ic_security_24,
+        )
+        binding.developerSettingsCard.bind(
+            R.string.settings_developer_title,
+            R.string.settings_developer_summary,
+            R.drawable.ic_code_24,
+        )
+        binding.wifiSettingsCard.bind(
+            R.string.settings_wifi_title,
+            R.string.settings_wifi_summary,
+            R.drawable.ic_wifi_24,
+        )
+        binding.appDetailsCard.bind(
+            R.string.settings_app_details_title,
+            R.string.settings_app_details_summary,
+            R.drawable.ic_info_24,
+        )
+        binding.storageAnalyzerButton.bind(
+            R.string.storage_analyzer,
+            R.string.settings_analyzer_summary,
+            R.drawable.ic_storage_24,
+        )
+        binding.trashButton.bind(
+            R.string.trash_bin,
+            R.string.settings_trash_summary,
+            R.drawable.ic_delete_24,
+        )
+        binding.checksumButton.bind(
+            R.string.checksum_tool,
+            R.string.settings_checksum_summary,
+            R.drawable.ic_hash_24,
+        )
+        binding.adbCard.bind(
+            R.string.wireless_debugging,
+            R.string.settings_adb_setup_summary,
+            R.drawable.ic_wifi_24,
+        )
+        binding.adbFilesCard.bind(
+            R.string.adb_browse,
+            R.string.settings_adb_browser_summary,
+            R.drawable.ic_storage_24,
+        )
+        binding.saveScoutCard.bind(
+            R.string.save_scout,
+            R.string.settings_save_scout_summary,
+            R.drawable.ic_search_24,
+        )
+        binding.sqliteStudioCard.bind(
+            R.string.sqlite_studio,
+            R.string.settings_sqlite_summary,
+            R.drawable.ic_database_24,
+        )
+    }
+
+    private fun bindActions() {
+        binding.storageAccessCard.setOnClickListener { openStorageAccessSettings() }
         binding.developerSettingsCard.setOnClickListener {
             openSystemSettings(SystemSettingsNavigator.Destination.DEVELOPER_OPTIONS)
         }
@@ -47,7 +114,7 @@ class MainActivity : OmniActivity() {
             openSystemSettings(SystemSettingsNavigator.Destination.APP_DETAILS)
         }
 
-        binding.storageAnalyzerCard.setOnClickListener {
+        binding.storageAnalyzerButton.setOnClickListener {
             if (StorageAccessController.hasSharedStorageAccess(this)) {
                 startActivity(Intent(this, StorageAnalyzerActivity::class.java))
             } else {
@@ -55,10 +122,10 @@ class MainActivity : OmniActivity() {
                 openStorageAccessSettings()
             }
         }
-        binding.trashCard.setOnClickListener {
+        binding.trashButton.setOnClickListener {
             startActivity(Intent(this, TrashActivity::class.java))
         }
-        binding.checksumCard.setOnClickListener {
+        binding.checksumButton.setOnClickListener {
             startActivity(Intent(this, ChecksumActivity::class.java))
         }
         binding.adbCard.setOnClickListener {
@@ -73,13 +140,6 @@ class MainActivity : OmniActivity() {
         binding.sqliteStudioCard.setOnClickListener {
             startActivity(Intent(this, SqliteStudioActivity::class.java))
         }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        renderStatus()
-        renderStorageUsage()
-        renderTrashCount()
     }
 
     private fun openStorageAccessSettings() {
@@ -110,35 +170,30 @@ class MainActivity : OmniActivity() {
             if (state.sharedStorage) R.string.settings_status_storage_ready
             else R.string.settings_status_storage_required
         )
+        binding.storageStatusChip.contentDescription = getString(
+            if (state.sharedStorage) R.string.storage_access_ready
+            else R.string.settings_status_attention
+        )
         binding.rootStatusChip.setText(
             if (state.rootBinaryPresent) R.string.settings_status_root_detected
             else R.string.settings_status_root_unknown
         )
-        binding.storageAccessSubtitle.setText(
+        binding.storageAccessCard.setSummary(
             if (state.sharedStorage) R.string.settings_storage_access_ready_summary
             else R.string.settings_storage_access_required_summary
         )
-        binding.storageAnalyzerSubtitle.setText(
+        binding.storageAnalyzerButton.setSummary(
             if (state.sharedStorage) R.string.settings_analyzer_summary
             else R.string.settings_analyzer_needs_access
         )
-        binding.adbFilesSubtitle.setText(
+        binding.adbFilesCard.setSummary(
             if (state.adbEndpointConfigured) R.string.settings_adb_browser_summary
             else R.string.settings_adb_browser_needs_setup
         )
-        binding.saveScoutSubtitle.setText(
+        binding.saveScoutCard.setSummary(
             if (state.adbEndpointConfigured) R.string.settings_save_scout_summary
             else R.string.settings_save_scout_needs_setup
         )
-
-        binding.storageAccessCard.contentDescription =
-            "${getString(R.string.settings_storage_access_title)}. ${binding.storageAccessSubtitle.text}"
-        binding.storageAnalyzerCard.contentDescription =
-            "${getString(R.string.storage_analyzer)}. ${binding.storageAnalyzerSubtitle.text}"
-        binding.adbFilesCard.contentDescription =
-            "${getString(R.string.adb_browse)}. ${binding.adbFilesSubtitle.text}"
-        binding.saveScoutCard.contentDescription =
-            "${getString(R.string.save_scout)}. ${binding.saveScoutSubtitle.text}"
 
         if (state.adbEndpointConfigured) {
             binding.adbStatusChip.setText(R.string.settings_status_adb_checking)
@@ -200,9 +255,7 @@ class MainActivity : OmniActivity() {
                 withContext(Dispatchers.IO) { TrashManager(this@MainActivity).count() }
             }.getOrNull() ?: return@launch
             if (generation != trashCountGeneration) return@launch
-            binding.trashSubtitle.text = getString(R.string.settings_trash_count_summary, count)
-            binding.trashCard.contentDescription =
-                "${getString(R.string.trash_bin)}. ${binding.trashSubtitle.text}"
+            binding.trashButton.setSummary(getString(R.string.settings_trash_count_summary, count))
         }
     }
 
@@ -222,6 +275,6 @@ class MainActivity : OmniActivity() {
         val total: Long,
         val used: Long,
         val free: Long,
-        val percent: Int
+        val percent: Int,
     )
 }
