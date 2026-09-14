@@ -7,6 +7,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.util.ArrayDeque
 import kotlin.io.path.createTempDirectory
 
 class FileOperationsTest {
@@ -106,6 +107,7 @@ class FileOperationsTest {
 
             assertArrayEquals(payload, copied.readBytes())
             assertEquals("payload.bin", copied.name)
+            assertEquals(source.lastModified(), copied.lastModified())
             assertNoTransferStaging(destination)
         } finally {
             root.deleteRecursively()
@@ -147,6 +149,28 @@ class FileOperationsTest {
             assertNoTransferStaging(destination)
         } finally {
             root.deleteRecursively()
+        }
+    }
+
+    @Test fun copiesVeryDeepDirectoryTreeWithoutRecursiveTraversal() {
+        val root = createTempDirectory("omnifiles-deep-copy-").toFile()
+        try {
+            val source = File(root, "Deep").apply { mkdir() }
+            var cursor = source
+            repeat(1200) {
+                cursor = File(cursor, "d").apply { check(mkdir()) }
+            }
+            File(cursor, "leaf.txt").writeText("deep-payload")
+            val destination = File(root, "Backups").apply { mkdir() }
+
+            val copied = FileOperations.copy(source, destination, root)
+            var copiedCursor = copied
+            repeat(1200) { copiedCursor = File(copiedCursor, "d") }
+
+            assertEquals("deep-payload", File(copiedCursor, "leaf.txt").readText())
+            assertNoTransferStaging(destination)
+        } finally {
+            deleteTreeIterative(root)
         }
     }
 
@@ -249,5 +273,18 @@ class FileOperationsTest {
         assertTrue(
             directory.listFiles().orEmpty().none { it.name.startsWith(".omnifiles-transfer-") }
         )
+    }
+
+    private fun deleteTreeIterative(root: File) {
+        if (!root.exists()) return
+        val pending = ArrayDeque<File>()
+        val visited = mutableListOf<File>()
+        pending.add(root)
+        while (pending.isNotEmpty()) {
+            val current = pending.removeFirst()
+            visited += current
+            if (current.isDirectory) current.listFiles().orEmpty().forEach(pending::addLast)
+        }
+        visited.asReversed().forEach { it.delete() }
     }
 }
