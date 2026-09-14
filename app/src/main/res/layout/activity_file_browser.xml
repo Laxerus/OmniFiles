@@ -97,6 +97,16 @@
         </LinearLayout>
     </HorizontalScrollView>
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/newFolderButton"
+        style="@style/Widget.Material3.Button.TonalButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="8dp"
+        android:text="@string/new_folder" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/list"
         android:layout_width="match_parent"
