@@ -30,6 +30,8 @@ import java.util.Locale
 
 class FileBrowserActivity : OmniActivity() {
     private enum class SortMode { NAME, DATE, SIZE }
+    private enum class TransferMode { COPY, MOVE }
+    private data class PendingTransfer(val sourcePath: String, val mode: TransferMode)
 
     private lateinit var binding: ActivityFileBrowserBinding
     private lateinit var adapter: FileListAdapter
@@ -39,12 +41,21 @@ class FileBrowserActivity : OmniActivity() {
     private var sortMode = SortMode.NAME
     private var showHidden = false
     private var loadGeneration = 0
+    private var pendingTransfer: PendingTransfer? = null
+    private var operationBusy = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityFileBrowserBinding.inflate(layoutInflater)
         setContentView(binding.root)
         applySystemBarInsets(binding.root)
+
+        val restoredPath = savedInstanceState?.getString(STATE_TRANSFER_PATH)
+        val restoredMode = savedInstanceState?.getString(STATE_TRANSFER_MODE)
+            ?.let { runCatching { TransferMode.valueOf(it) }.getOrNull() }
+        if (!restoredPath.isNullOrBlank() && restoredMode != null) {
+            pendingTransfer = PendingTransfer(restoredPath, restoredMode)
+        }
 
         binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
         binding.toolbar.setNavigationOnClickListener { navigateUpOrFinish() }
@@ -56,6 +67,8 @@ class FileBrowserActivity : OmniActivity() {
         binding.list.layoutManager = LinearLayoutManager(this)
         binding.list.adapter = adapter
         binding.newFolderButton.setOnClickListener { showCreateFolderDialog() }
+        binding.pasteButton.setOnClickListener { pastePendingTransfer() }
+        binding.cancelTransferButton.setOnClickListener { clearPendingTransfer() }
 
         binding.searchInput.doAfterTextChanged { renderEntries() }
         binding.hiddenSwitch.setOnCheckedChangeListener { _, checked ->
@@ -71,12 +84,26 @@ class FileBrowserActivity : OmniActivity() {
             }
             renderEntries()
         }
+        updateTransferUi()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        pendingTransfer?.let {
+            outState.putString(STATE_TRANSFER_PATH, it.sourcePath)
+            outState.putString(STATE_TRANSFER_MODE, it.mode.name)
+        }
+        super.onSaveInstanceState(outState)
     }
 
     override fun onResume() {
         super.onResume()
         val hasAccess = StorageAccessController.hasSharedStorageAccess(this)
-        binding.newFolderButton.isEnabled = hasAccess
+        val pending = pendingTransfer
+        if (pending != null && !File(pending.sourcePath).exists()) {
+            pendingTransfer = null
+            Toast.makeText(this, R.string.transfer_missing, Toast.LENGTH_LONG).show()
+        }
+        updateTransferUi()
         if (hasAccess) {
             load(currentDir)
         } else {
@@ -89,6 +116,7 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     private fun navigateUpOrFinish() {
+        if (operationBusy) return
         if (currentDir.canonicalPath == sharedRoot.path) finish()
         else currentDir.parentFile?.let(::load) ?: finish()
     }
@@ -160,6 +188,7 @@ class FileBrowserActivity : OmniActivity() {
     private fun isHidden(file: File): Boolean = file.name.startsWith('.') || file.isHidden
 
     private fun openEntry(file: File) {
+        if (operationBusy) return
         val safe = runCatching { FilePathPolicy.requireInside(file, sharedRoot) }
             .getOrElse {
                 Toast.makeText(this, "Güvenli depolama alanının dışına yönlenen öğe engellendi.", Toast.LENGTH_LONG).show()
@@ -189,17 +218,21 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     private fun showEntryActions(file: File) {
+        if (operationBusy) return
         val safe = runCatching { FilePathPolicy.requireInside(file, sharedRoot) }
             .getOrElse {
                 Toast.makeText(this, it.message ?: "Öğe güvenli alanın dışında", Toast.LENGTH_LONG).show()
                 return
             }
+        val mutable = runCatching { FilePathPolicy.requireMutableTarget(safe, sharedRoot) }.isSuccess
 
         val actions = buildList {
             if (safe.isFile) add(R.string.share)
-            add(R.string.rename)
+            add(R.string.copy)
+            if (mutable) add(R.string.move)
+            if (mutable) add(R.string.rename)
             add(R.string.copy_path)
-            add(R.string.move_to_trash)
+            if (mutable) add(R.string.move_to_trash)
         }
         val labels = actions.map(::getString).toTypedArray()
         MaterialAlertDialogBuilder(this)
@@ -207,12 +240,99 @@ class FileBrowserActivity : OmniActivity() {
             .setItems(labels) { _, which ->
                 when (actions[which]) {
                     R.string.share -> shareFile(safe)
+                    R.string.copy -> stageTransfer(safe, TransferMode.COPY)
+                    R.string.move -> stageTransfer(safe, TransferMode.MOVE)
                     R.string.rename -> showRenameDialog(safe)
                     R.string.copy_path -> copyPath(safe)
                     R.string.move_to_trash -> confirmTrash(safe)
                 }
             }
             .show()
+    }
+
+    private fun stageTransfer(file: File, mode: TransferMode) {
+        val safe = runCatching { FilePathPolicy.requireInside(file, sharedRoot) }
+            .getOrElse {
+                Toast.makeText(this, it.message ?: "Öğe seçilemedi", Toast.LENGTH_LONG).show()
+                return
+            }
+        if (mode == TransferMode.MOVE && runCatching { FilePathPolicy.requireMutableTarget(safe, sharedRoot) }.isFailure) {
+            Toast.makeText(this, "Bu sistem klasörü taşınamaz.", Toast.LENGTH_LONG).show()
+            return
+        }
+        pendingTransfer = PendingTransfer(safe.path, mode)
+        updateTransferUi()
+        Toast.makeText(
+            this,
+            if (mode == TransferMode.COPY) R.string.copy_ready else R.string.move_ready,
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    private fun pastePendingTransfer() {
+        if (operationBusy || !StorageAccessController.hasSharedStorageAccess(this)) return
+        val pending = pendingTransfer ?: return
+        val source = File(pending.sourcePath)
+        if (!source.exists()) {
+            pendingTransfer = null
+            updateTransferUi()
+            Toast.makeText(this, R.string.transfer_missing, Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val destinationDirectory = currentDir
+        setOperationBusy(true)
+        lifecycleScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    when (pending.mode) {
+                        TransferMode.COPY -> FileOperations.copy(source, destinationDirectory, sharedRoot)
+                        TransferMode.MOVE -> FileOperations.move(source, destinationDirectory, sharedRoot)
+                    }
+                }
+            }
+            result.onSuccess {
+                if (pending.mode == TransferMode.MOVE) pendingTransfer = null
+                Toast.makeText(this@FileBrowserActivity, R.string.transfer_done, Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                Toast.makeText(this@FileBrowserActivity, it.message ?: "Dosya işlemi başarısız", Toast.LENGTH_LONG).show()
+            }
+            setOperationBusy(false)
+            if (result.isSuccess) load(destinationDirectory) else updateTransferUi()
+        }
+    }
+
+    private fun clearPendingTransfer() {
+        if (operationBusy) return
+        pendingTransfer = null
+        updateTransferUi()
+    }
+
+    private fun updateTransferUi() {
+        if (!::binding.isInitialized) return
+        val pending = pendingTransfer
+        val hasAccess = StorageAccessController.hasSharedStorageAccess(this)
+        binding.pasteButton.visibility = if (pending == null) View.GONE else View.VISIBLE
+        binding.cancelTransferButton.visibility = if (pending == null) View.GONE else View.VISIBLE
+        binding.pasteButton.text = when (pending?.mode) {
+            TransferMode.MOVE -> getString(R.string.paste_move)
+            else -> getString(R.string.paste_copy)
+        }
+        binding.pasteButton.isEnabled = pending != null && hasAccess && !operationBusy
+        binding.cancelTransferButton.isEnabled = pending != null && !operationBusy
+        binding.newFolderButton.isEnabled = hasAccess && !operationBusy
+    }
+
+    private fun setOperationBusy(value: Boolean) {
+        operationBusy = value
+        binding.operationProgress.visibility = if (value) View.VISIBLE else View.GONE
+        binding.searchInput.isEnabled = !value
+        binding.hiddenSwitch.isEnabled = !value
+        for (index in 0 until binding.sortGroup.childCount) {
+            binding.sortGroup.getChildAt(index).isEnabled = !value
+        }
+        binding.list.alpha = if (value) 0.65f else 1f
+        updateTransferUi()
     }
 
     private fun shareFile(file: File) {
@@ -241,7 +361,7 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     private fun showCreateFolderDialog() {
-        if (!StorageAccessController.hasSharedStorageAccess(this)) return
+        if (operationBusy || !StorageAccessController.hasSharedStorageAccess(this)) return
         val input = EditText(this).apply {
             hint = getString(R.string.new_folder_hint)
             setSingleLine(true)
@@ -255,20 +375,24 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     private fun createFolder(name: String) {
+        if (operationBusy) return
+        setOperationBusy(true)
         lifecycleScope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) { FileOperations.createDirectory(currentDir, name, sharedRoot) }
             }
             result.onSuccess {
                 Toast.makeText(this@FileBrowserActivity, R.string.folder_created, Toast.LENGTH_SHORT).show()
-                load(currentDir)
             }.onFailure {
                 Toast.makeText(this@FileBrowserActivity, it.message ?: "Klasör oluşturulamadı", Toast.LENGTH_LONG).show()
             }
+            setOperationBusy(false)
+            if (result.isSuccess) load(currentDir)
         }
     }
 
     private fun showRenameDialog(file: File) {
+        if (operationBusy) return
         val input = EditText(this).apply {
             setText(file.name)
             setSelection(text.length)
@@ -283,20 +407,25 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     private fun renameEntry(file: File, name: String) {
+        if (operationBusy) return
+        setOperationBusy(true)
         lifecycleScope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) { FileOperations.rename(file, name, sharedRoot) }
             }
             result.onSuccess {
+                invalidatePendingTransferIfAffected(file)
                 Toast.makeText(this@FileBrowserActivity, R.string.renamed, Toast.LENGTH_SHORT).show()
-                load(currentDir)
             }.onFailure {
                 Toast.makeText(this@FileBrowserActivity, it.message ?: "Yeniden adlandırma başarısız", Toast.LENGTH_LONG).show()
             }
+            setOperationBusy(false)
+            if (result.isSuccess) load(currentDir)
         }
     }
 
     private fun confirmTrash(file: File) {
+        if (operationBusy) return
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.delete_title)
             .setMessage(R.string.delete_message)
@@ -306,21 +435,38 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     private fun moveToTrash(file: File) {
+        if (operationBusy) return
+        setOperationBusy(true)
         lifecycleScope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) { TrashManager(this@FileBrowserActivity).moveToTrash(file) }
             }
             result.onSuccess {
+                invalidatePendingTransferIfAffected(file)
                 Toast.makeText(this@FileBrowserActivity, "Çöpe taşındı.", Toast.LENGTH_SHORT).show()
-                load(currentDir)
             }.onFailure {
                 Toast.makeText(this@FileBrowserActivity, it.message ?: "İşlem başarısız", Toast.LENGTH_LONG).show()
             }
+            setOperationBusy(false)
+            if (result.isSuccess) load(currentDir)
+        }
+    }
+
+    private fun invalidatePendingTransferIfAffected(file: File) {
+        val pending = pendingTransfer ?: return
+        val affectedPath = runCatching { file.canonicalPath }.getOrElse { file.absolutePath }
+        if (pending.sourcePath == affectedPath || pending.sourcePath.startsWith(affectedPath + File.separator)) {
+            pendingTransfer = null
         }
     }
 
     private fun mimeFor(file: File): String {
         val extension = file.extension.lowercase(Locale.ROOT)
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream"
+    }
+
+    companion object {
+        private const val STATE_TRANSFER_PATH = "transfer_path"
+        private const val STATE_TRANSFER_MODE = "transfer_mode"
     }
 }
