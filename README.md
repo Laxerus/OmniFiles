@@ -25,6 +25,9 @@ En güncel debug APK `main` dalından Render build hattıyla üretilir:
 - Ortak depolama için güvenli yerel dosya tarayıcısı; arama, sıralama, gizli öğeler, favoriler, seçim ve toplu işlemler.
 - Yerel normal dosya satırlarında doğrudan **SHA** düğmesi; dosyayı ayrı belge seçici açmadan güvenli `FileProvider` URI'siyle SHA-256 ekranına gönderme.
 - Dosya ve klasörlerde **kopyala / taşı / hedefe yapıştır** akışı; sessiz overwrite yapmama ve isim çakışmasında güvenli yeni ad üretme.
+- Kopya/move-fallback aktarımında gerçek **byte tabanlı ilerleme**, Material progress penceresi ve o anda işlenen öğe için güvenli iptal.
+- Kullanıcı iptalinde boyut ön taraması, klasör traversal'ı, 64 KiB kopyalama blokları ve hedef SHA-256 doğrulaması arasında cancellation checkpoint'leri.
+- İptal veya hata halinde staging rollback; yarım kopyanın kullanıcı hedef adına commit edilmemesi.
 - Kopyaları önce gizli staging alanında tamamlama; her dosyada **boyut + SHA-256 doğrulaması**.
 - Yerel dosya kopyasında kaynak için **boyut + mtime snapshot doğrulaması**; kaynak aktarım sırasında değişirse staging kopyasını reddetme.
 - Kaynak klasörlerde **mtime + çocuk adları snapshot doğrulaması**; aktarım sırasında yapısal değişiklikleri commit öncesi yakalama.
@@ -64,6 +67,10 @@ Sonuç kartına dokunulduğunda dosyanın tarama anındaki yoluna körlemesine g
 
 Yerel kopyala/taşı katmanı canonical path doğrulamasından geçer. Transfer hedefinde sessiz overwrite yapılmaz ve klasör kendi altına gönderilemez. Kopya önce aynı hedef klasörde gizli bir staging öğesine yazılır. Her dosyanın kaynak akışından hesaplanan SHA-256 değeri staging kopyasının tekrar okunmasıyla doğrulanır; ayrıca kaynak dosyanın boyut ve değiştirilme zamanı işlem başı/sonunda karşılaştırılır.
 
+Aktarım başlamadan önce toplam dosya byte miktarı stack-safe biçimde hesaplanır. `FileOperations.copy` ve fallback gerektiren `move` işlemleri 64 KiB bloklarda ilerleme üretir. Bu telemetri `TransferRuntime` üzerinden yaşam döngüsüne dayanıklı biçimde aktif `OmniActivity` ekranına aktarılır; Material progress penceresi dosya adını, kopyalanan/toplam byte miktarını ve yüzdeyi gösterir. Ekran yeniden oluşturulursa aktif transfer snapshot'ı yeni Activity'ye tekrar verilir.
+
+Progress penceresindeki **Bu öğeyi iptal et** düğmesi yalnız o anda işlenen transfer öğesini durdurur. Çoklu seçim kuyruğunun tamamını otomatik iptal etmez. İptal isteği boyut taramasında, iteratif klasör kuyruğunda, her 64 KiB dosya bloğunda, destination SHA-256 doğrulamasında ve staging commitinden hemen önce kontrol edilir. `TransferCancelledException` normal hata/rollback yolunu kullandığı için yarım staging ağacı temizlenir ve görünür hedef adına taşınmaz. Move doğrudan aynı dosya sistemi içinde atomik `renameTo` ile tamamlanabiliyorsa işlem çok kısa olduğu için iptal penceresi pratikte kullanıcı etkileşiminden önce tamamlanabilir.
+
 Kaynak klasörlerin değiştirilme zamanı ve doğrudan çocuk adları final commit öncesi tekrar doğrulanır. Klasör kopyalama ve move-fallback kaynak temizliği recursive Java/Kotlin çağrı zincirine dayanmaz; düğümler explicit kuyruklarda tutulur. Kaynak ağacı silinmeden önce tamamı direct-entry/canonical kurallarıyla doğrulanır ve sonra çocuklardan köke doğru temizlenir.
 
 Yeni staging adları oluşturulma zamanını içerir. Sonraki kopyala/taşı işleminde hedef klasör taranırken ancak ad içindeki zaman damgası ve dosya sistemindeki değiştirilme zamanı altı saatlik eşiği birlikte aşmışsa temizlik adayı olur. Aday ağacı silinmeden önce bütünü doğrulanır; sembolik bağlantı veya güvenli alan dışına yönlenme görülürse otomatik temizlik yapılmaz.
@@ -99,7 +106,7 @@ Build kapıları:
 4. `:app:assembleDebug`
 5. APK SHA-256 çıktısı
 
-`FileOperationsTest` transfer, staging, kaynak snapshot ve **1200 katmanlı stack-safe klasör** davranışını doğrular. `StorageAnalyzerTest` en büyük dosya/klasör sıralamasını, bounded top-N aday seçimini, yapılandırılabilir öğe sınırını, kullanıcı iptalini ve **800 katmanlı stack-safe analiz ağacını** doğrular. `RemotePathPolicyTest` uzak yol normalizasyonunu, traversal engelini, kontrol karakteri/uzun ad reddini ve parent sınırlarını doğrular. `DigestUtilsTest` SHA-256 yardımcılarını denetler.
+`FileOperationsTest` transfer, staging, kaynak snapshot, **1200 katmanlı stack-safe klasör**, monotonic byte-progress ve iptalde staging rollback davranışını doğrular. `TransferRuntimeTest` progress/cancel/finish yaşam döngüsünü ve eski transfer kimliğinin yeni bir transferi iptal edememesini doğrular. `StorageAnalyzerTest` en büyük dosya/klasör sıralamasını, bounded top-N aday seçimini, yapılandırılabilir öğe sınırını, kullanıcı iptalini ve **800 katmanlı stack-safe analiz ağacını** doğrular. `RemotePathPolicyTest` uzak yol normalizasyonunu, traversal engelini, kontrol karakteri/uzun ad reddini ve parent sınırlarını doğrular. `DigestUtilsTest` SHA-256 yardımcılarını denetler.
 
 `source_sanity.py`; güvenli transfer primitive'leri, staging kurtarma, ADB pull doğrulaması, checksum aracı, Storage Analyzer sınır/iptal/path korumaları ve ana ekran wiring'i kaybolursa build'i durdurur.
 
@@ -107,7 +114,7 @@ Build kapıları:
 
 - `app/src/main/java/dev/laxerus/omnifiles/access` — depolama erişimi ve erişim durumu
 - `app/src/main/java/dev/laxerus/omnifiles/adb` — Kablosuz ADB, mDNS, health probe, doğrulanmış pull ve uzak yol politikaları
-- `app/src/main/java/dev/laxerus/omnifiles/fs` — yol güvenliği, SHA-256, transfer, çöp ve Storage Analyzer çekirdeği
+- `app/src/main/java/dev/laxerus/omnifiles/fs` — yol güvenliği, SHA-256, transfer, progress runtime, çöp ve Storage Analyzer çekirdeği
 - `app/src/main/java/dev/laxerus/omnifiles/scout` — Save Scout
 - `app/src/main/java/dev/laxerus/omnifiles/sqlite` — SQLite Studio
 - `app/src/main/java/dev/laxerus/omnifiles/ui` — Activity ve liste arayüzleri
