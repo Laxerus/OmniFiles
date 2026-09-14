@@ -1,8 +1,12 @@
 package dev.laxerus.omnifiles.fs
 
 import java.io.File
+import java.util.ArrayDeque
 
 object FileOperations {
+    private const val MIN_FREE_SPACE_RESERVE_BYTES = 8L * 1024L * 1024L
+    private const val MAX_FREE_SPACE_RESERVE_BYTES = 64L * 1024L * 1024L
+
     fun createDirectory(parent: File, rawName: String, sharedRoot: File): File {
         val destination = FilePathPolicy.resolveChild(parent, rawName, sharedRoot)
         require(!destination.exists()) { "Bu adda bir öğe zaten var" }
@@ -21,6 +25,35 @@ object FileOperations {
         return destination.canonicalFile
     }
 
+    fun estimateTransferBytes(source: File, sharedRoot: File): Long {
+        val root = FilePathPolicy.canonical(sharedRoot)
+        val safeSource = FilePathPolicy.requireInside(source, root)
+        require(safeSource.exists()) { "Kaynak öğe artık mevcut değil" }
+        require(safeSource.path != root.path) { "Depolama kökünün tamamı aktarılamaz" }
+
+        var total = 0L
+        val pending = ArrayDeque<File>()
+        val visitedDirectories = mutableSetOf<String>()
+        pending.add(safeSource)
+
+        while (pending.isNotEmpty()) {
+            val current = FilePathPolicy.requireInside(pending.removeFirst(), root)
+            require(current.exists()) { "Kaynak öğe tarama sırasında kayboldu: ${current.name}" }
+            if (current.isFile) {
+                total = saturatingAdd(total, current.length().coerceAtLeast(0L))
+                continue
+            }
+
+            val canonicalPath = current.canonicalPath
+            require(visitedDirectories.add(canonicalPath)) { "Döngüsel klasör bağlantısı algılandı" }
+            val children = current.listFiles() ?: error("Klasör okunamadı: ${current.name}")
+            children.forEach { child ->
+                pending.addLast(FilePathPolicy.requireInside(child, root))
+            }
+        }
+        return total
+    }
+
     fun copy(source: File, destinationDirectory: File, sharedRoot: File): File {
         val root = FilePathPolicy.canonical(sharedRoot)
         val safeSource = FilePathPolicy.requireInside(source, root)
@@ -29,6 +62,7 @@ object FileOperations {
 
         val safeDestinationDirectory = requireDestinationDirectory(destinationDirectory, root)
         requireNotInsideSource(safeSource, safeDestinationDirectory)
+        requireEnoughFreeSpace(safeSource, safeDestinationDirectory, root)
         val destination = nextAvailableDestination(safeDestinationDirectory, safeSource)
         val created = mutableListOf<File>()
 
@@ -63,6 +97,7 @@ object FileOperations {
 
         if (safeSource.renameTo(destination)) return destination.canonicalFile
 
+        requireEnoughFreeSpace(safeSource, safeDestinationDirectory, root)
         val created = mutableListOf<File>()
         try {
             copyTree(
@@ -93,6 +128,22 @@ object FileOperations {
             destinationDirectory.path != source.path &&
                 !destinationDirectory.path.startsWith(source.path + File.separator)
         ) { "Klasör kendi içine kopyalanamaz veya taşınamaz" }
+    }
+
+    private fun requireEnoughFreeSpace(source: File, destinationDirectory: File, root: File) {
+        val requiredBytes = estimateTransferBytes(source, root)
+        if (requiredBytes <= 0L) return
+
+        val usableBytes = destinationDirectory.usableSpace
+        if (usableBytes <= 0L) return
+
+        val reserve = (usableBytes / 50L)
+            .coerceAtLeast(MIN_FREE_SPACE_RESERVE_BYTES)
+            .coerceAtMost(MAX_FREE_SPACE_RESERVE_BYTES)
+        val safelyAvailable = (usableBytes - reserve).coerceAtLeast(0L)
+        require(requiredBytes <= safelyAvailable) {
+            "Hedefte yeterli boş alan yok. Gerekli: ${formatBytes(requiredBytes)}, güvenli kullanılabilir: ${formatBytes(safelyAvailable)}"
+        }
     }
 
     private fun nextAvailableDestination(parent: File, source: File): File {
@@ -167,5 +218,22 @@ object FileOperations {
         check(safeTarget.delete()) {
             "Kopya oluşturuldu ancak eski konum tamamen temizlenemedi; hedef kopya korundu"
         }
+    }
+
+    private fun saturatingAdd(left: Long, right: Long): Long {
+        if (right <= 0L) return left
+        return if (Long.MAX_VALUE - left < right) Long.MAX_VALUE else left + right
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        if (bytes < 1024L) return "$bytes B"
+        val units = arrayOf("KB", "MB", "GB", "TB", "PB")
+        var value = bytes.toDouble()
+        var index = -1
+        while (value >= 1024.0 && index < units.lastIndex) {
+            value /= 1024.0
+            index++
+        }
+        return "%.1f %s".format(java.util.Locale.ROOT, value, units[index])
     }
 }
