@@ -24,4 +24,26 @@ class FilePathPolicyTest {
         root.deleteRecursively()
         outside.delete()
     }
+
+    @Test fun sanitizesSimpleChildName() {
+        assertEquals("save.db", FilePathPolicy.sanitizeChildName("  save.db  "))
+    }
+
+    @Test fun rejectsTraversalNames() {
+        listOf(".", "..", "../save", "folder/save", "folder\\save").forEach { name ->
+            assertThrows(IllegalArgumentException::class.java) {
+                FilePathPolicy.sanitizeChildName(name)
+            }
+        }
+    }
+
+    @Test fun protectsCriticalAndroidDirectoryItself() {
+        val root = createTempDir(prefix = "omnifiles-root-")
+        val data = File(root, "Android/data")
+        data.mkdirs()
+        assertThrows(IllegalArgumentException::class.java) {
+            FilePathPolicy.requireMutableTarget(data, root)
+        }
+        root.deleteRecursively()
+    }
 }
