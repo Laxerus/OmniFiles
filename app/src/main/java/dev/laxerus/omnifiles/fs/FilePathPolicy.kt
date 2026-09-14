@@ -42,6 +42,9 @@ object FilePathPolicy {
         require('/' !in name && '\\' !in name && name.none { it.code == 0 }) {
             "Ad klasör ayırıcı veya geçersiz karakter içeremez"
         }
+        require(name.none { Character.isISOControl(it) }) {
+            "Ad satır sonu veya kontrol karakteri içeremez"
+        }
         return name
     }
 
