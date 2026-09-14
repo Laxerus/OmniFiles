@@ -27,6 +27,7 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <activity android:name=".ui.JunkCleanerActivity" android:exported="false" />
         <activity android:name=".ui.StorageAnalyzerActivity" android:exported="false" />
         <activity android:name=".ui.AdbChecksumActivity" android:exported="false" />
         <activity android:name=".ui.ChecksumActivity" android:exported="false" />
