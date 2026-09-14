@@ -22,17 +22,22 @@ REQUIRED = [
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbBrowserActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbFileListAdapter.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/ChecksumActivity.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/ui/StorageAnalyzerActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/DigestUtils.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/fs/StorageAnalyzer.kt",
     "app/src/main/res/layout/activity_checksum.xml",
+    "app/src/main/res/layout/activity_storage_analyzer.xml",
+    "app/src/main/res/layout/item_storage_analysis.xml",
     "app/src/main/res/layout/activity_trash.xml",
     "app/src/test/java/dev/laxerus/omnifiles/fs/DigestUtilsTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileOperationsTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileInspectorTest.kt",
+    "app/src/test/java/dev/laxerus/omnifiles/fs/StorageAnalyzerTest.kt",
 ]
 
 errors: list[str] = []
@@ -59,6 +64,8 @@ if manifest.is_file():
         errors.append("TrashActivity must remain registered")
     if '.ui.ChecksumActivity' not in text:
         errors.append("ChecksumActivity must remain registered")
+    if '.ui.StorageAnalyzerActivity' not in text:
+        errors.append("StorageAnalyzerActivity must remain registered")
 
 app_gradle = ROOT / "app/build.gradle"
 if app_gradle.is_file():
@@ -124,6 +131,21 @@ if file_inspector.is_file():
     for token in ("DEFAULT_MAX_ENTRIES", "FilePathPolicy.requireInside", "visitedDirectories", "saturatingAdd"):
         if token not in text:
             errors.append(f"bounded file inspection guard missing: {token}")
+
+storage_analyzer = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/StorageAnalyzer.kt"
+if storage_analyzer.is_file():
+    text = storage_analyzer.read_text(encoding="utf-8")
+    for token in (
+        "DEFAULT_MAX_ENTRIES = 40_000",
+        "ArrayDeque<Frame>",
+        "FilePathPolicy.requireDirectEntry",
+        "isCancelled",
+        "truncated",
+        "largestFiles",
+        "largestDirectories",
+    ):
+        if token not in text:
+            errors.append(f"bounded storage analyzer guard missing: {token}")
 
 favorite_store = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt"
 if favorite_store.is_file():
@@ -211,6 +233,13 @@ if checksum_activity.is_file():
         if token not in text:
             errors.append(f"checksum tool wiring missing: {token}")
 
+storage_analyzer_activity = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/StorageAnalyzerActivity.kt"
+if storage_analyzer_activity.is_file():
+    text = storage_analyzer_activity.read_text(encoding="utf-8")
+    for token in ("StorageAnalyzer.scan", "Dispatchers.IO", "AtomicBoolean", "cancelRequested", "largestDirectories"):
+        if token not in text:
+            errors.append(f"storage analyzer UI/cancellation wiring missing: {token}")
+
 trash_manager = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt"
 if trash_manager.is_file():
     text = trash_manager.read_text(encoding="utf-8")
@@ -236,16 +265,24 @@ if main_activity.is_file():
         "storageUsageProgress",
         "storage_access_ready",
         "ChecksumActivity::class.java",
+        "StorageAnalyzerActivity::class.java",
+        "storageAnalyzerButton",
         "verifyAdbHealth",
         ".healthCheck()",
     ):
         if token not in text:
-            errors.append(f"home storage/ADB/checksum wiring missing: {token}")
+            errors.append(f"home storage/ADB/checksum/analyzer wiring missing: {token}")
 
 main_layout = ROOT / "app/src/main/res/layout/activity_main.xml"
 if main_layout.is_file():
     text = main_layout.read_text(encoding="utf-8")
-    for view_id in ("@+id/trashButton", "@+id/checksumButton", "@+id/storageUsageText", "@+id/storageUsageProgress"):
+    for view_id in (
+        "@+id/trashButton",
+        "@+id/checksumButton",
+        "@+id/storageAnalyzerButton",
+        "@+id/storageUsageText",
+        "@+id/storageUsageProgress",
+    ):
         if view_id not in text:
             errors.append(f"home screen control missing: {view_id}")
 
