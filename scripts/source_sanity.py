@@ -89,11 +89,21 @@ if file_operations.is_file():
         ".usableSpace",
         "MIN_FREE_SPACE_RESERVE_BYTES",
         "rollbackCreated",
+        "STAGING_PREFIX",
+        "copyFileVerified",
+        "MessageDigest.getInstance(\"SHA-256\")",
+        "commitStagingCopy",
     ):
         if signature not in text:
             errors.append(f"safe transfer primitive missing from FileOperations: {signature}")
     if "overwrite = true" in text:
         errors.append("file transfer must not silently overwrite existing user files")
+
+file_path_policy = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FilePathPolicy.kt"
+if file_path_policy.is_file():
+    text = file_path_policy.read_text(encoding="utf-8")
+    if "Character.isISOControl" not in text:
+        errors.append("file names must reject ambiguous control characters")
 
 file_inspector = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt"
 if file_inspector.is_file():
@@ -190,9 +200,19 @@ if trash_activity.is_file():
         if token not in text:
             errors.append(f"trash center action missing: {token}")
 
+main_activity = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/MainActivity.kt"
+if main_activity.is_file():
+    text = main_activity.read_text(encoding="utf-8")
+    for token in ("StatFs", "renderStorageUsage", "storageUsageProgress", "storage_access_ready"):
+        if token not in text:
+            errors.append(f"home storage health wiring missing: {token}")
+
 main_layout = ROOT / "app/src/main/res/layout/activity_main.xml"
-if main_layout.is_file() and "@+id/trashButton" not in main_layout.read_text(encoding="utf-8"):
-    errors.append("home screen must expose the trash center")
+if main_layout.is_file():
+    text = main_layout.read_text(encoding="utf-8")
+    for view_id in ("@+id/trashButton", "@+id/storageUsageText", "@+id/storageUsageProgress"):
+        if view_id not in text:
+            errors.append(f"home screen control missing: {view_id}")
 
 workflow_render = ROOT / "scripts/render_build_apk.sh"
 if workflow_render.is_file():
