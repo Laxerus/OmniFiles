@@ -35,13 +35,15 @@ class FilePathPolicyTest {
         }
     }
 
-    @Test fun directEntryRejectsDotDotAlias() {
+    @Test fun rejectsExistingDotDotAlias() {
         val root = createTempDirectory("omnifiles-direct-").toFile()
         try {
             val folder = File(root, "folder").apply { mkdir() }
-            val target = File(root, "target.txt").apply { writeText("x") }
+            File(root, "target.txt").writeText("x")
             val alias = File(folder, "../target.txt")
-            assertEquals(target.canonicalPath, FilePathPolicy.requireInside(alias, root).canonicalPath)
+            assertThrows(IllegalArgumentException::class.java) {
+                FilePathPolicy.requireInside(alias, root)
+            }
             assertThrows(IllegalArgumentException::class.java) {
                 FilePathPolicy.requireDirectEntry(alias, root)
             }
@@ -50,17 +52,29 @@ class FilePathPolicyTest {
         }
     }
 
-    @Test fun mutableTargetRejectsSymbolicLink() {
+    @Test fun rejectsSymbolicLinkBeforeItCanResolveToTarget() {
         val root = createTempDirectory("omnifiles-link-").toFile()
         try {
             val target = File(root, "target.txt").apply { writeText("payload") }
             val link = File(root, "link.txt")
             Files.createSymbolicLink(link.toPath(), target.toPath())
 
-            assertEquals(target.canonicalPath, FilePathPolicy.requireInside(link, root).canonicalPath)
+            assertThrows(IllegalArgumentException::class.java) {
+                FilePathPolicy.requireInside(link, root)
+            }
             assertThrows(IllegalArgumentException::class.java) {
                 FilePathPolicy.requireMutableTarget(link, root)
             }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun allowsStorageRootAliasItselfAfterCanonicalization() {
+        val root = createTempDirectory("omnifiles-root-alias-").toFile()
+        try {
+            val alias = File(root, ".")
+            assertEquals(root.canonicalPath, FilePathPolicy.requireInside(alias, root).canonicalPath)
         } finally {
             root.deleteRecursively()
         }
