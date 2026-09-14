@@ -17,14 +17,15 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:clipToPadding="false">
+        android:clipToPadding="false"
+        android:fillViewport="true">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingStart="16dp"
-            android:paddingTop="10dp"
+            android:paddingTop="8dp"
             android:paddingEnd="16dp"
             android:paddingBottom="40dp">
 
@@ -32,7 +33,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 app:cardBackgroundColor="?attr/colorSurfaceVariant"
-                app:cardCornerRadius="28dp"
+                app:cardCornerRadius="30dp"
                 app:cardElevation="0dp"
                 app:strokeWidth="0dp">
 
@@ -58,12 +59,12 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:text="@string/settings_overview_title"
-                                android:textAppearance="?attr/textAppearanceTitleLarge" />
+                                android:textAppearance="?attr/textAppearanceHeadlineSmall" />
 
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="4dp"
+                                android:layout_marginTop="5dp"
                                 android:text="@string/settings_overview_summary"
                                 android:textAppearance="?attr/textAppearanceBodyMedium" />
                         </LinearLayout>
@@ -81,7 +82,7 @@
                         android:id="@+id/storageUsageText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="18dp"
+                        android:layout_marginTop="20dp"
                         android:text="@string/storage_usage_unavailable"
                         android:textAppearance="?attr/textAppearanceBodyMedium" />
 
@@ -93,13 +94,13 @@
                         android:max="100"
                         android:progress="0"
                         app:indicatorTrackGapSize="0dp"
-                        app:trackCornerRadius="4dp"
-                        app:trackThickness="8dp" />
+                        app:trackCornerRadius="5dp"
+                        app:trackThickness="10dp" />
 
                     <com.google.android.material.chip.ChipGroup
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
+                        android:layout_marginTop="18dp"
                         app:chipSpacingHorizontal="8dp"
                         app:chipSpacingVertical="8dp"
                         app:singleLine="false">
@@ -133,39 +134,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="28dp"
                 android:paddingStart="4dp"
-                android:paddingBottom="8dp"
-                android:text="@string/settings_section_phone"
-                android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-            <dev.laxerus.omnifiles.ui.SettingsActionCard
-                android:id="@+id/storageAccessCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-
-            <dev.laxerus.omnifiles.ui.SettingsActionCard
-                android:id="@+id/developerSettingsCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" />
-
-            <dev.laxerus.omnifiles.ui.SettingsActionCard
-                android:id="@+id/wifiSettingsCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" />
-
-            <dev.laxerus.omnifiles.ui.SettingsActionCard
-                android:id="@+id/appDetailsCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="28dp"
-                android:paddingStart="4dp"
-                android:paddingBottom="8dp"
+                android:paddingBottom="9dp"
                 android:text="@string/settings_section_files"
                 android:textAppearance="?attr/textAppearanceTitleMedium" />
 
@@ -178,20 +147,20 @@
                 android:id="@+id/trashButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" />
+                android:layout_marginTop="10dp" />
 
             <dev.laxerus.omnifiles.ui.SettingsActionCard
                 android:id="@+id/checksumButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" />
+                android:layout_marginTop="10dp" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="28dp"
                 android:paddingStart="4dp"
-                android:paddingBottom="8dp"
+                android:paddingBottom="9dp"
                 android:text="@string/settings_section_adb"
                 android:textAppearance="?attr/textAppearanceTitleMedium" />
 
@@ -204,20 +173,52 @@
                 android:id="@+id/adbFilesCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" />
+                android:layout_marginTop="10dp" />
 
             <dev.laxerus.omnifiles.ui.SettingsActionCard
                 android:id="@+id/saveScoutCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" />
+                android:layout_marginTop="10dp" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="28dp"
                 android:paddingStart="4dp"
-                android:paddingBottom="8dp"
+                android:paddingBottom="9dp"
+                android:text="@string/settings_section_phone"
+                android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+            <dev.laxerus.omnifiles.ui.SettingsActionCard
+                android:id="@+id/storageAccessCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <dev.laxerus.omnifiles.ui.SettingsActionCard
+                android:id="@+id/wifiSettingsCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp" />
+
+            <dev.laxerus.omnifiles.ui.SettingsActionCard
+                android:id="@+id/developerSettingsCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp" />
+
+            <dev.laxerus.omnifiles.ui.SettingsActionCard
+                android:id="@+id/appDetailsCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp"
+                android:paddingStart="4dp"
+                android:paddingBottom="9dp"
                 android:text="@string/settings_section_developer"
                 android:textAppearance="?attr/textAppearanceTitleMedium" />
 
