@@ -67,6 +67,23 @@ class FileOperationsTest {
         }
     }
 
+    @Test fun copiesExtensionlessFilesWithSafeCollisionName() {
+        val root = createTempDirectory("omnifiles-copy-name-").toFile()
+        try {
+            val source = File(root, "LICENSE").apply { writeText("new") }
+            val destination = File(root, "Backup").apply { mkdir() }
+            File(destination, "LICENSE").writeText("old")
+
+            val copied = FileOperations.copy(source, destination, root)
+
+            assertEquals("LICENSE (1)", copied.name)
+            assertEquals("new", copied.readText())
+            assertEquals("old", File(destination, "LICENSE").readText())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     @Test fun copiesDirectoryTreesAndKeepsSource() {
         val root = createTempDirectory("omnifiles-copy-tree-").toFile()
         try {
