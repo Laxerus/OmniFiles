@@ -9,16 +9,22 @@
         app:showAsAction="always" />
 
     <item
+        android:id="@+id/actionJunkCleaner"
+        android:icon="@drawable/ic_delete_24"
+        android:title="@string/toolbar_junk_cleaner"
+        app:showAsAction="ifRoom" />
+
+    <item
         android:id="@+id/actionStorageAnalyzer"
         android:icon="@drawable/ic_storage_24"
         android:title="@string/toolbar_storage_analyzer"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="never" />
 
     <item
         android:id="@+id/actionTrash"
         android:icon="@drawable/ic_delete_24"
         android:title="@string/toolbar_trash"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="never" />
 
     <item
         android:id="@+id/actionChecksum"
