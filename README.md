@@ -24,6 +24,7 @@ APK, `main` dalından Render build hattında kaynak sanity kontrolü, unit test,
 - Dosya/klasör ayrıntıları, yol kopyalama, doğrudan yerel SHA-256 işlemi.
 - Ana ekranda kullanılan/toplam/boş ortak depolama alanı ve doluluk göstergesi.
 - **Depolama Analizi:** stack-safe ve bounded tarama, en büyük dosya/klasörler, sabit sekiz dosya kategorisi ve alan kullanım yüzdeleri.
+- Kategori kartına dokunarak o türdeki **en büyük dosyaları** bounded drill-down listesinde inceleme; dosyayı açma, paylaşma, SHA-256 hesaplama, klasöründe gösterme, ayrıntı ve yol kopyalama.
 - Analiz sonucundaki klasörü dosya yöneticisinde açma veya büyük bir dosyanın bulunduğu klasöre doğrudan gitme.
 - **SHA-256 Doğrulama:** Android belge seçiciden veya OmniFiles içindeki güvenli URI'lerden dosya hash'i üretme.
 - APK içine gömülü **Kadb 2.1.4** ile Kablosuz ADB eşleştirme, bağlantı, mDNS keşfi, klasör listeleme, önizleme, paylaşım ve dışa aktarma.
@@ -61,6 +62,10 @@ Storage Analyzer ortak depolama kökünü değiştirmez; yalnız metadata ve dos
 
 Sonuç belleği bounded tutulur: tüm taranan öğeleri saklamak yerine yalnız gösterilecek en büyük N dosya ve N klasör adayı tutulur. Dosya türü dağılımı görsel, video, ses, APK/uygulama paketi, arşiv, belge, veritabanı ve diğer olmak üzere sekiz sabit kovada `IntArray`/`LongArray` sayaçlarıyla hesaplanır.
 
+Kategori drill-down da bounded kalır. Her kategori için varsayılan olarak yalnız **8 en büyük dosya adayı** tutulur; API seviyesinde kategori başına hard-cap **20** dosyadır. Aday listeleri sekiz kategoriye karşılık gelen sabit boyutlu bir `Array` içinde tutulur; benzersiz uzantı veya taranan dosya sayısı arttıkça sınırsız sonuç belleği oluşmaz. Kategori kartına dokunulduğunda bu sıralı adaylar gösterilir ve seçilen dosya mevcut güvenli analiz aksiyonlarına yönlendirilir.
+
+İptal veya 40.000 öğe sınırında duran taramalarda kategori sayıları, byte toplamları ve kategori top-N listeleri aynı güvenilir **kısmi tarama kesitini** temsil eder. Genel en büyük dosyalar listesi ile kategori top-N listeleri birbirinden bağımsız limitlenir; örneğin global listede görünmeyen bir video kendi kategori drill-down'ında yine yer alabilir.
+
 Bir analiz sonucuna işlem yapılacağı anda yol yeniden doğrulanır. Taramadan sonra taşınmış/değişmiş, kök dışına çıkan veya dolaylı/symlink hedefe dönüşmüş öğe reddedilir. `BrowserStartPathPolicy` yalnız mevcut, doğrudan ve ortak depolama içindeki klasörleri başlangıç yolu olarak kabul eder. `EXTRA_START_PATH` yalnız Activity'nin ilk oluşturuluşunda uygulanır; ekran yeniden oluşturulurken kaydedilmiş gezinme durumu korunur.
 
 ## ADB ve veri güvenliği
@@ -95,12 +100,12 @@ Build kapıları:
 - `FileOperationsTest`: staging, kaynak snapshot'ları, SHA doğrulaması, 1200 katmanlı stack-safe transfer, monotonic byte progress ve iptalde rollback.
 - `TransferRuntimeTest`: tekil progress/cancel/finish yaşam döngüsü ve stale transfer kimliği izolasyonu.
 - `TransferBatchRunnerTest`: ikinci öğede iptalin sonraki öğeyi başlatmaması, aggregate byte progress, normal hata sonrası kuyruğun devam etmesi ve stale batch kimliği izolasyonu.
-- `StorageAnalyzerTest`: bounded top-N, sabit kategori kovaları, öğe sınırı, kullanıcı iptali ve 800 katmanlı stack-safe analiz ağacı.
+- `StorageAnalyzerTest`: bounded global top-N, **kategori başına bounded/sıralı top-N**, sabit kategori kovaları, öğe sınırı, kullanıcı iptali ve 800 katmanlı stack-safe analiz ağacı.
 - `BrowserStartPathPolicyTest`: dosya, kayıp, kök dışı ve symlink başlangıç hedeflerinin güvenli fallback davranışı.
 - `RemotePathPolicyTest`: uzak yol normalizasyonu, traversal/kontrol karakteri/uzun ad reddi.
 - `DigestUtilsTest`: SHA-256 yardımcıları.
 
-`source_sanity.py`, transfer staging güvenliği yanında `TransferBatchRuntime`, `TransferBatchRunner`, batch testleri, FileBrowser entegrasyonu, Material batch progress/cancel wiring'i ve ilgili kaynak/string sözleşmelerini de zorunlu tutar. Bu parçalar yanlışlıkla silinirse APK build'i erken durur.
+`source_sanity.py`, transfer staging güvenliği yanında `TransferBatchRuntime`, `TransferBatchRunner`, batch testleri, FileBrowser entegrasyonu, Material batch progress/cancel wiring'i, Storage Analyzer bounded kategori drill-down sözleşmesi ve ilgili kaynak/string/layout bağlantılarını zorunlu tutar. Bu parçalar yanlışlıkla silinirse APK build'i erken durur.
 
 ## Ana kaynak alanları
 
