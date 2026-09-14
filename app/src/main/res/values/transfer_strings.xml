@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="transfer_progress_title">Dosya aktarımı</string>
+    <string name="transfer_progress_copy">Kopyalanıyor</string>
+    <string name="transfer_progress_move">Taşınıyor</string>
+    <string name="transfer_progress_canceling">İptal ediliyor…</string>
+    <string name="transfer_progress_done">Tamamlandı</string>
+    <string name="transfer_progress_cancelled">İptal edildi</string>
+    <string name="transfer_progress_failed">Aktarım durdu</string>
+    <string name="transfer_progress_preparing">%1$s\nBoyut hazırlanıyor…</string>
+    <string name="transfer_progress_detail">%1$s\n%2$s / %3$s • %4$d%%</string>
+    <string name="transfer_cancel_current">Bu öğeyi iptal et</string>
+</resources>
