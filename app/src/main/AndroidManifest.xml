@@ -35,9 +35,9 @@
         <activity android:name=".ui.AdbBrowserActivity" android:exported="false" />
         <activity android:name=".ui.AdbPairingActivity" android:exported="false" />
         <activity android:name=".ui.TrashActivity" android:exported="false" />
-        <activity android:name=".ui.FileBrowserActivity" android:exported="false" />
+        <activity android:name=".ui.MainActivity" android:exported="false" />
         <activity
-            android:name=".ui.MainActivity"
+            android:name=".ui.FileBrowserActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
