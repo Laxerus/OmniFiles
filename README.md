@@ -16,7 +16,7 @@ Geliştirme sürümü yayınlanana kadar **`0.8.0-dev`** olarak sabit tutulur.
 - Arama, sıralama, favoriler, gizli dosyalar ve toplu seçim içeren dosya yöneticisi.
 - Güvenli kopyalama/taşıma, yeniden adlandırma, paylaşma ve klasör oluşturma.
 - Geri yüklenebilir **OmniFiles Çöp Kutusu**.
-- **Gereksiz Dosya Temizliği:** eski geçici dosyaları, yarım indirmeleri, metadata artıklarını ve boş cache/temp klasörlerini tarar; uygun adayları kalıcı silmek yerine Çöp Kutusu'na taşır.
+- **Gereksiz Dosya Temizliği:** eski geçici dosyaları, yarım indirmeleri, metadata artıklarını ve boş cache/temp klasörlerini tarar; değişmediği tekrar doğrulanan düşük riskli adayları tek dokunuşla siler.
 - **Depolama Analizi:** en büyük dosyaları, klasörleri ve dosya kategorilerini gösterir.
 - SHA-256 hesaplama ve beklenen hash ile doğrulama.
 - Dahili Kablosuz ADB istemcisi ile erişilebilir Android dosyalarını inceleme ve dışa aktarma.
@@ -28,7 +28,7 @@ Geliştirme sürümü yayınlanana kadar **`0.8.0-dev`** olarak sabit tutulur.
 
 OmniFiles dosya işlemlerinde canonical yol kontrolleri kullanır, sembolik/dolaylı yolları sınırlar ve kritik Android klasörlerinin kendisini değiştirmeyi engeller.
 
-Gereksiz Dosya Temizliği özellikle muhafazakârdır: `Android/` ve `LOST.DIR` tarama dışında tutulur; fotoğraf, video veya belge klasörleri yalnız adına bakılarak gereksiz kabul edilmez. Temizlik öncesinde aday tekrar doğrulanır ve uygun öğe Çöp Kutusu'na taşınır.
+Gereksiz Dosya Temizliği özellikle muhafazakârdır: `Android/` ve `LOST.DIR` tarama dışında tutulur; fotoğraf, video veya belge klasörleri yalnız adına bakılarak gereksiz kabul edilmez. Silme anında adayın türü, boyutu ve değiştirilme zamanı yeniden doğrulanır. Klasörlerde recursive silme yapılmaz; yalnız gerçekten boş cache/temp klasörleri silinebilir.
 
 ## Geliştirme
 
