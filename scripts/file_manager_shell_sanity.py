@@ -104,7 +104,7 @@ require(
     '@+id/actionTitle',
     '@+id/actionSummary',
     '@drawable/ic_chevron_right_24',
-    'app:cardBackgroundColor="?attr/colorSecondaryContainer"',
+    'app:cardBackgroundColor="?attr/colorPrimaryContainer"',
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/MainActivity.kt",
