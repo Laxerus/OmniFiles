@@ -252,7 +252,10 @@ class AdbBrowserActivity : OmniActivity() {
         val actions = buildList {
             add(R.string.details)
             add(R.string.copy_path)
-            if (!entry.isDirectory && !entry.isSymlink) add(R.string.export_file)
+            if (!entry.isDirectory && !entry.isSymlink) {
+                add(R.string.share)
+                add(R.string.export_file)
+            }
         }
         MaterialAlertDialogBuilder(this)
             .setTitle(entry.name.ifBlank { entry.path })
@@ -260,6 +263,7 @@ class AdbBrowserActivity : OmniActivity() {
                 when (actions[which]) {
                     R.string.details -> showEntryDetails(entry)
                     R.string.copy_path -> copyRemotePath(entry)
+                    R.string.share -> shareEntry(entry)
                     R.string.export_file -> exportEntry(entry)
                 }
             }
@@ -303,6 +307,38 @@ class AdbBrowserActivity : OmniActivity() {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("OmniFiles ADB path", safePath))
         Toast.makeText(this, R.string.path_copied, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun shareEntry(entry: AdbRemoteEntry) {
+        if (entry.isDirectory || entry.isSymlink || loading) return
+        setLoading(true)
+        lifecycleScope.launch {
+            val target = newPreviewFile(entry.name)
+            runCatching { manager.pull(entry.path, target) }
+                .onSuccess { local -> shareLocalFile(local) }
+                .onFailure {
+                    target.delete()
+                    Toast.makeText(this@AdbBrowserActivity, it.message ?: "Dosya paylaşıma hazırlanamadı", Toast.LENGTH_LONG).show()
+                }
+            setLoading(false)
+        }
+    }
+
+    private fun shareLocalFile(file: File) {
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase(Locale.ROOT))
+            ?: "application/octet-stream"
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newUri(contentResolver, file.name, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivity(Intent.createChooser(intent, getString(R.string.share))) }
+            .onFailure {
+                file.delete()
+                Toast.makeText(this, "Paylaşım ekranı açılamadı.", Toast.LENGTH_SHORT).show()
+            }
     }
 
     private fun exportEntry(entry: AdbRemoteEntry) {
