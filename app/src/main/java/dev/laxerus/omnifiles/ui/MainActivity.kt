@@ -30,6 +30,7 @@ class MainActivity : OmniActivity() {
 
         binding.versionText.text = getString(R.string.version_label, BuildConfig.VERSION_NAME)
         binding.openFilesButton.setOnClickListener { startActivity(Intent(this, FileBrowserActivity::class.java)) }
+        binding.storageAnalyzerButton.setOnClickListener { startActivity(Intent(this, StorageAnalyzerActivity::class.java)) }
         binding.trashButton.setOnClickListener { startActivity(Intent(this, TrashActivity::class.java)) }
         binding.checksumButton.setOnClickListener { startActivity(Intent(this, ChecksumActivity::class.java)) }
         binding.grantAccessButton.setOnClickListener { StorageAccessController.requestSharedStorageAccess(this) }
@@ -52,6 +53,7 @@ class MainActivity : OmniActivity() {
         binding.rootStatus.text = "${getString(R.string.root_status)}: ${if (state.rootBinaryPresent) "Algılandı" else "Yok / bilinmiyor"}"
         binding.grantAccessButton.isEnabled = !state.sharedStorage
         binding.grantAccessButton.setText(if (state.sharedStorage) R.string.storage_access_ready else R.string.grant_all_files)
+        binding.storageAnalyzerButton.isEnabled = state.sharedStorage
         binding.adbFilesButton.isEnabled = state.adbEndpointConfigured
         binding.saveScoutButton.isEnabled = state.adbEndpointConfigured
 
