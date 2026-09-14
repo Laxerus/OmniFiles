@@ -4,15 +4,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-TOOLS="$ROOT/.render-tools"
-SDK="$ROOT/.android-sdk"
+CACHE_ROOT="${XDG_CACHE_HOME:-$ROOT/.render-cache}/omnifiles"
+TOOLS="$CACHE_ROOT/tools"
+SDK="$CACHE_ROOT/android-sdk"
+GRADLE_USER_HOME="$CACHE_ROOT/gradle-user-home"
 PUBLIC="$ROOT/public"
 GRADLE_VERSION="9.3.1"
 ANDROID_PLATFORM="37.0"
 BUILD_TOOLS="36.0.0"
 CMDLINE_TOOLS_REV="11076708"
 
-mkdir -p "$TOOLS" "$SDK" "$PUBLIC"
+export GRADLE_USER_HOME
+mkdir -p "$TOOLS" "$SDK" "$GRADLE_USER_HOME" "$PUBLIC"
 rm -rf "$PUBLIC"/*
 
 log() { printf '\n==> %s\n' "$*"; }
@@ -47,6 +50,8 @@ if [[ "$JAVA_MAJOR" != "17" ]]; then
     test -n "$EXTRACTED_JDK"
     mv "$EXTRACTED_JDK" "$JDK_DIR"
     rm -rf "$TOOLS/jdk-extract" "$TOOLS/jdk17.tar.gz"
+  else
+    log "Temurin JDK 17 build cache'ten kullanılıyor"
   fi
   export JAVA_HOME="$JDK_DIR"
   export PATH="$JAVA_HOME/bin:$PATH"
@@ -61,6 +66,8 @@ if [[ ! -x "$GRADLE_HOME/bin/gradle" ]]; then
   fetch "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" "$TOOLS/gradle.zip"
   unzip -q "$TOOLS/gradle.zip" -d "$TOOLS"
   rm -f "$TOOLS/gradle.zip"
+else
+  log "Gradle $GRADLE_VERSION build cache'ten kullanılıyor"
 fi
 export PATH="$GRADLE_HOME/bin:$PATH"
 
@@ -75,14 +82,20 @@ if [[ ! -x "$CMDLINE_LATEST/bin/sdkmanager" ]]; then
   unzip -q "$TOOLS/android-tools.zip" -d "$SDK/cmdline-tools"
   mv "$SDK/cmdline-tools/cmdline-tools" "$CMDLINE_LATEST"
   rm -f "$TOOLS/android-tools.zip"
+else
+  log "Android command-line tools build cache'ten kullanılıyor"
 fi
 export PATH="$CMDLINE_LATEST/bin:$SDK/platform-tools:$PATH"
 
 log "Android SDK lisansları kabul ediliyor"
 yes | sdkmanager --licenses >/dev/null 2>&1 || true
 
-log "Android SDK $ANDROID_PLATFORM kuruluyor"
-sdkmanager "platform-tools" "platforms;android-${ANDROID_PLATFORM}" "build-tools;${BUILD_TOOLS}"
+if [[ ! -f "$SDK/platforms/android-$ANDROID_PLATFORM/android.jar" || ! -x "$SDK/build-tools/$BUILD_TOOLS/aapt2" || ! -x "$SDK/platform-tools/adb" ]]; then
+  log "Android SDK $ANDROID_PLATFORM kuruluyor"
+  sdkmanager "platform-tools" "platforms;android-${ANDROID_PLATFORM}" "build-tools;${BUILD_TOOLS}"
+else
+  log "Android SDK $ANDROID_PLATFORM build cache'ten kullanılıyor"
+fi
 
 log "Kaynak sanity kontrolü"
 python3 scripts/source_sanity.py
