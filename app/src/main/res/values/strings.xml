@@ -38,6 +38,15 @@
     <string name="storage_access_required">Ortak depolamayı listelemek için dosya erişimi gerekli.</string>
     <string name="empty_search">Bu filtreyle eşleşen öğe yok.</string>
     <string name="empty_folder">Bu klasör boş veya okunamıyor.</string>
+    <string name="new_folder">Yeni klasör</string>
+    <string name="new_folder_hint">Klasör adı</string>
+    <string name="create">Oluştur</string>
+    <string name="rename">Yeniden adlandır</string>
+    <string name="share">Paylaş</string>
+    <string name="copy_path">Yolu kopyala</string>
+    <string name="path_copied">Dosya yolu panoya kopyalandı.</string>
+    <string name="folder_created">Klasör oluşturuldu.</string>
+    <string name="renamed">Öğe yeniden adlandırıldı.</string>
     <string name="delete_title">Çöpe taşı?</string>
     <string name="delete_message">Seçilen öğe doğrudan silinmek yerine OmniFiles çöp alanına taşınacak.</string>
     <string name="cancel">İptal</string>
