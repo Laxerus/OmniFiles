@@ -3,6 +3,7 @@ package dev.laxerus.omnifiles.ui
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -37,15 +38,27 @@ class AdbFileListAdapter(
                 .format(Date(entry.modifiedAtMillis))
             binding.meta.text = "$type • $date"
             binding.selectionMark.visibility = View.GONE
+            binding.checksumButton.visibility = if (!entry.isDirectory && !entry.isSymlink) View.VISIBLE else View.GONE
             binding.root.setOnClickListener { onClick(entry) }
             binding.root.setOnLongClickListener {
                 onLongClick(entry)
                 true
             }
+            binding.checksumButton.contentDescription = binding.root.context.getString(R.string.adb_checksum_title)
+            binding.checksumButton.setOnClickListener { launchChecksum(entry) }
             binding.moreButton.isEnabled = true
             binding.moreButton.visibility = View.VISIBLE
             binding.moreButton.contentDescription = binding.root.context.getString(R.string.more_actions)
             binding.moreButton.setOnClickListener { onMore(entry) }
+        }
+
+        private fun launchChecksum(entry: AdbRemoteEntry) {
+            val context = binding.root.context
+            runCatching {
+                context.startActivity(AdbChecksumActivity.createIntent(context, entry))
+            }.onFailure {
+                Toast.makeText(context, it.message ?: "ADB SHA-256 ekranı açılamadı", Toast.LENGTH_LONG).show()
+            }
         }
     }
 

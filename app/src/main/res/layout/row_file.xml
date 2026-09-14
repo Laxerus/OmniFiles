@@ -61,6 +61,19 @@
             android:visibility="gone" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/checksumButton"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="52dp"
+            android:layout_height="48dp"
+            android:contentDescription="@string/checksum_tool"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:text="SHA"
+            android:textSize="10sp"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/moreButton"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="48dp"

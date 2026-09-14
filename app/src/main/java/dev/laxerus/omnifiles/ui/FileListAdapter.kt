@@ -1,8 +1,12 @@
 package dev.laxerus.omnifiles.ui
 
+import android.content.ClipData
+import android.content.Intent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -38,6 +42,8 @@ class FileListAdapter(
             val path = runCatching { file.canonicalPath }.getOrElse { file.absolutePath }
             val selected = path in selectedPaths
             val selectionMode = selectedPaths.isNotEmpty()
+            val checksumEligible = !selectionMode && file.isFile &&
+                runCatching { file.absolutePath == file.canonicalPath }.getOrDefault(false)
 
             binding.icon.text = iconFor(file)
             binding.name.text = file.name.ifEmpty { file.path }
@@ -47,6 +53,7 @@ class FileListAdapter(
                 "${formatBytes(file.length())} • ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(file.lastModified())}"
             }
             binding.selectionMark.visibility = if (selected) View.VISIBLE else View.GONE
+            binding.checksumButton.visibility = if (checksumEligible) View.VISIBLE else View.GONE
             binding.moreButton.visibility = if (selectionMode) View.GONE else View.VISIBLE
             binding.root.contentDescription = buildString {
                 append(binding.name.text)
@@ -57,8 +64,36 @@ class FileListAdapter(
                 onLongClick(file)
                 true
             }
+            binding.checksumButton.contentDescription = binding.root.context.getString(R.string.checksum_tool)
+            binding.checksumButton.setOnClickListener { launchChecksum(file) }
             binding.moreButton.contentDescription = binding.root.context.getString(R.string.more_actions)
             binding.moreButton.setOnClickListener { onMoreClick(file) }
+        }
+
+        private fun launchChecksum(file: File) {
+            val context = binding.root.context
+            val directFile = runCatching {
+                file.takeIf { it.isFile && it.absolutePath == it.canonicalPath }
+                    ?: error("Dosya artık güvenli bir doğrudan giriş değil")
+            }.getOrElse {
+                Toast.makeText(context, it.message ?: "SHA-256 için dosya açılamadı", Toast.LENGTH_LONG).show()
+                return
+            }
+            val uri = runCatching {
+                FileProvider.getUriForFile(context, "${context.packageName}.files", directFile)
+            }.getOrElse {
+                Toast.makeText(context, "SHA-256 için güvenli dosya URI'si oluşturulamadı", Toast.LENGTH_LONG).show()
+                return
+            }
+            val intent = Intent(context, ChecksumActivity::class.java).apply {
+                data = uri
+                clipData = ClipData.newUri(context.contentResolver, directFile.name, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            runCatching { context.startActivity(intent) }
+                .onFailure {
+                    Toast.makeText(context, "SHA-256 ekranı açılamadı", Toast.LENGTH_SHORT).show()
+                }
         }
     }
 

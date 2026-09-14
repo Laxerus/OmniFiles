@@ -2,14 +2,17 @@ package dev.laxerus.omnifiles.adb
 
 import android.content.Context
 import com.flyfishxu.kadb.Kadb
+import dev.laxerus.omnifiles.fs.DigestUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.UUID
 
 class AdbSessionManager private constructor(context: Context) {
-    private val store = AdbEndpointStore(context)
+    private val appContext = context.applicationContext
+    private val store = AdbEndpointStore(appContext)
     private val mutex = Mutex()
     private var session: Kadb? = null
 
@@ -71,7 +74,8 @@ class AdbSessionManager private constructor(context: Context) {
         withContext(Dispatchers.IO) {
             withReconnectOnce { active ->
                 active.openSync().use { sync ->
-                    sync.list(safePath).map { entry ->
+                    sync.list(safePath).mapNotNull { entry ->
+                        if (!RemotePathPolicy.isSafeChildName(entry.name)) return@mapNotNull null
                         AdbRemoteEntry(
                             parentPath = safePath,
                             name = entry.name,
@@ -118,6 +122,17 @@ class AdbSessionManager private constructor(context: Context) {
         }
     }
 
+    suspend fun sha256(remotePath: String): String {
+        val safePath = RemotePathPolicy.normalizeAbsolute(remotePath)
+        val scratch = newChecksumScratch()
+        val pulled = pull(safePath, scratch)
+        return try {
+            withContext(Dispatchers.IO) { DigestUtils.sha256Hex(pulled) }
+        } finally {
+            pulled.delete()
+        }
+    }
+
     suspend fun disconnect(forgetEndpoint: Boolean = false) = mutex.withLock {
         withContext(Dispatchers.IO) { closeSessionBlocking() }
         if (forgetEndpoint) store.clear()
@@ -125,13 +140,28 @@ class AdbSessionManager private constructor(context: Context) {
 
     fun endpoint(): AdbEndpoint? = store.load()
 
+    private fun newChecksumScratch(): File {
+        val root = File(appContext.cacheDir, "adb-checksum").apply {
+            check(exists() || mkdirs()) { "ADB checksum cache klasörü oluşturulamadı" }
+        }
+        val cutoff = System.currentTimeMillis() - CHECKSUM_CACHE_RETENTION_MS
+        root.listFiles()?.forEach { stale ->
+            if (stale.isFile && stale.lastModified() < cutoff) stale.delete()
+        }
+        return File(root, "${UUID.randomUUID()}.bin")
+    }
+
     private fun snapshotRemote(active: Kadb, safePath: String): RemoteSnapshot? {
         if (safePath == "/") return null
         val parent = RemotePathPolicy.parent(safePath) ?: return null
         val name = safePath.substringAfterLast('/')
         return active.openSync().use { sync ->
             sync.list(parent)
-                .firstOrNull { entry -> entry.name == name && (entry.errorCode == null || entry.errorCode == 0) }
+                .firstOrNull {
+                    entry -> entry.name == name &&
+                        RemotePathPolicy.isSafeChildName(entry.name) &&
+                        (entry.errorCode == null || entry.errorCode == 0)
+                }
                 ?.let { entry ->
                     RemoteSnapshot(
                         size = entry.size,
@@ -198,6 +228,7 @@ class AdbSessionManager private constructor(context: Context) {
     companion object {
         private const val CONNECT_TIMEOUT_MS = 8_000
         private const val SOCKET_TIMEOUT_MS = 15_000
+        private const val CHECKSUM_CACHE_RETENTION_MS = 6L * 60L * 60L * 1000L
         @Volatile private var instance: AdbSessionManager? = null
 
         fun get(context: Context): AdbSessionManager = instance ?: synchronized(this) {

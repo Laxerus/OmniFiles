@@ -1,0 +1,9 @@
+<resources>
+    <string name="adb_checksum_title">ADB SHA-256 Doğrulama</string>
+    <string name="adb_checksum_help">Uzak dosya önce mevcut ADB snapshot doğrulamasıyla geçici uygulama cache’ine alınır. Boyut, değiştirilme zamanı veya mod aktarım sırasında değişirse hash üretilmez. Doğrulanan geçici kopya hash sonrasında silinir.</string>
+    <string name="adb_checksum_retry">SHA-256’yı yeniden hesapla</string>
+    <string name="adb_checksum_calculating">Uzak dosya doğrulanıyor ve SHA-256 hesaplanıyor…</string>
+    <string name="adb_checksum_failed">ADB SHA-256 hesaplanamadı.</string>
+    <string name="adb_checksum_invalid_path">ADB dosya yolu güvenli değil.</string>
+    <string name="adb_checksum_file_info">%1$s\nUzak boyut: %2$s\nADB yolu: %3$s</string>
+</resources>
