@@ -1,14 +1,24 @@
 package dev.laxerus.omnifiles.ui
 
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.webkit.MimeTypeMap
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.AccessSnapshot
 import dev.laxerus.omnifiles.access.StorageAccessController
 import dev.laxerus.omnifiles.databinding.ActivityStorageAnalyzerBinding
+import dev.laxerus.omnifiles.fs.FilePathPolicy
 import dev.laxerus.omnifiles.fs.StorageAnalyzer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +27,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.DateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -147,8 +159,131 @@ class StorageAnalyzerActivity : OmniActivity() {
                 formatBytes(entry.sizeBytes),
                 relativePath(entry.path)
             )
+            row.isClickable = true
+            row.isFocusable = true
+            row.contentDescription = getString(
+                R.string.storage_analyzer_entry_action_hint,
+                entry.name,
+                formatBytes(entry.sizeBytes)
+            )
+            row.setOnClickListener { showEntryActions(entry) }
+            row.setOnLongClickListener {
+                copyEntryPath(entry)
+                true
+            }
             container.addView(row)
         }
+    }
+
+    private fun showEntryActions(entry: StorageAnalyzer.Entry) {
+        val safe = resolveEntry(entry) ?: return
+        val actions = buildList {
+            add(R.string.details)
+            if (safe.isFile) {
+                add(R.string.storage_analyzer_open_file)
+                add(R.string.share)
+                add(R.string.storage_analyzer_sha256)
+            }
+            add(R.string.copy_path)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(safe.name.ifBlank { relativePath(safe.path) })
+            .setItems(actions.map(::getString).toTypedArray()) { _, which ->
+                when (actions[which]) {
+                    R.string.details -> showEntryDetails(safe, entry)
+                    R.string.storage_analyzer_open_file -> openFile(safe)
+                    R.string.share -> shareFile(safe)
+                    R.string.storage_analyzer_sha256 -> openChecksum(safe)
+                    R.string.copy_path -> copyEntryPath(entry)
+                }
+            }
+            .show()
+    }
+
+    private fun resolveEntry(entry: StorageAnalyzer.Entry): File? {
+        val safe = runCatching { FilePathPolicy.requireDirectEntry(File(entry.path), sharedRoot) }
+            .getOrElse {
+                Toast.makeText(this, R.string.storage_analyzer_entry_stale, Toast.LENGTH_LONG).show()
+                return null
+            }
+        if (!safe.exists() || safe.isDirectory != entry.isDirectory) {
+            Toast.makeText(this, R.string.storage_analyzer_entry_stale, Toast.LENGTH_LONG).show()
+            return null
+        }
+        return safe
+    }
+
+    private fun showEntryDetails(file: File, entry: StorageAnalyzer.Entry) {
+        val modified = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+            .format(Date(file.lastModified().coerceAtLeast(entry.modifiedAt)))
+        val type = if (file.isDirectory) {
+            getString(R.string.storage_analyzer_type_folder)
+        } else {
+            mimeFor(file)
+        }
+        val message = listOf(
+            getString(R.string.detail_type, type),
+            getString(R.string.detail_size, formatBytes(entry.sizeBytes)),
+            getString(R.string.detail_modified, modified),
+            getString(R.string.detail_path, file.path)
+        ).joinToString("\n")
+        MaterialAlertDialogBuilder(this)
+            .setTitle(file.name.ifBlank { file.path })
+            .setMessage(message)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    private fun openFile(file: File) {
+        if (!file.isFile) return
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mimeFor(file))
+            clipData = ClipData.newUri(contentResolver, file.name, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.storage_analyzer_no_viewer, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun shareFile(file: File) {
+        if (!file.isFile) return
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = mimeFor(file)
+            putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newUri(contentResolver, file.name, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivity(Intent.createChooser(intent, getString(R.string.share))) }
+            .onFailure {
+                Toast.makeText(this, R.string.storage_analyzer_share_failed, Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun openChecksum(file: File) {
+        if (!file.isFile) return
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+        startActivity(
+            Intent(this, ChecksumActivity::class.java)
+                .setData(uri)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        )
+    }
+
+    private fun copyEntryPath(entry: StorageAnalyzer.Entry) {
+        val safe = resolveEntry(entry) ?: return
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("OmniFiles path", safe.path))
+        Toast.makeText(this, R.string.path_copied, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun mimeFor(file: File): String {
+        val extension = file.extension.lowercase(Locale.ROOT)
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream"
     }
 
     private fun relativePath(path: String): String {
