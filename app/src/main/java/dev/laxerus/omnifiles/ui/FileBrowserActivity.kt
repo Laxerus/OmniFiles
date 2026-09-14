@@ -16,12 +16,14 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.snackbar.Snackbar
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.StorageAccessController
 import dev.laxerus.omnifiles.databinding.ActivityFileBrowserBinding
 import dev.laxerus.omnifiles.fs.FileOperations
 import dev.laxerus.omnifiles.fs.FilePathPolicy
 import dev.laxerus.omnifiles.fs.TrashManager
+import dev.laxerus.omnifiles.fs.TrashTicket
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -480,14 +482,43 @@ class FileBrowserActivity : OmniActivity() {
             val result = runCatching {
                 withContext(Dispatchers.IO) { TrashManager(this@FileBrowserActivity).moveToTrash(file) }
             }
-            result.onSuccess {
+            val ticket = result.getOrNull()
+            ticket?.let {
                 invalidatePendingTransferIfAffected(file)
-                Toast.makeText(this@FileBrowserActivity, "Çöpe taşındı.", Toast.LENGTH_SHORT).show()
-            }.onFailure {
+            }
+            result.onFailure {
                 Toast.makeText(this@FileBrowserActivity, it.message ?: "İşlem başarısız", Toast.LENGTH_LONG).show()
             }
             setOperationBusy(false)
-            if (result.isSuccess) load(currentDir)
+            if (ticket != null) {
+                load(currentDir)
+                Snackbar.make(binding.root, R.string.moved_to_trash, Snackbar.LENGTH_LONG)
+                    .setAction(R.string.undo) { restoreTrash(ticket) }
+                    .show()
+            }
+        }
+    }
+
+    private fun restoreTrash(ticket: TrashTicket) {
+        if (operationBusy) return
+        setOperationBusy(true)
+        lifecycleScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.IO) { TrashManager(this@FileBrowserActivity).restore(ticket) }
+            }
+            setOperationBusy(false)
+            result.onSuccess {
+                Toast.makeText(this@FileBrowserActivity, R.string.trash_restored, Toast.LENGTH_SHORT).show()
+                load(currentDir)
+            }.onFailure {
+                val detail = it.message?.takeIf(String::isNotBlank)
+                val message = if (detail == null) {
+                    getString(R.string.trash_restore_failed)
+                } else {
+                    "${getString(R.string.trash_restore_failed)} $detail"
+                }
+                Toast.makeText(this@FileBrowserActivity, message, Toast.LENGTH_LONG).show()
+            }
         }
     }
 
