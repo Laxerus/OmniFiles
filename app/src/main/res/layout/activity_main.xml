@@ -40,34 +40,58 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             app:cardCornerRadius="24dp">
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="20dp">
+
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/access_title"
                     android:textAppearance="?attr/textAppearanceTitleLarge" />
+
                 <TextView
                     android:id="@+id/storageStatus"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
                     android:textAppearance="?attr/textAppearanceBodyLarge" />
+
                 <TextView
                     android:id="@+id/adbStatus"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:textAppearance="?attr/textAppearanceBodyLarge" />
+
                 <TextView
                     android:id="@+id/rootStatus"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+                <TextView
+                    android:id="@+id/storageUsageText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/storage_usage_unavailable"
+                    android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/storageUsageProgress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:max="100"
+                    android:progress="0"
+                    app:indicatorTrackGapSize="0dp"
+                    app:trackCornerRadius="4dp"
+                    app:trackThickness="8dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -78,6 +102,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:text="@string/open_files" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/trashButton"
             style="@style/Widget.Material3.Button.TonalButton"
@@ -85,6 +110,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="@string/trash_bin" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/grantAccessButton"
             style="@style/Widget.Material3.Button.OutlinedButton"
@@ -92,6 +118,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="@string/grant_all_files" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/adbButton"
             style="@style/Widget.Material3.Button.TonalButton"
@@ -99,6 +126,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="@string/wireless_debugging" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/adbFilesButton"
             style="@style/Widget.Material3.Button.OutlinedButton"
@@ -106,6 +134,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="@string/adb_browse" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/saveScoutButton"
             style="@style/Widget.Material3.Button.OutlinedButton"
@@ -113,6 +142,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="@string/save_scout" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/sqliteStudioButton"
             style="@style/Widget.Material3.Button.OutlinedButton"
