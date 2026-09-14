@@ -227,7 +227,10 @@ class StorageAnalyzerActivity : OmniActivity() {
         val safe = resolveEntry(entry) ?: return
         val actions = buildList {
             add(R.string.details)
-            if (safe.isFile) {
+            if (safe.isDirectory) {
+                add(R.string.storage_analyzer_open_folder)
+            } else {
+                add(R.string.storage_analyzer_show_in_folder)
                 add(R.string.storage_analyzer_open_file)
                 add(R.string.share)
                 add(R.string.storage_analyzer_sha256)
@@ -239,6 +242,8 @@ class StorageAnalyzerActivity : OmniActivity() {
             .setItems(actions.map(::getString).toTypedArray()) { _, which ->
                 when (actions[which]) {
                     R.string.details -> showEntryDetails(safe, entry)
+                    R.string.storage_analyzer_open_folder -> openInBrowser(safe)
+                    R.string.storage_analyzer_show_in_folder -> openInBrowser(safe)
                     R.string.storage_analyzer_open_file -> openFile(safe)
                     R.string.share -> shareFile(safe)
                     R.string.storage_analyzer_sha256 -> openChecksum(safe)
@@ -259,6 +264,23 @@ class StorageAnalyzerActivity : OmniActivity() {
             return null
         }
         return safe
+    }
+
+    private fun openInBrowser(file: File) {
+        val target = if (file.isDirectory) file else file.parentFile ?: sharedRoot
+        val safeTarget = runCatching { FilePathPolicy.requireDirectEntry(target, sharedRoot) }
+            .getOrElse {
+                Toast.makeText(this, R.string.storage_analyzer_entry_stale, Toast.LENGTH_LONG).show()
+                return
+            }
+        if (!safeTarget.exists() || !safeTarget.isDirectory) {
+            Toast.makeText(this, R.string.storage_analyzer_entry_stale, Toast.LENGTH_LONG).show()
+            return
+        }
+        startActivity(
+            Intent(this, FileBrowserActivity::class.java)
+                .putExtra(FileBrowserActivity.EXTRA_START_PATH, safeTarget.canonicalPath)
+        )
     }
 
     private fun showEntryDetails(file: File, entry: StorageAnalyzer.Entry) {
