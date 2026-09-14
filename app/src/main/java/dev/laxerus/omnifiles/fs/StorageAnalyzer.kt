@@ -84,11 +84,12 @@ object StorageAnalyzer {
                         break@scanLoop
                     }
 
-                    val safe = runCatching { FilePathPolicy.requireDirectEntry(frame.file, safeRoot) }
-                        .getOrElse {
-                            skippedEntries++
-                            continue@scanLoop
-                        }
+                    val safe = try {
+                        FilePathPolicy.requireDirectEntry(frame.file, safeRoot)
+                    } catch (_: Throwable) {
+                        skippedEntries++
+                        continue@scanLoop
+                    }
                     if (!safe.exists()) {
                         skippedEntries++
                         continue@scanLoop
