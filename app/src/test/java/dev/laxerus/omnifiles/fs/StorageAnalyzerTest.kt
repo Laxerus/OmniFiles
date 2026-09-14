@@ -59,8 +59,42 @@ class StorageAnalyzerTest {
             assertEquals(30L, usages.getValue(StorageAnalyzer.FileCategory.DOCUMENT).sizeBytes)
             assertEquals(20L, usages.getValue(StorageAnalyzer.FileCategory.DATABASE).sizeBytes)
             assertEquals(10L, usages.getValue(StorageAnalyzer.FileCategory.OTHER).sizeBytes)
+            assertEquals("clip.mp4", usages.getValue(StorageAnalyzer.FileCategory.VIDEO).largestFiles.single().name)
             assertEquals(result.fileCount, result.categories.sumOf { it.fileCount })
             assertEquals(result.scannedBytes, result.categories.sumOf { it.sizeBytes })
+            assertTrue(result.categories.all { it.largestFiles.size <= StorageAnalyzer.DEFAULT_CATEGORY_TOP_LIMIT })
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun keepsLargestFilesPerCategoryBoundedAndSorted() {
+        val root = createTempDirectory("omnifiles-analyzer-category-top-").toFile()
+        try {
+            repeat(30) { index ->
+                File(root, "video-${index.toString().padStart(2, '0')}.mp4")
+                    .writeBytes(ByteArray(index + 1))
+            }
+            repeat(6) { index ->
+                File(root, "image-${index.toString().padStart(2, '0')}.jpg")
+                    .writeBytes(ByteArray(100 + index))
+            }
+
+            val result = StorageAnalyzer.scan(
+                root = root,
+                maxEntries = 100,
+                topLimit = 2,
+                categoryTopLimit = 4
+            )
+            val usages = result.categories.associateBy(StorageAnalyzer.CategoryUsage::category)
+            val videos = usages.getValue(StorageAnalyzer.FileCategory.VIDEO).largestFiles
+            val images = usages.getValue(StorageAnalyzer.FileCategory.IMAGE).largestFiles
+
+            assertEquals(listOf(30L, 29L, 28L, 27L), videos.map { it.sizeBytes })
+            assertEquals(listOf(105L, 104L, 103L, 102L), images.map { it.sizeBytes })
+            assertEquals(4, videos.size)
+            assertEquals(4, images.size)
+            assertEquals(2, result.largestFiles.size)
         } finally {
             root.deleteRecursively()
         }
@@ -104,6 +138,7 @@ class StorageAnalyzerTest {
             assertTrue(result.largestFiles.size <= 3)
             assertEquals(result.fileCount, result.categories.sumOf { it.fileCount })
             assertEquals(result.scannedBytes, result.categories.sumOf { it.sizeBytes })
+            assertTrue(result.categories.all { it.largestFiles.size <= StorageAnalyzer.DEFAULT_CATEGORY_TOP_LIMIT })
         } finally {
             root.deleteRecursively()
         }
@@ -127,6 +162,7 @@ class StorageAnalyzerTest {
             assertTrue(result.visitedEntries < 51)
             assertEquals(result.fileCount, result.categories.sumOf { it.fileCount })
             assertEquals(result.scannedBytes, result.categories.sumOf { it.sizeBytes })
+            assertTrue(result.categories.all { it.largestFiles.size <= StorageAnalyzer.DEFAULT_CATEGORY_TOP_LIMIT })
         } finally {
             root.deleteRecursively()
         }
