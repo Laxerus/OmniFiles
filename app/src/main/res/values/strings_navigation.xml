@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_tools">Ayarlar ve Araçlar</string>
+    <string name="settings_hub_title">Ayarlar ve Araçlar</string>
+    <string name="settings_hub_subtitle">OmniFiles normalde doğrudan dosya yöneticisi olarak açılır. Gelişmiş araçları, erişim ayarlarını ve ADB seçeneklerini buradan yönet.</string>
+    <string name="back_to_files">Dosyalara dön</string>
+    <string name="grant_access_inline">Depolama erişimini aç</string>
+</resources>
