@@ -5,6 +5,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.databinding.RowFileBinding
 import java.io.File
 import java.text.DateFormat
@@ -36,6 +37,8 @@ class FileListAdapter(
                 onLongClick(file)
                 true
             }
+            binding.moreButton.contentDescription = binding.root.context.getString(R.string.more_actions)
+            binding.moreButton.setOnClickListener { onLongClick(file) }
         }
     }
 
