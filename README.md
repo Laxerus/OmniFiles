@@ -1,32 +1,45 @@
 # OmniFiles
 
-OmniFiles, Android için tek APK içinde çalışan gelişmiş dosya yöneticisi, save inceleme aracı ve geliştirici yardımcı paketidir. **Shizuku, LADB veya PC çalışma anında gerekmez.** Gelişmiş shell erişimi için Android 11+'ın kendi **Kablosuz hata ayıklama** özelliği kullanılır.
+OmniFiles, Android için tek APK yaklaşımıyla geliştirilen modern bir dosya yöneticisi ve geliştirici araç setidir. Normal ortak depolama işlemlerini doğrudan Android API'leriyle, daha ileri dosya inceleme işlemlerini ise Android 11+ Kablosuz Hata Ayıklama üzerinden APK içine gömülü ADB istemcisiyle yapar.
 
-## 0.8.0-dev öne çıkanlar
+**Shizuku, LADB veya çalışma anında bir PC zorunlu değildir.** Android'in güvenlik modeli yine geçerlidir; dahili ADB normalde `shell` kimliğiyle çalışır ve uygulama özel verilerine Android'in izin vermediği durumlarda OmniFiles bu sınırı aşmış gibi davranmaz.
 
-### 0.8 — Material 3 arayüz + sağlamlık dalgası
+## Geliştirme durumu
 
-- Uygulamanın ana görsel sistemi **Material 3** tabanında yeniden kuruldu: modern kartlar, tonal/outlined action tile'lar, büyük köşe yarıçapları, tutarlı surface katmanları ve sade ikon ailesi.
-- Android 12+ cihazlarda **Dynamic Color** otomatik uygulanır; menüden **Sistem / Açık / Koyu** görünüm seçilebilir.
-- Tüm Activity'ler ortak `OmniActivity` tabanına taşındı; Android 15/16 edge-to-edge ve display-cutout/system-bar inset davranışı merkezi olarak güvenli yönetilir.
-- Ana ekran; Erişim Merkezi, hızlı konumlar ve dahili araçlar olarak yeniden tasarlandı. ADB/root/depolama durumları gerçek sağlık testiyle gösterilir.
-- Dosya tarayıcısı Material 3 toolbar, backend etiketi, öğe sayacı, boş-durum kartı, checkable dosya kartları ve oluşturma FAB'ı ile yenilendi; liste `ListAdapter + DiffUtil` kullanır.
-- Dahili ADB eşleştirme ekranı iki aşamalı modern onboarding'e geçirildi ve host/port/6-haneli kod doğrulaması hem UI hem ADB katmanında zorunlu hale getirildi.
-- Save Scout hedef-uygulama ekranı modernleştirildi ve Android paket adı doğrulaması sıkılaştırıldı.
-- **SQLite Studio** artık SQL yazmadan tablo/satır seçip hücre değerlerini düzenleyebilir. BLOB alanlar güvenlik için salt okunur, `WITHOUT ROWID` tablolar SQL konsoluna yönlendirilir; değişiklikler yine kullanıcı `Kaydet` demeden kaynak dosyaya yazılmaz.
-- Save restore artık hedef dosyaları önce güvenli snapshot'a alır. Restore ortada hata verirse dokunulan dosyaları geri yüklemeyi dener; tekrar eden arşiv yolları ve birden fazla manifest reddedilir.
-- ZIP restore/extract, hash ve karşılaştırma akışlarında null-stream/sessiz overwrite noktaları sertleştirildi; hash aracı dosyayı tek geçişte birden fazla algoritmayla işler.
-- Repoya hızlı `scripts/source_sanity.py` kontrolü eklendi. GitHub Actions artık kaynak/XML kontrolü → unit test → **Android Lint** → `assembleDebug` sırasını zorunlu build gate olarak çalıştırır.
+Aktif geliştirme sürümü `0.8.0-dev` olarak sabit tutulur. Normal özellik ve hata düzeltmeleri sürüm numarasını otomatik ilerletmez.
 
-## Dahili Kablosuz ADB
+Repository kökündeki normal Android/Gradle ağacı kaynak kodun tek güncel kaynağıdır. `.source/` klasörü yalnızca tarihsel kurtarma snapshot'ı olarak korunur ve aktif APK build'i tarafından kullanılmaz.
 
-OmniFiles, `com.flyfishxu:kadb:2.1.4` istemcisini APK içine gömer. Bu nedenle ADB shell kullanmak için Shizuku/LADB kurmak veya bilgisayara bağlanmak gerekmez.
+## Mevcut özellikler
 
-## Android güvenlik sınırı
+- Android 11+ için **Tüm dosyalara erişim** ayar akışı; eski Android sürümlerinde uygun legacy izin akışı.
+- Ortak depolama için güvenli yerel dosya tarayıcısı.
+- Yerel ve ADB tarayıcılarında **arama**, **ad/tarih/boyut sıralama**, klasörleri üstte tutma ve **gizli öğe filtresi**.
+- Canonical-path doğrulaması; depolama kökü dışına kaçışların engellenmesi.
+- `Android`, `Android/data`, `Android/obb` ve `Android/media` gibi kritik dizin köklerinin kendisine yönelik tehlikeli mutasyonların engellenmesi.
+- Dosyaları destekleyen uygulamalarda açmak için güvenli `FileProvider` paylaşımı.
+- Doğrudan kalıcı silme yerine uygulama içi güvenli çöp alanına taşıma.
+- APK içine gömülü `Kadb 2.1.4` ile Kablosuz ADB eşleştirme ve bağlantı.
+- mDNS ile ADB uç noktası keşfi; pair/connect portlarının aynı cihaz host'u ile eşleştirilmesi.
+- Daha önce eşleştirilmiş cihaza tekrar kod istemeden **yalnızca bağlan** akışı.
+- ADB klasör listeleme, dosya önizleme ve Android'in belge seçicisine güvenli dışa aktarma.
+- Geçici ADB önizleme dosyalarının yaşa göre cache temizliği.
+- **Save Scout** ile üçüncü taraf paketlerini listeleme ve erişilebilir standart oyun/save konumlarını tarama.
+- Save Scout'ta `SaveGames`, `Saved`, `userdata`, `profiles`, `worlds`, `UE4Game` gibi yaygın klasör adlarını sınırlı ve güvenli biçimde öne çıkarma.
+- **SQLite Studio** ile çalışma kopyasında tablo/satır görüntüleme ve uygun hücreleri düzenleme.
+- BLOB hücrelerini ve güvenli rowid düzenlemesi olmayan `WITHOUT ROWID` tabloları salt okunur tutma.
+- SQLite kaydında önce bütünlük kontrolü, ardından kaynak yazımı; yazılan dosyayı yeniden okuyup **boyut + SHA-256 + SQLite integrity** doğrulaması ve başarısızlıkta yedekten geri yükleme denemesi.
+- Material 3 tabanı ve Android 15/16 edge-to-edge uyumlu ortak Activity altyapısı.
 
-Tek APK olması Android'in sandbox güvenlik modelini ortadan kaldırmaz. Dahili ADB normalde `shell` kimliğiyle çalışır. Private app data için hedef uygulamanın `debuggable=true` olup `run-as` kabul etmesi veya cihazda önceden kullanıcı tarafından root sağlanmış olması gerekir.
+## Güvenlik yaklaşımı
 
-## Derleme
+OmniFiles, Android sandbox'ını atlatıyormuş gibi davranmaz. Kablosuz ADB kullanıcı tarafından Android ayarlarından açıkça etkinleştirilmeli ve eşleştirilmelidir. Root tespiti yalnızca durum bilgisi içindir; uygulama kendiliğinden `su` başlatmaz. Shell/path girdileri ayrı doğrulama katmanlarından geçirilir ve sembolik bağlantı önizlemeleri ADB tarayıcısında engellenir.
+
+SQLite düzenleme doğrudan kaynak üzerinde yapılmaz. Önce uygulama cache alanında çalışma ve yedek kopyaları oluşturulur; değişiklikler kullanıcı kaydetmeden kaynak URI'ye yazılmaz.
+
+## Build ve test
+
+Gereksinimler:
 
 - JDK 17+
 - Android SDK 36
@@ -34,4 +47,23 @@ Tek APK olması Android'in sandbox güvenlik modelini ortadan kaldırmaz. Dahili
 - Gradle 8.11.1
 - Kotlin 2.4.0
 
-GitHub Actions workflow'u debug APK'yı `OmniFiles-debug-apk` artifact'i olarak üretir.
+Aktif GitHub Actions akışı doğrudan repository kökündeki güncel kaynak ağacını kullanır ve şu gate'leri uygular:
+
+1. `scripts/source_sanity.py`
+2. `:app:testDebugUnitTest`
+3. `:app:lintDebug`
+4. `:app:assembleDebug`
+5. APK ZIP bütünlük kontrolü ve SHA-256 çıktısı
+
+`source_sanity.py`, aktif workflow'un eski `.source` snapshot'ını yeniden build kaynağı yapmasını özellikle hata kabul eder.
+
+## Ana kaynak alanları
+
+- `app/src/main/java/dev/laxerus/omnifiles/access` — depolama erişimi ve erişim durumu
+- `app/src/main/java/dev/laxerus/omnifiles/adb` — Kablosuz ADB, mDNS ve uzak yol politikaları
+- `app/src/main/java/dev/laxerus/omnifiles/fs` — yerel yol güvenliği ve çöp yönetimi
+- `app/src/main/java/dev/laxerus/omnifiles/scout` — Save Scout
+- `app/src/main/java/dev/laxerus/omnifiles/sqlite` — SQLite Studio çalışma alanı
+- `app/src/main/java/dev/laxerus/omnifiles/ui` — Activity ve liste arayüzleri
+- `app/src/test` — unit testler
+- `scripts/source_sanity.py` — hızlı kaynak ve CI regresyon kontrolleri
