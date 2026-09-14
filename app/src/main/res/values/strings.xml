@@ -11,6 +11,9 @@
     <string name="trash_bin">Çöp Kutusu</string>
     <string name="trash_bin_count">Çöp Kutusu • %1$d öğe</string>
     <string name="grant_all_files">Tüm dosyalara erişimi aç</string>
+    <string name="storage_access_ready">Dosya erişimi hazır</string>
+    <string name="storage_usage">Depolama: %1$s / %2$s kullanılıyor • %3$s boş • %4$d%%</string>
+    <string name="storage_usage_unavailable">Depolama kapasitesi okunamadı.</string>
     <string name="wireless_debugging">Kablosuz ADB</string>
     <string name="adb_browse">ADB ile Android/data</string>
     <string name="save_scout">Save Scout</string>
