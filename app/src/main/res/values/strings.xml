@@ -17,7 +17,7 @@
     <string name="adb_not_ready">Önce Kablosuz ADB bağlantısını kur.</string>
     <string name="adb_loading">ADB üzerinden okunuyor…</string>
     <string name="adb_symlink_blocked">Güvenlik için sembolik bağlantı önizlemesi kapalı.</string>
-    <string name="adb_long_press_export">Dosyayı cihaza kaydetmek için uzun bas.</string>
+    <string name="adb_long_press_export">Dosyayı cihaza kaydetmek için uzun bas veya sağdaki düğmeyi kullan.</string>
     <string name="adb_export_ready">Kaydedilecek dosya hazır. Hedef konumu seç.</string>
     <string name="adb_export_done">Dosya kaydedildi.</string>
     <string name="adb_export_failed">Dosya kaydedilemedi.</string>
@@ -51,10 +51,14 @@
     <string name="cancel_transfer">Aktarımı iptal et</string>
     <string name="copy_ready">Kopyalanacak öğe seçildi. Hedef klasöre gidip “Buraya kopyala”ya dokun.</string>
     <string name="move_ready">Taşınacak öğe seçildi. Hedef klasöre gidip “Buraya taşı”ya dokun.</string>
+    <string name="transfer_copy_label">Kopyalanacak: %1$s</string>
+    <string name="transfer_move_label">Taşınacak: %1$s</string>
     <string name="copying">Öğe güvenli biçimde kopyalanıyor…</string>
     <string name="moving">Öğe güvenli biçimde taşınıyor…</string>
     <string name="transfer_done">Dosya işlemi tamamlandı.</string>
     <string name="transfer_missing">Seçilen kaynak artık mevcut değil; aktarım iptal edildi.</string>
+    <string name="more_actions">Diğer işlemler</string>
+    <string name="export_file">Dosyayı dışa aktar</string>
     <string name="copy_path">Yolu kopyala</string>
     <string name="path_copied">Dosya yolu panoya kopyalandı.</string>
     <string name="folder_created">Klasör oluşturuldu.</string>
