@@ -31,6 +31,7 @@
         <activity android:name=".ui.SaveScoutActivity" android:exported="false" />
         <activity android:name=".ui.AdbBrowserActivity" android:exported="false" />
         <activity android:name=".ui.AdbPairingActivity" android:exported="false" />
+        <activity android:name=".ui.TrashActivity" android:exported="false" />
         <activity android:name=".ui.FileBrowserActivity" android:exported="false" />
         <activity
             android:name=".ui.MainActivity"
