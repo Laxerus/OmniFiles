@@ -1,5 +1,6 @@
 package dev.laxerus.omnifiles.fs
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -88,6 +89,24 @@ class FileOperationsTest {
             assertEquals("slot-a", copied.readText())
             assertEquals("save (1).dat", copied.name)
             assertEquals("older", File(destination, "save.dat").readText())
+            assertNoTransferStaging(destination)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun copiesBinaryPayloadByteForByteAndCommitsStaging() {
+        val root = createTempDirectory("omnifiles-copy-binary-").toFile()
+        try {
+            val payload = ByteArray(256 * 1024) { index -> ((index * 31) xor (index ushr 3)).toByte() }
+            val source = File(root, "payload.bin").apply { writeBytes(payload) }
+            val destination = File(root, "Backup").apply { mkdir() }
+
+            val copied = FileOperations.copy(source, destination, root)
+
+            assertArrayEquals(payload, copied.readBytes())
+            assertEquals("payload.bin", copied.name)
+            assertNoTransferStaging(destination)
         } finally {
             root.deleteRecursively()
         }
@@ -105,6 +124,7 @@ class FileOperationsTest {
             assertEquals("LICENSE (1)", copied.name)
             assertEquals("new", copied.readText())
             assertEquals("old", File(destination, "LICENSE").readText())
+            assertNoTransferStaging(destination)
         } finally {
             root.deleteRecursively()
         }
@@ -124,6 +144,7 @@ class FileOperationsTest {
             assertTrue(source.exists())
             assertEquals("world-data", File(copied, "level.dat").readText())
             assertEquals("region-data", File(copied, "region/r.0.0.mca").readText())
+            assertNoTransferStaging(destination)
         } finally {
             root.deleteRecursively()
         }
@@ -158,8 +179,15 @@ class FileOperationsTest {
             assertTrue(moved.isFile)
             assertEquals("payload", moved.readText())
             assertEquals(File(destination, "move.txt").canonicalPath, moved.canonicalPath)
+            assertNoTransferStaging(destination)
         } finally {
             root.deleteRecursively()
         }
+    }
+
+    private fun assertNoTransferStaging(directory: File) {
+        assertTrue(
+            directory.listFiles().orEmpty().none { it.name.startsWith(".omnifiles-transfer-") }
+        )
     }
 }
