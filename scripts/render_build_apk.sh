@@ -87,8 +87,8 @@ sdkmanager "platform-tools" "platforms;android-${ANDROID_PLATFORM}" "build-tools
 log "Kaynak sanity kontrolü"
 python3 scripts/source_sanity.py
 
-log "Debug APK derleniyor"
-gradle --no-daemon --stacktrace :app:assembleDebug
+log "Unit test + Android Lint + Debug APK"
+gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 
 APK="$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' | head -n 1)"
 if [[ -z "$APK" || ! -s "$APK" ]]; then
