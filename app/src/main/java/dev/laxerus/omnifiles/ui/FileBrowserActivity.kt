@@ -26,6 +26,8 @@ import dev.laxerus.omnifiles.fs.FavoriteStore
 import dev.laxerus.omnifiles.fs.FileInspector
 import dev.laxerus.omnifiles.fs.FileOperations
 import dev.laxerus.omnifiles.fs.FilePathPolicy
+import dev.laxerus.omnifiles.fs.TransferBatchRunner
+import dev.laxerus.omnifiles.fs.TransferBatchRuntime
 import dev.laxerus.omnifiles.fs.TrashManager
 import dev.laxerus.omnifiles.fs.TrashTicket
 import kotlinx.coroutines.Dispatchers
@@ -602,37 +604,70 @@ class FileBrowserActivity : OmniActivity() {
         val destinationDirectory = currentDir
         setOperationBusy(true)
         lifecycleScope.launch {
-            val outcomes = withContext(Dispatchers.IO) {
-                val succeeded = mutableListOf<String>()
-                val failed = mutableListOf<String>()
-                existingPaths.forEach { path ->
-                    val source = File(path)
-                    runCatching {
+            val outcome = withContext(Dispatchers.IO) {
+                TransferBatchRunner.run(
+                    operation = when (pending.mode) {
+                        TransferMode.COPY -> TransferBatchRuntime.Operation.COPY
+                        TransferMode.MOVE -> TransferBatchRuntime.Operation.MOVE
+                    },
+                    items = existingPaths,
+                    labelOf = { path -> File(path).name.ifBlank { path } },
+                    estimateBytes = { path, isCancelled ->
+                        FileOperations.estimateTransferBytes(File(path), sharedRoot, isCancelled)
+                    },
+                    execute = { path, onProgress, isCancelled ->
+                        val source = File(path)
                         when (pending.mode) {
-                            TransferMode.COPY -> FileOperations.copy(source, destinationDirectory, sharedRoot)
-                            TransferMode.MOVE -> FileOperations.move(source, destinationDirectory, sharedRoot)
+                            TransferMode.COPY -> FileOperations.copy(
+                                source = source,
+                                destinationDirectory = destinationDirectory,
+                                sharedRoot = sharedRoot,
+                                onProgress = onProgress,
+                                isCancelled = isCancelled
+                            )
+                            TransferMode.MOVE -> FileOperations.move(
+                                source = source,
+                                destinationDirectory = destinationDirectory,
+                                sharedRoot = sharedRoot,
+                                onProgress = onProgress,
+                                isCancelled = isCancelled
+                            )
                         }
-                    }.onSuccess { succeeded += path }
-                        .onFailure { failed += path }
-                }
-                succeeded to failed
+                    }
+                )
             }
 
-            val succeeded = outcomes.first
-            val failed = outcomes.second
-            if (pending.mode == TransferMode.MOVE) {
-                pendingTransfer = failed.takeIf { it.isNotEmpty() }?.let { PendingTransfer(it, TransferMode.MOVE) }
-            } else {
-                pendingTransfer = PendingTransfer(existingPaths, TransferMode.COPY)
+            val succeeded = outcome.succeeded
+            val failed = outcome.failed
+            val remaining = outcome.remaining
+            pendingTransfer = when {
+                outcome.cancelled -> {
+                    (failed + remaining)
+                        .filter { File(it).exists() }
+                        .distinct()
+                        .takeIf { it.isNotEmpty() }
+                        ?.let { PendingTransfer(it, pending.mode) }
+                }
+                pending.mode == TransferMode.MOVE -> {
+                    failed.takeIf { it.isNotEmpty() }?.let { PendingTransfer(it, TransferMode.MOVE) }
+                }
+                else -> PendingTransfer(existingPaths, TransferMode.COPY)
             }
 
             setOperationBusy(false)
             val message = when {
+                outcome.cancelled -> getString(
+                    R.string.transfer_batch_cancelled_toast,
+                    succeeded.size,
+                    remaining.size,
+                    failed.size
+                )
                 failed.isEmpty() && succeeded.size == 1 -> getString(R.string.transfer_done)
                 failed.isEmpty() -> getString(R.string.batch_transfer_done, succeeded.size)
                 else -> getString(R.string.batch_transfer_partial, succeeded.size, failed.size)
             }
-            Toast.makeText(this@FileBrowserActivity, message, if (failed.isEmpty()) Toast.LENGTH_SHORT else Toast.LENGTH_LONG).show()
+            val duration = if (outcome.cancelled || failed.isNotEmpty()) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+            Toast.makeText(this@FileBrowserActivity, message, duration).show()
             if (succeeded.isNotEmpty()) load(destinationDirectory) else updateTransferUi()
         }
     }
