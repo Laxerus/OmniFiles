@@ -2,6 +2,7 @@
     <string name="app_name">OmniFiles</string>
     <string name="home_title">OmniFiles</string>
     <string name="home_subtitle">Erişim durumunu gör, dosyalarını yönet ve gerektiğinde dahili ADB ile yetkili işlemlere geç.</string>
+    <string name="version_label">Sürüm %1$s</string>
     <string name="access_title">Erişim Merkezi</string>
     <string name="direct_storage">Ortak depolama</string>
     <string name="adb_shell">Dahili ADB shell</string>
