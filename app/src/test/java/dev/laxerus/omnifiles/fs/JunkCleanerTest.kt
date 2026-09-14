@@ -39,6 +39,30 @@ class JunkCleanerTest {
         }
     }
 
+    @Test fun permanentCleanDeletesUnchangedCandidateAndSkipsChangedOne() {
+        val root = Files.createTempDirectory("omnifiles-junk-clean-").toFile()
+        val now = System.currentTimeMillis()
+        val old = now - 10L * 24L * 60L * 60L * 1000L
+        try {
+            val deleteMe = root.resolve("delete.tmp").apply { writeText("old"); setLastModified(old) }
+            val changed = root.resolve("changed.tmp").apply { writeText("old"); setLastModified(old) }
+            val scan = JunkCleaner.scan(root, now = now)
+
+            changed.writeText("new-content")
+            changed.setLastModified(old + 1_000L)
+
+            val result = JunkCleaner.clean(root, scan.candidates, now = now)
+
+            assertFalse(deleteMe.exists())
+            assertTrue(changed.exists())
+            assertEquals(1, result.deleted)
+            assertEquals(1, result.failed)
+            assertEquals(3L, result.reclaimedBytes)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     @Test fun respectsCandidateLimit() {
         val root = Files.createTempDirectory("omnifiles-junk-limit-").toFile()
         val now = System.currentTimeMillis()
