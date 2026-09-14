@@ -8,7 +8,9 @@ on:
       - "app/**"
       - "scripts/**"
       - "build.gradle"
+      - "build.gradle.kts"
       - "settings.gradle"
+      - "settings.gradle.kts"
       - "gradle.properties"
       - ".github/workflows/build-apk.yml"
 
@@ -17,7 +19,7 @@ permissions:
 
 jobs:
   build-debug:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
 
     steps:
