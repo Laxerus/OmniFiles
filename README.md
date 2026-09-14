@@ -21,6 +21,7 @@ En güncel debug APK, repository'nin `main` dalından Render build hattıyla ür
 
 - Android 11+ için **Tüm dosyalara erişim** ayar akışı; eski Android sürümlerinde uygun legacy izin akışı.
 - Ana ekranda ortak depolamanın **kullanılan / toplam / boş alanını ve doluluk yüzdesini** gösteren canlı depolama sağlık göstergesi.
+- Ana ekranda kayıtlı ADB uç noktasını yalnız yapılandırılmış kabul etmek yerine gerçek shell probe ile **canlı bağlantı sağlığı** kontrolü.
 - Ortak depolama için güvenli yerel dosya tarayıcısı.
 - Yerel tarayıcıda dosya ve klasörler için **kopyala / taşı / hedef klasöre yapıştır** akışı.
 - Kopyalamada mevcut kullanıcı dosyasının üzerine yazmama; isim çakışmasında güvenli yeni ad üretme.
@@ -36,10 +37,12 @@ En güncel debug APK, repository'nin `main` dalından Render build hattıyla ür
 - `Android`, `Android/data`, `Android/obb` ve `Android/media` gibi kritik dizin köklerinin kendisine yönelik tehlikeli mutasyonların engellenmesi.
 - Dosyaları destekleyen uygulamalarda açmak için güvenli `FileProvider` paylaşımı.
 - Doğrudan kalıcı silme yerine uygulama içi güvenli çöp alanına taşıma.
+- Bağımsız **SHA-256 Doğrulama** aracı: Android belge seçiciden herhangi bir dosyayı salt okunur açıp hash üretme, dosya adı/boyut/MIME bilgisini gösterme ve özeti panoya kopyalama.
 - APK içine gömülü `Kadb 2.1.4` ile Kablosuz ADB eşleştirme ve bağlantı.
 - mDNS ile ADB uç noktası keşfi; pair/connect portlarının aynı cihaz host'u ile eşleştirilmesi.
 - Daha önce eşleştirilmiş cihaza tekrar kod istemeden **yalnızca bağlan** akışı.
 - ADB klasör listeleme, dosya önizleme, doğrudan paylaşım ve Android'in belge seçicisine güvenli dışa aktarma.
+- ADB dosya çekimlerinde aktarım öncesi/sonrası **boyut + mtime + mod snapshot doğrulaması**; uzak dosya aktarım sırasında değişirse yerel geçici kopyayı reddetme ve silme.
 - ADB tarayıcısında yükleme durumunun listeden bağımsız progress göstergesiyle yönetilmesi; başarılı yüklemeden sonra takılı kalan “yükleniyor” durumunun engellenmesi.
 - Geçici ADB önizleme/dışa aktarma dosyalarının iptal, başarı, Activity yeniden oluşturma ve yaşa bağlı cache temizliği akışlarında yönetilmesi.
 - **Save Scout** ile üçüncü taraf paketlerini listeleme ve erişilebilir standart oyun/save konumlarını tarama.
@@ -54,6 +57,10 @@ En güncel debug APK, repository'nin `main` dalından Render build hattıyla ür
 OmniFiles, Android sandbox'ını atlatıyormuş gibi davranmaz. Kablosuz ADB kullanıcı tarafından Android ayarlarından açıkça etkinleştirilmeli ve eşleştirilmelidir. Root tespiti yalnızca durum bilgisi içindir; uygulama kendiliğinden `su` başlatmaz. Shell/path girdileri ayrı doğrulama katmanlarından geçirilir ve sembolik bağlantı önizlemeleri ADB tarayıcısında engellenir.
 
 Yerel kopyala/taşı katmanı canonical path doğrulamasından geçer. Transfer hedefinde sessiz overwrite yapılmaz; klasör kendi altına gönderilemez. Kopya önce aynı hedef klasörde gizli bir staging öğesine yazılır. Her dosyanın kaynak akışından hesaplanan SHA-256 değeri staging kopyasının tekrar okunmasıyla doğrulanır; ancak bundan sonra staging öğesi görünür hedef adına geçirilir. Kopya sırasında hata oluşursa bu işlem tarafından yeni oluşturulan kısmi staging öğeleri geri alınmaya çalışılır. Taşıma farklı dosya sistemi nedeniyle doğrudan rename kullanamazsa aynı doğrulanmış kopya akışına düşer ve hedef kopya doğrulanmadan eski konumu temizlemez.
+
+ADB pull akışı, mümkün olduğunda uzak dosyayı aynı parent dizininden transfer öncesi ve sonrası tekrar stat ederek boyut, değiştirilme zamanı ve mode bilgisini karşılaştırır. Dosya aktarım sırasında değişmiş veya kaybolmuşsa önizleme/dışa aktarma kopyası güvenilir kabul edilmez ve silinir.
+
+SHA-256 aracı seçilen belgeyi değiştirmez; dosyayı yalnızca `ContentResolver` üzerinden salt okunur akış olarak okur. Hash hesaplaması UI thread'i dışında yapılır ve ekran döndürmede tamamlanmış sonuç korunur.
 
 SQLite düzenleme doğrudan kaynak üzerinde yapılmaz. Önce uygulama cache alanında çalışma ve yedek kopyaları oluşturulur; değişiklikler kullanıcı kaydetmeden kaynak URI'ye yazılmaz.
 
@@ -76,17 +83,17 @@ Aktif GitHub Actions akışı doğrudan repository kökündeki güncel kaynak a�
 4. `:app:assembleDebug`
 5. APK ZIP bütünlük kontrolü ve SHA-256 çıktısı
 
-`FileOperationsTest`, klasör oluşturma/yeniden adlandırmaya ek olarak dosya kopyalama, binary içerik doğruluğu, staging commit temizliği, klasör ağacı kopyalama, isim çakışması, klasörün kendi içine transfer edilmesinin engellenmesi ve taşıma davranışını doğrular.
+`FileOperationsTest`, klasör oluşturma/yeniden adlandırmaya ek olarak dosya kopyalama, binary içerik doğruluğu, staging commit temizliği, klasör ağacı kopyalama, isim çakışması, klasörün kendi içine transfer edilmesinin engellenmesi ve taşıma davranışını doğrular. `DigestUtilsTest`, bağımsız SHA-256 aracının bilinen test vektörünü ve binary byte dönüşümünü doğrular.
 
 Render build hattı, GitHub-hosted runner erişilemediğinde aynı `main` kaynağından taşınabilir Android toolchain kurarak APK'yı üretir ve sabit indirme adresinde yayınlar. Render hattı da unit test, Android Lint ve APK assemble kapılarını geçmeden artifact yayınlamaz.
 
-`source_sanity.py`, aktif workflow'un eski `.source` snapshot'ını yeniden build kaynağı yapmasını, deprecated geri navigasyonunu, sessiz overwrite davranışını, doğrulanmış staging transferinin kaldırılmasını veya güvenli transfer wiring'inin bozulmasını hata kabul eder.
+`source_sanity.py`, aktif workflow'un eski `.source` snapshot'ını yeniden build kaynağı yapmasını, deprecated geri navigasyonunu, sessiz overwrite davranışını, doğrulanmış staging transferinin kaldırılmasını, ADB pull snapshot doğrulamasının kaybolmasını, checksum aracının sökülmesini veya güvenli transfer wiring'inin bozulmasını hata kabul eder.
 
 ## Ana kaynak alanları
 
 - `app/src/main/java/dev/laxerus/omnifiles/access` — depolama erişimi ve erişim durumu
-- `app/src/main/java/dev/laxerus/omnifiles/adb` — Kablosuz ADB, mDNS ve uzak yol politikaları
-- `app/src/main/java/dev/laxerus/omnifiles/fs` — yerel yol güvenliği, doğrulanmış transfer işlemleri ve çöp yönetimi
+- `app/src/main/java/dev/laxerus/omnifiles/adb` — Kablosuz ADB, mDNS, canlı health probe ve doğrulanmış uzak dosya pull politikaları
+- `app/src/main/java/dev/laxerus/omnifiles/fs` — yerel yol güvenliği, SHA-256 yardımcıları, doğrulanmış transfer işlemleri ve çöp yönetimi
 - `app/src/main/java/dev/laxerus/omnifiles/scout` — Save Scout
 - `app/src/main/java/dev/laxerus/omnifiles/sqlite` — SQLite Studio çalışma alanı
 - `app/src/main/java/dev/laxerus/omnifiles/ui` — Activity ve liste arayüzleri
