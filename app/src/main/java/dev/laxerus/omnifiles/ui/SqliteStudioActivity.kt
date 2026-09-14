@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -49,6 +50,9 @@ class SqliteStudioActivity : OmniActivity() {
 
         binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
         binding.toolbar.setNavigationOnClickListener { handleExit() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = handleExit()
+        })
         rowsAdapter = SqliteRowAdapter(::chooseCell)
         binding.rowsList.layoutManager = LinearLayoutManager(this)
         binding.rowsList.adapter = rowsAdapter
@@ -61,9 +65,6 @@ class SqliteStudioActivity : OmniActivity() {
             tables.getOrNull(position)?.let(::selectTable)
         }
     }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() = handleExit()
 
     override fun onDestroy() {
         workspace.close()
@@ -209,6 +210,7 @@ class SqliteStudioActivity : OmniActivity() {
     }
 
     private fun handleExit() {
+        if (busy) return
         if (!workspace.dirty) {
             finish()
             return
