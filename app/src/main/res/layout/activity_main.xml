@@ -104,6 +104,14 @@
             android:text="@string/open_files" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/storageAnalyzerButton"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/storage_analyzer" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/trashButton"
             style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="match_parent"
