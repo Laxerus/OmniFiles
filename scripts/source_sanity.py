@@ -105,7 +105,7 @@ if file_inspector.is_file():
 favorite_store = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt"
 if favorite_store.is_file():
     text = favorite_store.read_text(encoding="utf-8")
-    for token in ("FilePathPolicy.requireInside", "SharedPreferences", "fun list()", "fun toggle("):
+    for token in ("FilePathPolicy.requireInside", "SharedPreferences", "fun list(", "fun toggle("):
         if token not in text:
             errors.append(f"favorite path safety/persistence missing: {token}")
 
@@ -124,7 +124,7 @@ if file_browser.is_file():
         "restoreTrashTickets",
         "FileInspector.inspect",
         "FavoriteStore",
-        "showFavorites",
+        "showFavoritePicker",
         "toggleCurrentFavorite",
         "STATE_CURRENT_PATH",
         "restoreTrash",
@@ -138,7 +138,7 @@ browser_layout = ROOT / "app/src/main/res/layout/activity_file_browser.xml"
 if browser_layout.is_file():
     text = browser_layout.read_text(encoding="utf-8")
     for view_id in (
-        "@+id/favoriteButton",
+        "@+id/favoriteToggleButton",
         "@+id/favoritesButton",
         "@+id/selectionBar",
         "@+id/selectAllButton",
