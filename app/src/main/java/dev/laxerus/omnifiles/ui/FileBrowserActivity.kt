@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.webkit.MimeTypeMap
@@ -64,13 +65,14 @@ class FileBrowserActivity : OmniActivity() {
             override fun handleOnBackPressed() = navigateUpOrFinish()
         })
 
-        adapter = FileListAdapter(::handleEntryClick, ::handleEntryLongClick)
+        adapter = FileListAdapter(::handleEntryClick, ::handleEntryLongClick, ::showEntryActions)
         binding.list.layoutManager = LinearLayoutManager(this)
         binding.list.adapter = adapter
         binding.newFolderButton.setOnClickListener { showCreateFolderDialog() }
         binding.pasteButton.setOnClickListener { pastePendingTransfer() }
         binding.cancelTransferButton.setOnClickListener { clearPendingTransfer() }
         binding.selectAllButton.setOnClickListener { selectAllVisible() }
+        binding.selectionShareButton.setOnClickListener { shareSelectedFiles() }
         binding.selectionCopyButton.setOnClickListener { stageSelectedTransfer(TransferMode.COPY) }
         binding.selectionMoveButton.setOnClickListener { stageSelectedTransfer(TransferMode.MOVE) }
         binding.selectionTrashButton.setOnClickListener { confirmSelectedTrash() }
@@ -318,8 +320,14 @@ class FileBrowserActivity : OmniActivity() {
         binding.selectAllButton.isEnabled = !operationBusy && adapter.currentList.isNotEmpty()
         binding.selectionCopyButton.isEnabled = active && !operationBusy
 
-        val allMutable = active && selectedPaths.all { path ->
-            runCatching { FilePathPolicy.requireMutableTarget(File(path), sharedRoot) }.isSuccess
+        val selectedFiles = selectedPaths.map(::File)
+        val allFiles = active && selectedFiles.all { file ->
+            runCatching { FilePathPolicy.requireInside(file, sharedRoot) }.getOrNull()?.isFile == true
+        }
+        binding.selectionShareButton.isEnabled = allFiles && !operationBusy
+
+        val allMutable = active && selectedFiles.all { file ->
+            runCatching { FilePathPolicy.requireMutableTarget(file, sharedRoot) }.isSuccess
         }
         binding.selectionMoveButton.isEnabled = allMutable && !operationBusy
         binding.selectionTrashButton.isEnabled = allMutable && !operationBusy
@@ -442,6 +450,33 @@ class FileBrowserActivity : OmniActivity() {
                 Toast.makeText(this@FileBrowserActivity, it.message ?: "Ayrıntılar okunamadı", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    private fun shareSelectedFiles() {
+        if (operationBusy || selectedPaths.isEmpty()) return
+        val files = selectedPaths.mapNotNull { path ->
+            runCatching { FilePathPolicy.requireInside(File(path), sharedRoot) }.getOrNull()?.takeIf(File::isFile)
+        }
+        if (files.size != selectedPaths.size || files.isEmpty()) {
+            Toast.makeText(this, "Toplu paylaşım yalnız dosyalar için kullanılabilir.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val uris = ArrayList<Uri>(files.size)
+        files.forEach { file ->
+            uris += FileProvider.getUriForFile(this, "$packageName.files", file)
+        }
+        val mimeTypes = files.map(::mimeFor).distinct()
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = mimeTypes.singleOrNull() ?: "*/*"
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            clipData = ClipData.newUri(contentResolver, files.first().name, uris.first()).apply {
+                uris.drop(1).forEach { uri -> addItem(ClipData.Item(uri)) }
+            }
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivity(Intent.createChooser(intent, getString(R.string.share))) }
+            .onFailure { Toast.makeText(this, "Paylaşım ekranı açılamadı.", Toast.LENGTH_SHORT).show() }
     }
 
     private fun stageSelectedTransfer(mode: TransferMode) {
