@@ -8,6 +8,7 @@ import dev.laxerus.omnifiles.BuildConfig
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.AccessSnapshot
 import dev.laxerus.omnifiles.access.StorageAccessController
+import dev.laxerus.omnifiles.adb.AdbSessionManager
 import dev.laxerus.omnifiles.databinding.ActivityMainBinding
 import dev.laxerus.omnifiles.fs.TrashManager
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +20,7 @@ import kotlin.math.roundToInt
 class MainActivity : OmniActivity() {
     private lateinit var binding: ActivityMainBinding
     private var trashCountGeneration = 0
+    private var adbHealthGeneration = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,6 +31,7 @@ class MainActivity : OmniActivity() {
         binding.versionText.text = getString(R.string.version_label, BuildConfig.VERSION_NAME)
         binding.openFilesButton.setOnClickListener { startActivity(Intent(this, FileBrowserActivity::class.java)) }
         binding.trashButton.setOnClickListener { startActivity(Intent(this, TrashActivity::class.java)) }
+        binding.checksumButton.setOnClickListener { startActivity(Intent(this, ChecksumActivity::class.java)) }
         binding.grantAccessButton.setOnClickListener { StorageAccessController.requestSharedStorageAccess(this) }
         binding.adbButton.setOnClickListener { startActivity(Intent(this, AdbPairingActivity::class.java)) }
         binding.adbFilesButton.setOnClickListener { startActivity(Intent(this, AdbBrowserActivity::class.java)) }
@@ -46,12 +49,30 @@ class MainActivity : OmniActivity() {
     private fun renderStatus() {
         val state = AccessSnapshot.read(this)
         binding.storageStatus.text = "${getString(R.string.direct_storage)}: ${if (state.sharedStorage) "Hazır" else "İzin gerekli"}"
-        binding.adbStatus.text = "${getString(R.string.adb_shell)}: ${if (state.adbEndpointConfigured) "Yapılandırıldı" else "Bağlı değil"}"
         binding.rootStatus.text = "${getString(R.string.root_status)}: ${if (state.rootBinaryPresent) "Algılandı" else "Yok / bilinmiyor"}"
         binding.grantAccessButton.isEnabled = !state.sharedStorage
         binding.grantAccessButton.setText(if (state.sharedStorage) R.string.storage_access_ready else R.string.grant_all_files)
         binding.adbFilesButton.isEnabled = state.adbEndpointConfigured
         binding.saveScoutButton.isEnabled = state.adbEndpointConfigured
+
+        if (state.adbEndpointConfigured) {
+            binding.adbStatus.text = "${getString(R.string.adb_shell)}: ${getString(R.string.adb_status_checking)}"
+            verifyAdbHealth()
+        } else {
+            adbHealthGeneration++
+            binding.adbStatus.text = "${getString(R.string.adb_shell)}: ${getString(R.string.adb_status_not_configured)}"
+        }
+    }
+
+    private fun verifyAdbHealth() {
+        val generation = ++adbHealthGeneration
+        lifecycleScope.launch {
+            val healthy = runCatching { AdbSessionManager.get(this@MainActivity).healthCheck() }.isSuccess
+            if (generation != adbHealthGeneration) return@launch
+            binding.adbStatus.text = "${getString(R.string.adb_shell)}: ${getString(
+                if (healthy) R.string.adb_status_connected else R.string.adb_status_unreachable
+            )}"
+        }
     }
 
     private fun renderStorageUsage() {
