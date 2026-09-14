@@ -1,7 +1,7 @@
 <resources>
     <string name="storage_analyzer">Depolama Analizi</string>
     <string name="storage_analyzer_title">Depolama Analizi</string>
-    <string name="storage_analyzer_help">Ortak depolamayı salt okunur tarar; dosya türlerinin kapladığı alanı, en büyük dosyaları ve klasörleri gösterir. Tarama 40.000 öğeyle sınırlandırılır, sembolik bağlantılar izlenmez ve istediğin zaman iptal edebilirsin.</string>
+    <string name="storage_analyzer_help">Ortak depolamayı salt okunur tarar; dosya türlerinin kapladığı alanı, kategori başına en büyük dosyaları ve en büyük klasörleri gösterir. Tarama 40.000 öğeyle sınırlandırılır, sembolik bağlantılar izlenmez ve istediğin zaman iptal edebilirsin.</string>
     <string name="storage_analyzer_start">Depolamayı tara</string>
     <string name="storage_analyzer_rescan">Yeniden tara</string>
     <string name="storage_analyzer_cancel">Taramayı iptal et</string>
@@ -16,6 +16,10 @@
     <string name="storage_analyzer_partial_cancelled">Tarama iptal edildi; aşağıdaki sonuçlar kısmi.</string>
     <string name="storage_analyzer_categories">Dosya türlerine göre kullanım</string>
     <string name="storage_analyzer_category_meta">%1$d dosya • %2$s • %3$s</string>
+    <string name="storage_analyzer_category_hint">En büyük %1$d dosyayı incelemek için dokun</string>
+    <string name="storage_analyzer_category_action_hint">%1$s. %2$d dosya, %3$s. En büyük dosyaları incelemek için dokun.</string>
+    <string name="storage_analyzer_category_top_title">%1$s • en büyük %2$d dosya</string>
+    <string name="storage_analyzer_category_file_item">%1$s\n%2$s • %3$s</string>
     <string name="storage_analyzer_category_image">Görseller</string>
     <string name="storage_analyzer_category_video">Videolar</string>
     <string name="storage_analyzer_category_audio">Ses</string>
