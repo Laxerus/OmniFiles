@@ -42,6 +42,8 @@ En güncel debug APK `main` dalından Render build hattıyla üretilir:
 - Kategori özetinde uzantı başına büyüyen map yerine sabit `IntArray`/`LongArray` sayaçları; dosya sayısından bağımsız bounded ek bellek kullanımı.
 - Kategori kartlarında dosya sayısı, toplam byte ve taranan dosya verisine göre yüzde/progress gösterimi.
 - Depolama Analizi sonuçlarında dosya açma, paylaşma, SHA-256 hesaplama, ayrıntıları görme ve yolu kopyalama; klasörlerde ayrıntı/yol işlemleri.
+- Analiz sonucundaki klasörü doğrudan yerel dosya yöneticisinde açma ve büyük bir dosyanın **bulunduğu klasöre** tek dokunuşla gitme.
+- Dosya yöneticisinin başlangıç klasörü için ortak depolama kökü dışını, kayıp/dosya hedeflerini ve symlink/dolaylı yolları reddeden güvenli `BrowserStartPathPolicy`.
 - Analiz sonucu üzerinde işlem yapılacağı anda yolu tekrar direct-entry/canonical politikasıyla doğrulama; taramadan sonra taşınan/değişen güvensiz öğeyi reddetme.
 - Büyük veya çok öğeli işlemlerde UI thread'ini bloklamayan coroutine tabanlı iş akışları.
 - Güvenli `FileProvider` ile dosya açma/paylaşma ve doğrudan kalıcı silme yerine uygulama içi çöp alanı.
@@ -67,6 +69,8 @@ Tarama varsayılan olarak en fazla **40.000 öğe** işler ve en büyük 20 dosy
 Dosya türü dağılımı sekiz sabit `FileCategory` kovasında hesaplanır. Her taranan normal dosyanın uzantısı case-insensitive olarak sınıflandırılır; bilinmeyen veya uzantısız dosyalar `OTHER` kovasına gider. Sayaçlar kategori sayısı kadar sabit `IntArray` ve `LongArray` üzerinde tutulduğu için farklı/benzersiz uzantı sayısı belleği büyütmez. Kategori dosya sayılarının toplamı taranan dosya sayısıyla, kategori byte toplamı da `scannedBytes` ile aynı tarama kesitini temsil eder; iptal veya güvenlik sınırında bu değerler güvenilir kısmi sonuç olarak kalır.
 
 Sonuç kartına dokunulduğunda dosyanın tarama anındaki yoluna körlemesine güvenilmez. Öğenin hâlâ ortak depolama kökü içinde doğrudan bir giriş olduğu, mevcut olduğu ve dosya/klasör tipinin beklenen türle eşleştiği yeniden doğrulanır. Ancak bundan sonra `FileProvider` URI'si oluşturularak açma/paylaşma veya SHA-256 ekranına geçiş yapılır. Uzun basma yolu güvenli biçimde panoya kopyalar.
+
+Analyzer'daki **Klasörü dosya yöneticisinde aç** ve **Bulunduğu klasörü aç** işlemleri de hedef klasörü işlem anında yeniden `requireDirectEntry` ile doğrular. `FileBrowserActivity.EXTRA_START_PATH` yalnız Activity'nin ilk oluşturuluşunda değerlendirilir; ekran yeniden oluşturulduğunda kaydedilmiş gezinme durumu Intent'ten gelen başlangıç yolunun önüne geçer. `BrowserStartPathPolicy` yalnız mevcut, doğrudan ve ortak depolama kökü içindeki klasörleri kabul eder; dosya, kayıp hedef, kök dışı hedef veya symlink/dolaylı yol güvenli biçimde ortak depolama köküne düşürülür.
 
 ## Transfer güvenliği
 
@@ -111,7 +115,7 @@ Build kapıları:
 4. `:app:assembleDebug`
 5. APK SHA-256 çıktısı
 
-`FileOperationsTest` transfer, staging, kaynak snapshot, **1200 katmanlı stack-safe klasör**, monotonic byte-progress ve iptalde staging rollback davranışını doğrular. `TransferRuntimeTest` progress/cancel/finish yaşam döngüsünü ve eski transfer kimliğinin yeni bir transferi iptal edememesini doğrular. `StorageAnalyzerTest` en büyük dosya/klasör sıralamasını, bounded top-N aday seçimini, sabit kategori kovalarını ve toplam tutarlılığını, case-insensitive sınıflandırmayı, yapılandırılabilir öğe sınırını, kullanıcı iptalini ve **800 katmanlı stack-safe analiz ağacını** doğrular. `RemotePathPolicyTest` uzak yol normalizasyonunu, traversal engelini, kontrol karakteri/uzun ad reddini ve parent sınırlarını doğrular. `DigestUtilsTest` SHA-256 yardımcılarını denetler.
+`FileOperationsTest` transfer, staging, kaynak snapshot, **1200 katmanlı stack-safe klasör**, monotonic byte-progress ve iptalde staging rollback davranışını doğrular. `TransferRuntimeTest` progress/cancel/finish yaşam döngüsünü ve eski transfer kimliğinin yeni bir transferi iptal edememesini doğrular. `StorageAnalyzerTest` en büyük dosya/klasör sıralamasını, bounded top-N aday seçimini, sabit kategori kovalarını ve toplam tutarlılığını, case-insensitive sınıflandırmayı, yapılandırılabilir öğe sınırını, kullanıcı iptalini ve **800 katmanlı stack-safe analiz ağacını** doğrular. `BrowserStartPathPolicyTest` doğrudan klasör kabulünü ve dosya, kayıp, kök dışı veya symlink başlangıç hedeflerinin güvenli kök fallback davranışını doğrular. `RemotePathPolicyTest` uzak yol normalizasyonunu, traversal engelini, kontrol karakteri/uzun ad reddini ve parent sınırlarını doğrular. `DigestUtilsTest` SHA-256 yardımcılarını denetler.
 
 `source_sanity.py`; güvenli transfer primitive'leri, staging kurtarma, ADB pull doğrulaması, checksum aracı, Storage Analyzer sınır/iptal/path korumaları, sabit kategori bellek yapısı/kategori UI wiring'i ve ana ekran wiring'i kaybolursa build'i durdurur.
 
