@@ -116,7 +116,7 @@ class FileBrowserActivity : OmniActivity() {
         val visible = allEntries.asSequence()
             .filter { showHidden || !isHidden(it) }
             .filter { query.isEmpty() || it.name.lowercase(Locale.ROOT).contains(query) }
-            .sortedWith(::compareEntries)
+            .sortedWith(Comparator(::compareEntries))
             .toList()
 
         adapter.submitList(visible)
