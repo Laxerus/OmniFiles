@@ -1,3 +1,0 @@
-package dev.laxerus.omnifiles.fs
-
-internal object StorageAnalyzerCategoryDrilldownMarker
