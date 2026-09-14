@@ -30,6 +30,7 @@ REQUIRED = [
     "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/StorageAnalyzer.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/fs/BrowserStartPathPolicy.kt",
     "app/src/main/res/layout/activity_checksum.xml",
     "app/src/main/res/layout/activity_storage_analyzer.xml",
     "app/src/main/res/layout/item_storage_analysis.xml",
@@ -39,6 +40,7 @@ REQUIRED = [
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileOperationsTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileInspectorTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/StorageAnalyzerTest.kt",
+    "app/src/test/java/dev/laxerus/omnifiles/fs/BrowserStartPathPolicyTest.kt",
 ]
 
 errors: list[str] = []
@@ -119,6 +121,17 @@ if file_path_policy.is_file():
     if "Character.isISOControl" not in text:
         errors.append("file names must reject ambiguous control characters")
 
+browser_start_policy = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/BrowserStartPathPolicy.kt"
+if browser_start_policy.is_file():
+    text = browser_start_policy.read_text(encoding="utf-8")
+    for token in (
+        "FilePathPolicy.requireDirectEntry",
+        "it.exists() && it.isDirectory",
+        "?: root",
+    ):
+        if token not in text:
+            errors.append(f"safe browser start-path guard missing: {token}")
+
 digest_utils = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/DigestUtils.kt"
 if digest_utils.is_file():
     text = digest_utils.read_text(encoding="utf-8")
@@ -180,9 +193,12 @@ if file_browser.is_file():
         "toggleCurrentFavorite",
         "STATE_CURRENT_PATH",
         "restoreTrash",
+        "BrowserStartPathPolicy.resolve",
+        "EXTRA_START_PATH",
+        "intent.getStringExtra(EXTRA_START_PATH)",
     ):
         if token not in text:
-            errors.append(f"file browser transfer/selection/detail/favorite wiring missing: {token}")
+            errors.append(f"file browser transfer/selection/detail/favorite/start-path wiring missing: {token}")
     if "FileListAdapter(::handleEntryClick, ::handleEntryLongClick, ::showEntryActions)" not in text:
         errors.append("file browser must keep long-press selection separate from the more-actions menu")
 
@@ -252,9 +268,12 @@ if storage_analyzer_activity.is_file():
         "renderCategories",
         "result.categories",
         "categoryProgress",
+        "openInBrowser",
+        "FileBrowserActivity.EXTRA_START_PATH",
+        "FilePathPolicy.requireDirectEntry(target, sharedRoot)",
     ):
         if token not in text:
-            errors.append(f"storage analyzer UI/cancellation/category wiring missing: {token}")
+            errors.append(f"storage analyzer UI/cancellation/category/browser wiring missing: {token}")
 
 storage_analyzer_layout = ROOT / "app/src/main/res/layout/activity_storage_analyzer.xml"
 if storage_analyzer_layout.is_file():
