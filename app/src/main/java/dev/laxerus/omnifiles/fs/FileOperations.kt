@@ -13,6 +13,8 @@ object FileOperations {
     private const val STAGING_PREFIX = ".omnifiles-transfer-v2-"
     private const val DEFAULT_STAGING_STALE_AFTER_MS = 6L * 60L * 60L * 1000L
     private const val DEFAULT_PREFLIGHT_SNAPSHOT_LIMIT = 8_192
+    private const val PREFLIGHT_CACHE_MAX_ENTRIES = 8
+    private const val PREFLIGHT_CACHE_TTL_MS = 2L * 60L * 1000L
 
     private data class CopyTask(
         val source: File,
@@ -50,6 +52,14 @@ object FileOperations {
         val totalBytes: Long,
         val snapshots: Map<String, PreflightEntry>?
     )
+
+    private data class CachedPreflight(
+        val createdAtMs: Long,
+        val value: TransferPreflight
+    )
+
+    private val preflightCacheLock = Any()
+    private val preflightCache = LinkedHashMap<String, CachedPreflight>(PREFLIGHT_CACHE_MAX_ENTRIES, 0.75f, true)
 
     fun createDirectory(parent: File, rawName: String, sharedRoot: File): File {
         val destination = FilePathPolicy.resolveChild(parent, rawName, sharedRoot)
@@ -126,12 +136,15 @@ object FileOperations {
         source: File,
         sharedRoot: File,
         isCancelled: (() -> Boolean)? = null
-    ): Long = prepareTransfer(
-        source = source,
-        sharedRoot = sharedRoot,
-        isCancelled = isCancelled,
-        snapshotLimit = 0
-    ).totalBytes
+    ): Long {
+        val prepared = prepareTransfer(
+            source = source,
+            sharedRoot = sharedRoot,
+            isCancelled = isCancelled
+        )
+        cachePreflight(prepared)
+        return prepared.totalBytes
+    }
 
     fun cleanupStaleStaging(
         directory: File,
@@ -261,6 +274,7 @@ object FileOperations {
             report(0L, 0L)
             checkCancelled(cancellation)
             if (safeSource.renameTo(destination)) {
+                consumeCachedPreflight(safeSource.canonicalPath)
                 report(1L, 1L)
                 completed = true
                 return destination.canonicalFile
@@ -308,10 +322,11 @@ object FileOperations {
     private fun resolvePreflight(
         safeSource: File,
         root: File,
-        preflight: TransferPreflight?,
+        explicitPreflight: TransferPreflight?,
         isCancelled: (() -> Boolean)?
     ): ResolvedPreflight {
         checkCancelled(isCancelled)
+        val preflight = explicitPreflight ?: consumeCachedPreflight(safeSource.canonicalPath)
         val snapshots = preflight?.snapshots
         val rootSnapshot = snapshots?.get("")
         if (
@@ -324,10 +339,48 @@ object FileOperations {
             return ResolvedPreflight(preflight.totalBytes.coerceAtLeast(0L), snapshots)
         }
 
-        return ResolvedPreflight(
-            totalBytes = estimateTransferBytes(safeSource, root, isCancelled),
-            snapshots = null
+        val fresh = prepareTransfer(
+            source = safeSource,
+            sharedRoot = root,
+            isCancelled = isCancelled,
+            snapshotLimit = 0
         )
+        return ResolvedPreflight(totalBytes = fresh.totalBytes, snapshots = null)
+    }
+
+    private fun cachePreflight(preflight: TransferPreflight) {
+        val now = System.currentTimeMillis().coerceAtLeast(0L)
+        synchronized(preflightCacheLock) {
+            prunePreflightCacheLocked(now)
+            if (!preflight.reusable) {
+                preflightCache.remove(preflight.sourcePath)
+                return
+            }
+            preflightCache[preflight.sourcePath] = CachedPreflight(now, preflight)
+            while (preflightCache.size > PREFLIGHT_CACHE_MAX_ENTRIES) {
+                val iterator = preflightCache.entries.iterator()
+                if (!iterator.hasNext()) break
+                iterator.next()
+                iterator.remove()
+            }
+        }
+    }
+
+    private fun consumeCachedPreflight(sourcePath: String): TransferPreflight? {
+        val now = System.currentTimeMillis().coerceAtLeast(0L)
+        return synchronized(preflightCacheLock) {
+            prunePreflightCacheLocked(now)
+            preflightCache.remove(sourcePath)?.value
+        }
+    }
+
+    private fun prunePreflightCacheLocked(nowMs: Long) {
+        val iterator = preflightCache.entries.iterator()
+        while (iterator.hasNext()) {
+            val cached = iterator.next().value
+            val age = if (nowMs >= cached.createdAtMs) nowMs - cached.createdAtMs else Long.MAX_VALUE
+            if (age > PREFLIGHT_CACHE_TTL_MS) iterator.remove()
+        }
     }
 
     private fun preflightEntry(file: File): PreflightEntry = PreflightEntry(
