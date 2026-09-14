@@ -22,9 +22,11 @@ REQUIRED = [
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbBrowserActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt",
     "app/src/main/res/layout/activity_trash.xml",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileOperationsTest.kt",
+    "app/src/test/java/dev/laxerus/omnifiles/fs/FileInspectorTest.kt",
 ]
 
 errors: list[str] = []
@@ -82,19 +84,47 @@ if file_operations.is_file():
     if "overwrite = true" in text:
         errors.append("file transfer must not silently overwrite existing user files")
 
+file_inspector = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt"
+if file_inspector.is_file():
+    text = file_inspector.read_text(encoding="utf-8")
+    for token in ("DEFAULT_MAX_ENTRIES", "FilePathPolicy.requireInside", "visitedDirectories", "saturatingAdd"):
+        if token not in text:
+            errors.append(f"bounded file inspection guard missing: {token}")
+
 file_browser = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserActivity.kt"
 if file_browser.is_file():
     text = file_browser.read_text(encoding="utf-8")
-    for token in ("TransferMode.COPY", "TransferMode.MOVE", "pastePendingTransfer", "STATE_CURRENT_PATH", "restoreTrash"):
+    for token in (
+        "TransferMode.COPY",
+        "TransferMode.MOVE",
+        "sourcePaths: List<String>",
+        "pastePendingTransfer",
+        "selectedPaths",
+        "selectAllVisible",
+        "moveSelectedToTrash",
+        "restoreTrashTickets",
+        "FileInspector.inspect",
+        "STATE_CURRENT_PATH",
+        "restoreTrash",
+    ):
         if token not in text:
-            errors.append(f"file browser transfer/state/trash wiring missing: {token}")
+            errors.append(f"file browser transfer/selection/detail wiring missing: {token}")
 
 browser_layout = ROOT / "app/src/main/res/layout/activity_file_browser.xml"
 if browser_layout.is_file():
     text = browser_layout.read_text(encoding="utf-8")
-    for view_id in ("@+id/pasteButton", "@+id/cancelTransferButton", "@+id/operationProgress"):
+    for view_id in (
+        "@+id/selectionBar",
+        "@+id/selectAllButton",
+        "@+id/selectionCopyButton",
+        "@+id/selectionMoveButton",
+        "@+id/selectionTrashButton",
+        "@+id/pasteButton",
+        "@+id/cancelTransferButton",
+        "@+id/operationProgress",
+    ):
         if view_id not in text:
-            errors.append(f"file browser transfer control missing: {view_id}")
+            errors.append(f"file browser selection/transfer control missing: {view_id}")
 
 trash_manager = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt"
 if trash_manager.is_file():
