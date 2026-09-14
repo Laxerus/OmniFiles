@@ -90,5 +90,40 @@
             android:layout_marginTop="16dp"
             android:enabled="false"
             android:text="@string/checksum_copy" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/expectedHashLayout"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:hint="@string/checksum_expected_label">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/expectedHashInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:inputType="textNoSuggestions"
+                android:maxLength="80"
+                android:maxLines="2"
+                android:hint="@string/checksum_expected_hint" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/pasteExpectedHashButton"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/checksum_paste" />
+
+        <TextView
+            android:id="@+id/verificationText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/checksum_verify_idle"
+            android:textAppearance="?attr/textAppearanceBodyLarge" />
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

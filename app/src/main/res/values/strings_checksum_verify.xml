@@ -1,0 +1,11 @@
+<resources>
+    <string name="checksum_expected_label">Beklenen SHA-256</string>
+    <string name="checksum_expected_hint">64 hex karakter veya sha256:…</string>
+    <string name="checksum_paste">Panodan yapıştır</string>
+    <string name="checksum_verify_idle">Karşılaştırmak için beklenen SHA-256 değerini gir.</string>
+    <string name="checksum_verify_invalid">Beklenen değer geçersiz. SHA-256 tam 64 hex karakter olmalı.</string>
+    <string name="checksum_verify_waiting">Beklenen SHA-256 hazır. Karşılaştırma için bir dosyanın hash’i hesaplanmalı.</string>
+    <string name="checksum_verify_match">✓ SHA-256 eşleşiyor. Dosya beklenen içerikle aynı.</string>
+    <string name="checksum_verify_mismatch">⚠ SHA-256 eşleşmiyor. Dosya beklenen içerikle aynı değil.</string>
+    <string name="checksum_clipboard_empty">Panoda kullanılabilir bir SHA-256 değeri yok.</string>
+</resources>

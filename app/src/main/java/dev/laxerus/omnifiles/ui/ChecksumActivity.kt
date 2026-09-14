@@ -9,10 +9,12 @@ import android.provider.OpenableColumns
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.databinding.ActivityChecksumBinding
 import dev.laxerus.omnifiles.fs.DigestUtils
+import dev.laxerus.omnifiles.fs.Sha256Verifier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,6 +40,8 @@ class ChecksumActivity : OmniActivity() {
         binding.toolbar.setNavigationOnClickListener { finish() }
         binding.selectFileButton.setOnClickListener { openDocument.launch(arrayOf("*/*")) }
         binding.copyHashButton.setOnClickListener { copyHash() }
+        binding.pasteExpectedHashButton.setOnClickListener { pasteExpectedHash() }
+        binding.expectedHashInput.doAfterTextChanged { renderVerification() }
 
         lastHash = savedInstanceState?.getString(STATE_HASH)
         activeUri = savedInstanceState?.getString(STATE_URI)
@@ -46,7 +50,9 @@ class ChecksumActivity : OmniActivity() {
         binding.fileInfoText.text = savedInstanceState?.getString(STATE_INFO)
             ?: getString(R.string.checksum_no_file)
         binding.hashText.text = lastHash ?: getString(R.string.checksum_not_calculated)
+        binding.expectedHashInput.setText(savedInstanceState?.getString(STATE_EXPECTED).orEmpty())
         binding.copyHashButton.isEnabled = lastHash != null
+        renderVerification()
 
         if (lastHash == null) activeUri?.let(::calculateChecksum)
     }
@@ -54,6 +60,7 @@ class ChecksumActivity : OmniActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString(STATE_HASH, lastHash)
         outState.putString(STATE_INFO, binding.fileInfoText.text?.toString())
+        outState.putString(STATE_EXPECTED, binding.expectedHashInput.text?.toString().orEmpty())
         activeUri?.let { outState.putString(STATE_URI, it.toString()) }
         super.onSaveInstanceState(outState)
     }
@@ -64,6 +71,7 @@ class ChecksumActivity : OmniActivity() {
         lastHash = null
         binding.hashText.setText(R.string.checksum_calculating)
         binding.copyHashButton.isEnabled = false
+        renderVerification()
         setBusy(true)
 
         lifecycleScope.launch {
@@ -83,9 +91,11 @@ class ChecksumActivity : OmniActivity() {
                 )
                 binding.hashText.text = checksum.sha256
                 binding.copyHashButton.isEnabled = true
+                renderVerification()
             }.onFailure { error ->
                 binding.fileInfoText.setText(R.string.checksum_failed)
                 binding.hashText.text = error.message ?: getString(R.string.checksum_failed)
+                renderVerification()
                 Toast.makeText(
                     this@ChecksumActivity,
                     error.message ?: getString(R.string.checksum_failed),
@@ -132,6 +142,42 @@ class ChecksumActivity : OmniActivity() {
         return displayName to size
     }
 
+    private fun pasteExpectedHash() {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val text = clipboard.primaryClip
+            ?.takeIf { it.itemCount > 0 }
+            ?.getItemAt(0)
+            ?.coerceToText(this)
+            ?.toString()
+            ?.takeIf { it.isNotBlank() }
+        if (text == null) {
+            Toast.makeText(this, R.string.checksum_clipboard_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        binding.expectedHashInput.setText(text.trim())
+        binding.expectedHashInput.setSelection(binding.expectedHashInput.text?.length ?: 0)
+    }
+
+    private fun renderVerification() {
+        if (!::binding.isInitialized) return
+        val expected = binding.expectedHashInput.text?.toString().orEmpty()
+        val status = Sha256Verifier.verify(lastHash, expected).status
+        binding.expectedHashLayout.error = if (status == Sha256Verifier.Status.INVALID) {
+            getString(R.string.checksum_verify_invalid)
+        } else {
+            null
+        }
+        binding.verificationText.setText(
+            when (status) {
+                Sha256Verifier.Status.EMPTY -> R.string.checksum_verify_idle
+                Sha256Verifier.Status.INVALID -> R.string.checksum_verify_invalid
+                Sha256Verifier.Status.WAITING_FOR_HASH -> R.string.checksum_verify_waiting
+                Sha256Verifier.Status.MATCH -> R.string.checksum_verify_match
+                Sha256Verifier.Status.MISMATCH -> R.string.checksum_verify_mismatch
+            }
+        )
+    }
+
     private fun copyHash() {
         val hash = lastHash ?: return
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -143,6 +189,8 @@ class ChecksumActivity : OmniActivity() {
         binding.progress.visibility = if (busy) View.VISIBLE else View.GONE
         binding.selectFileButton.isEnabled = !busy
         binding.copyHashButton.isEnabled = !busy && lastHash != null
+        binding.pasteExpectedHashButton.isEnabled = !busy
+        binding.expectedHashInput.isEnabled = !busy
     }
 
     private fun formatBytes(bytes: Long): String {
@@ -168,5 +216,6 @@ class ChecksumActivity : OmniActivity() {
         private const val STATE_HASH = "checksum_hash"
         private const val STATE_INFO = "checksum_info"
         private const val STATE_URI = "checksum_uri"
+        private const val STATE_EXPECTED = "checksum_expected"
     }
 }
