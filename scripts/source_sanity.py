@@ -16,11 +16,14 @@ REQUIRED = [
     "app/src/main/AndroidManifest.xml",
     "app/src/main/java/dev/laxerus/omnifiles/ui/MainActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserActivity.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/ui/TrashActivity.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/ui/TrashListAdapter.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbPairingActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbBrowserActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt",
+    "app/src/main/res/layout/activity_trash.xml",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileOperationsTest.kt",
 ]
 
@@ -44,6 +47,8 @@ if manifest.is_file():
         errors.append("AndroidManifest.xml must keep allowBackup=false")
     if "android:usesCleartextTraffic=\"false\"" not in text:
         errors.append("AndroidManifest.xml must keep usesCleartextTraffic=false")
+    if '.ui.TrashActivity' not in text:
+        errors.append("TrashActivity must remain registered")
 
 app_gradle = ROOT / "app/build.gradle"
 if app_gradle.is_file():
@@ -77,26 +82,12 @@ if file_operations.is_file():
     if "overwrite = true" in text:
         errors.append("file transfer must not silently overwrite existing user files")
 
-trash_manager = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt"
-if trash_manager.is_file():
-    text = trash_manager.read_text(encoding="utf-8")
-    for token in ("data class TrashTicket", "fun restore(ticket: TrashTicket)", "requireTrashEntry"):
-        if token not in text:
-            errors.append(f"safe trash undo primitive missing: {token}")
-
 file_browser = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserActivity.kt"
 if file_browser.is_file():
     text = file_browser.read_text(encoding="utf-8")
-    for token in (
-        "TransferMode.COPY",
-        "TransferMode.MOVE",
-        "pastePendingTransfer",
-        "STATE_CURRENT_PATH",
-        "restoreTrash(ticket: TrashTicket)",
-        "Snackbar.make"
-    ):
+    for token in ("TransferMode.COPY", "TransferMode.MOVE", "pastePendingTransfer", "STATE_CURRENT_PATH", "restoreTrash"):
         if token not in text:
-            errors.append(f"file browser transfer/state/undo wiring missing: {token}")
+            errors.append(f"file browser transfer/state/trash wiring missing: {token}")
 
 browser_layout = ROOT / "app/src/main/res/layout/activity_file_browser.xml"
 if browser_layout.is_file():
@@ -104,6 +95,26 @@ if browser_layout.is_file():
     for view_id in ("@+id/pasteButton", "@+id/cancelTransferButton", "@+id/operationProgress"):
         if view_id not in text:
             errors.append(f"file browser transfer control missing: {view_id}")
+
+trash_manager = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt"
+if trash_manager.is_file():
+    text = trash_manager.read_text(encoding="utf-8")
+    for token in ("METADATA_DIR", "fun listEntries()", "fun restore(entry:", "fun deletePermanently(", "fun emptyTrash()"):
+        if token not in text:
+            errors.append(f"persistent trash primitive missing: {token}")
+    if "overwrite = true" in text:
+        errors.append("trash restore must not silently overwrite existing user files")
+
+trash_activity = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/TrashActivity.kt"
+if trash_activity.is_file():
+    text = trash_activity.read_text(encoding="utf-8")
+    for token in ("TrashManager", "restore(entry)", "deletePermanently(entry)", "emptyTrash()"):
+        if token not in text:
+            errors.append(f"trash center action missing: {token}")
+
+main_layout = ROOT / "app/src/main/res/layout/activity_main.xml"
+if main_layout.is_file() and "@+id/trashButton" not in main_layout.read_text(encoding="utf-8"):
+    errors.append("home screen must expose the trash center")
 
 workflow_render = ROOT / "scripts/render_build_apk.sh"
 if workflow_render.is_file():
@@ -118,10 +129,10 @@ for path in ROOT.glob("app/src/main/java/**/*.kt"):
         errors.append(f"unreviewed direct privilege process launch: {path.relative_to(ROOT)}")
     if "override fun onBackPressed" in text:
         errors.append(f"deprecated onBackPressed override: {path.relative_to(ROOT)}")
-    if ".putIfAbsent(" in text:
-        errors.append(f"API 24+ Map.putIfAbsent breaks minSdk 23 compatibility: {path.relative_to(ROOT)}")
     if "deleteRecursively()" in text and path.name != "TrashManager.kt" and "cache" not in text.lower():
         errors.append(f"review recursive delete outside trash/cache layer: {path.relative_to(ROOT)}")
+    if ".putIfAbsent(" in text:
+        errors.append(f"API 24 putIfAbsent call would break minSdk 23: {path.relative_to(ROOT)}")
 
 for path in ROOT.glob("app/src/test/java/**/*.kt"):
     text = path.read_text(encoding="utf-8")
