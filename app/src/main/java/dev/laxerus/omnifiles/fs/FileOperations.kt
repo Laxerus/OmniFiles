@@ -8,7 +8,8 @@ object FileOperations {
     private const val MIN_FREE_SPACE_RESERVE_BYTES = 8L * 1024L * 1024L
     private const val MAX_FREE_SPACE_RESERVE_BYTES = 64L * 1024L * 1024L
     private const val COPY_BUFFER_BYTES = 64 * 1024
-    private const val STAGING_PREFIX = ".omnifiles-transfer-"
+    private const val STAGING_PREFIX = ".omnifiles-transfer-v2-"
+    private const val DEFAULT_STAGING_STALE_AFTER_MS = 6L * 60L * 60L * 1000L
 
     fun createDirectory(parent: File, rawName: String, sharedRoot: File): File {
         val destination = FilePathPolicy.resolveChild(parent, rawName, sharedRoot)
@@ -57,6 +58,33 @@ object FileOperations {
         return total
     }
 
+    fun cleanupStaleStaging(
+        directory: File,
+        sharedRoot: File,
+        nowMs: Long = System.currentTimeMillis(),
+        staleAfterMs: Long = DEFAULT_STAGING_STALE_AFTER_MS
+    ): Int {
+        require(nowMs >= 0L) { "Geçerli saat negatif olamaz" }
+        require(staleAfterMs >= 0L) { "Staging yaş sınırı negatif olamaz" }
+        val root = FilePathPolicy.canonical(sharedRoot)
+        val safeDirectory = requireDestinationDirectory(directory, root)
+        val cutoff = if (nowMs >= staleAfterMs) nowMs - staleAfterMs else Long.MIN_VALUE
+        var removed = 0
+
+        safeDirectory.listFiles().orEmpty().forEach { candidate ->
+            val createdAt = stagingTimestamp(candidate.name) ?: return@forEach
+            if (createdAt > cutoff) return@forEach
+
+            val safeCandidate = runCatching { FilePathPolicy.requireDirectEntry(candidate, root) }
+                .getOrNull() ?: return@forEach
+            val modifiedAt = safeCandidate.lastModified()
+            if (modifiedAt <= 0L || modifiedAt > cutoff) return@forEach
+
+            if (deleteValidatedStagingTree(safeCandidate, root)) removed++
+        }
+        return removed
+    }
+
     fun copy(source: File, destinationDirectory: File, sharedRoot: File): File {
         val root = FilePathPolicy.canonical(sharedRoot)
         val safeSource = FilePathPolicy.requireDirectEntry(source, root)
@@ -64,6 +92,7 @@ object FileOperations {
         require(safeSource.path != root.path) { "Depolama kökünün tamamı kopyalanamaz" }
 
         val safeDestinationDirectory = requireDestinationDirectory(destinationDirectory, root)
+        cleanupStaleStaging(safeDestinationDirectory, root)
         requireNotInsideSource(safeSource, safeDestinationDirectory)
         requireEnoughFreeSpace(safeSource, safeDestinationDirectory, root)
         val preferredDestination = nextAvailableDestination(safeDestinationDirectory, safeSource)
@@ -90,6 +119,7 @@ object FileOperations {
         val safeSource = FilePathPolicy.requireMutableTarget(source, root)
         require(safeSource.exists()) { "Kaynak öğe artık mevcut değil" }
         val safeDestinationDirectory = requireDestinationDirectory(destinationDirectory, root)
+        cleanupStaleStaging(safeDestinationDirectory, root)
         requireNotInsideSource(safeSource, safeDestinationDirectory)
 
         val sourceParent = safeSource.parentFile?.canonicalFile ?: error("Kaynak üst klasörü bulunamadı")
@@ -170,13 +200,55 @@ object FileOperations {
     }
 
     private fun nextStagingDestination(parent: File): File {
+        val createdAt = System.currentTimeMillis().coerceAtLeast(0L)
         val token = java.lang.Long.toUnsignedString(System.nanoTime(), 36)
         for (index in 0..999) {
             val suffix = if (index == 0) token else "$token-$index"
-            val candidate = File(parent, "$STAGING_PREFIX$suffix")
+            val candidate = File(parent, "$STAGING_PREFIX$createdAt-$suffix")
             if (!candidate.exists()) return candidate
         }
         error("Güvenli geçici aktarım alanı oluşturulamadı")
+    }
+
+    private fun stagingTimestamp(name: String): Long? {
+        if (!name.startsWith(STAGING_PREFIX)) return null
+        val payload = name.substring(STAGING_PREFIX.length)
+        val separator = payload.indexOf('-')
+        if (separator <= 0 || separator == payload.lastIndex) return null
+        val timestamp = payload.substring(0, separator).toLongOrNull() ?: return null
+        if (timestamp < 0L) return null
+        val token = payload.substring(separator + 1)
+        if (token.any { !(it in '0'..'9' || it in 'a'..'z' || it == '-') }) return null
+        return timestamp
+    }
+
+    private fun deleteValidatedStagingTree(target: File, allowedRoot: File): Boolean {
+        val pending = ArrayDeque<File>()
+        val validated = mutableListOf<File>()
+        val visitedDirectories = mutableSetOf<String>()
+        pending.add(target)
+
+        while (pending.isNotEmpty()) {
+            val safeCurrent = runCatching {
+                FilePathPolicy.requireDirectEntry(pending.removeFirst(), allowedRoot)
+            }.getOrNull() ?: return false
+            if (!safeCurrent.exists()) continue
+            validated += safeCurrent
+
+            if (!safeCurrent.isDirectory) continue
+            if (!visitedDirectories.add(safeCurrent.canonicalPath)) return false
+            val children = safeCurrent.listFiles() ?: return false
+            for (child in children) {
+                val safeChild = runCatching { FilePathPolicy.requireDirectEntry(child, allowedRoot) }
+                    .getOrNull() ?: return false
+                pending.addLast(safeChild)
+            }
+        }
+
+        for (entry in validated.asReversed()) {
+            if (entry.exists() && !entry.delete()) return false
+        }
+        return !target.exists()
     }
 
     private fun commitStagingCopy(
