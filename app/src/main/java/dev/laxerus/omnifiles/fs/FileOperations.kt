@@ -101,7 +101,7 @@ object FileOperations {
 
         val name = source.name
         val dot = if (source.isFile) name.lastIndexOf('.').takeIf { it > 0 } else null
-        val base = dot?.let(name::substring) ?: name
+        val base = dot?.let { name.substring(0, it) } ?: name
         val suffix = dot?.let { name.substring(it) }.orEmpty()
         for (index in 1..9999) {
             val candidate = File(parent, "$base ($index)$suffix")
