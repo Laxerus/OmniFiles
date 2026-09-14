@@ -50,12 +50,7 @@ class FileBrowserActivity : OmniActivity() {
         setContentView(binding.root)
         applySystemBarInsets(binding.root)
 
-        val restoredPath = savedInstanceState?.getString(STATE_TRANSFER_PATH)
-        val restoredMode = savedInstanceState?.getString(STATE_TRANSFER_MODE)
-            ?.let { runCatching { TransferMode.valueOf(it) }.getOrNull() }
-        if (!restoredPath.isNullOrBlank() && restoredMode != null) {
-            pendingTransfer = PendingTransfer(restoredPath, restoredMode)
-        }
+        restoreBrowserState(savedInstanceState)
 
         binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
         binding.toolbar.setNavigationOnClickListener { navigateUpOrFinish() }
@@ -84,10 +79,24 @@ class FileBrowserActivity : OmniActivity() {
             }
             renderEntries()
         }
+
+        binding.hiddenSwitch.isChecked = showHidden
+        binding.sortGroup.check(
+            when (sortMode) {
+                SortMode.NAME -> R.id.sortNameButton
+                SortMode.DATE -> R.id.sortDateButton
+                SortMode.SIZE -> R.id.sortSizeButton
+            }
+        )
+        savedInstanceState?.getString(STATE_SEARCH_QUERY)?.takeIf { it.isNotEmpty() }?.let(binding.searchInput::setText)
         updateTransferUi()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_CURRENT_PATH, runCatching { currentDir.canonicalPath }.getOrElse { currentDir.path })
+        outState.putString(STATE_SORT_MODE, sortMode.name)
+        outState.putBoolean(STATE_SHOW_HIDDEN, showHidden)
+        outState.putString(STATE_SEARCH_QUERY, binding.searchInput.text?.toString().orEmpty())
         pendingTransfer?.let {
             outState.putString(STATE_TRANSFER_PATH, it.sourcePath)
             outState.putString(STATE_TRANSFER_MODE, it.mode.name)
@@ -112,6 +121,27 @@ class FileBrowserActivity : OmniActivity() {
             adapter.submitList(emptyList())
             binding.emptyText.setText(R.string.storage_access_required)
             binding.emptyText.visibility = View.VISIBLE
+        }
+    }
+
+    private fun restoreBrowserState(savedInstanceState: Bundle?) {
+        showHidden = savedInstanceState?.getBoolean(STATE_SHOW_HIDDEN, false) ?: false
+        sortMode = savedInstanceState?.getString(STATE_SORT_MODE)
+            ?.let { runCatching { SortMode.valueOf(it) }.getOrNull() }
+            ?: SortMode.NAME
+
+        val restoredPath = savedInstanceState?.getString(STATE_CURRENT_PATH)
+        currentDir = restoredPath
+            ?.let(::File)
+            ?.let { candidate -> runCatching { FilePathPolicy.requireInside(candidate, sharedRoot) }.getOrNull() }
+            ?.takeIf { it.isDirectory }
+            ?: sharedRoot
+
+        val restoredTransferPath = savedInstanceState?.getString(STATE_TRANSFER_PATH)
+        val restoredTransferMode = savedInstanceState?.getString(STATE_TRANSFER_MODE)
+            ?.let { runCatching { TransferMode.valueOf(it) }.getOrNull() }
+        if (!restoredTransferPath.isNullOrBlank() && restoredTransferMode != null) {
+            pendingTransfer = PendingTransfer(restoredTransferPath, restoredTransferMode)
         }
     }
 
@@ -312,8 +342,17 @@ class FileBrowserActivity : OmniActivity() {
         if (!::binding.isInitialized) return
         val pending = pendingTransfer
         val hasAccess = StorageAccessController.hasSharedStorageAccess(this)
-        binding.pasteButton.visibility = if (pending == null) View.GONE else View.VISIBLE
-        binding.cancelTransferButton.visibility = if (pending == null) View.GONE else View.VISIBLE
+        val visible = pending != null
+        binding.transferText.visibility = if (visible) View.VISIBLE else View.GONE
+        binding.pasteButton.visibility = if (visible) View.VISIBLE else View.GONE
+        binding.cancelTransferButton.visibility = if (visible) View.VISIBLE else View.GONE
+
+        val sourceName = pending?.sourcePath?.let { File(it).name.ifBlank { it } }.orEmpty()
+        binding.transferText.text = when (pending?.mode) {
+            TransferMode.COPY -> getString(R.string.transfer_copy_label, sourceName)
+            TransferMode.MOVE -> getString(R.string.transfer_move_label, sourceName)
+            null -> ""
+        }
         binding.pasteButton.text = when (pending?.mode) {
             TransferMode.MOVE -> getString(R.string.paste_move)
             else -> getString(R.string.paste_copy)
@@ -466,6 +505,10 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     companion object {
+        private const val STATE_CURRENT_PATH = "current_path"
+        private const val STATE_SORT_MODE = "sort_mode"
+        private const val STATE_SHOW_HIDDEN = "show_hidden"
+        private const val STATE_SEARCH_QUERY = "search_query"
         private const val STATE_TRANSFER_PATH = "transfer_path"
         private const val STATE_TRANSFER_MODE = "transfer_mode"
     }
