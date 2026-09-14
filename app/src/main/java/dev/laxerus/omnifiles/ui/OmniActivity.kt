@@ -96,14 +96,16 @@ abstract class OmniActivity : AppCompatActivity() {
                 formatTransferBytes(snapshot.totalBytes),
                 percent
             )
-            if (progress != null) {
-                if (progress.isIndeterminate) progress.isIndeterminate = false
-                progress.max = PROGRESS_MAX
-                progress.setProgressCompat(fraction, true)
+            progress?.apply {
+                max = PROGRESS_MAX
+                setProgressCompat(fraction, true)
             }
         } else {
             transferDetailText?.text = getString(R.string.transfer_progress_preparing, snapshot.sourceName)
-            if (progress != null && !progress.isIndeterminate) progress.isIndeterminate = true
+            progress?.apply {
+                max = PROGRESS_MAX
+                setProgressCompat(0, false)
+            }
         }
 
         transferDialog?.getButton(DialogInterface.BUTTON_NEGATIVE)?.apply {
@@ -122,7 +124,6 @@ abstract class OmniActivity : AppCompatActivity() {
         transferStatusText?.text = status
         if (snapshot.succeeded == true && snapshot.totalBytes > 0L) {
             transferProgressIndicator?.apply {
-                if (isIndeterminate) isIndeterminate = false
                 max = PROGRESS_MAX
                 setProgressCompat(PROGRESS_MAX, true)
             }
