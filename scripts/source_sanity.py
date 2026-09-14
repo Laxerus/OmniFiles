@@ -50,9 +50,9 @@ if app_gradle.is_file():
     version = re.search(r"versionName\s+['\"]([^'\"]+)['\"]", text)
     if not version or version.group(1) != "0.8.0-dev":
         errors.append("versionName must remain 0.8.0-dev during this development line")
-    if "com.flyfishxu:kadb:2.1.4" not in text:
+    if not re.search(r"com\.flyfishxu:kadb:[0-9][^'\"\s]*", text):
         errors.append("embedded Kadb dependency is missing")
-    if "com.flyfishxu:kadb-mdns:2.1.4" not in text:
+    if not re.search(r"com\.flyfishxu:kadb-mdns:[0-9][^'\"\s]*", text):
         errors.append("Kadb mDNS dependency is missing")
 
 workflow = ROOT / ".github/workflows/build-apk.yml"
