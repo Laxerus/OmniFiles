@@ -9,6 +9,9 @@ import dev.laxerus.omnifiles.databinding.RowFileBinding
 import java.io.File
 import java.text.DateFormat
 
+internal fun Sequence<File>.sortedWith(comparison: (File, File) -> Int): Sequence<File> =
+    this.sortedWith(Comparator { left, right -> comparison(left, right) })
+
 class FileListAdapter(
     private val onClick: (File) -> Unit,
     private val onLongClick: (File) -> Unit
