@@ -65,6 +65,11 @@ class MainActivity : OmniActivity() {
             R.string.settings_app_details_summary,
             R.drawable.ic_info_24,
         )
+        binding.junkCleanerButton.bind(
+            R.string.junk_cleaner_title,
+            R.string.settings_junk_cleaner_summary,
+            R.drawable.ic_delete_24,
+        )
         binding.storageAnalyzerButton.bind(
             R.string.storage_analyzer,
             R.string.settings_analyzer_summary,
@@ -114,13 +119,11 @@ class MainActivity : OmniActivity() {
             openSystemSettings(SystemSettingsNavigator.Destination.APP_DETAILS)
         }
 
+        binding.junkCleanerButton.setOnClickListener {
+            openStorageTool(JunkCleanerActivity::class.java)
+        }
         binding.storageAnalyzerButton.setOnClickListener {
-            if (StorageAccessController.hasSharedStorageAccess(this)) {
-                startActivity(Intent(this, StorageAnalyzerActivity::class.java))
-            } else {
-                Toast.makeText(this, R.string.settings_requires_storage, Toast.LENGTH_SHORT).show()
-                openStorageAccessSettings()
-            }
+            openStorageTool(StorageAnalyzerActivity::class.java)
         }
         binding.trashButton.setOnClickListener {
             startActivity(Intent(this, TrashActivity::class.java))
@@ -139,6 +142,15 @@ class MainActivity : OmniActivity() {
         }
         binding.sqliteStudioCard.setOnClickListener {
             startActivity(Intent(this, SqliteStudioActivity::class.java))
+        }
+    }
+
+    private fun openStorageTool(target: Class<*>) {
+        if (StorageAccessController.hasSharedStorageAccess(this)) {
+            startActivity(Intent(this, target))
+        } else {
+            Toast.makeText(this, R.string.settings_requires_storage, Toast.LENGTH_SHORT).show()
+            openStorageAccessSettings()
         }
     }
 
@@ -181,6 +193,10 @@ class MainActivity : OmniActivity() {
         binding.storageAccessCard.setSummary(
             if (state.sharedStorage) R.string.settings_storage_access_ready_summary
             else R.string.settings_storage_access_required_summary
+        )
+        binding.junkCleanerButton.setSummary(
+            if (state.sharedStorage) R.string.settings_junk_cleaner_summary
+            else R.string.settings_junk_cleaner_needs_access
         )
         binding.storageAnalyzerButton.setSummary(
             if (state.sharedStorage) R.string.settings_analyzer_summary
