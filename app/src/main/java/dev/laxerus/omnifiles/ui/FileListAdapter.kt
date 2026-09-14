@@ -1,12 +1,9 @@
 package dev.laxerus.omnifiles.ui
 
-import android.content.ClipData
-import android.content.Intent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -72,24 +69,11 @@ class FileListAdapter(
 
         private fun launchChecksum(file: File) {
             val context = binding.root.context
-            val directFile = runCatching {
-                file.takeIf { it.isFile && it.absolutePath == it.canonicalPath }
-                    ?: error("Dosya artık güvenli bir doğrudan giriş değil")
-            }.getOrElse {
-                Toast.makeText(context, it.message ?: "SHA-256 için dosya açılamadı", Toast.LENGTH_LONG).show()
-                return
-            }
-            val uri = runCatching {
-                FileProvider.getUriForFile(context, "${context.packageName}.files", directFile)
-            }.getOrElse {
-                Toast.makeText(context, "SHA-256 için güvenli dosya URI'si oluşturulamadı", Toast.LENGTH_LONG).show()
-                return
-            }
-            val intent = Intent(context, ChecksumActivity::class.java).apply {
-                data = uri
-                clipData = ClipData.newUri(context.contentResolver, directFile.name, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
+            val intent = runCatching { LocalFileIntents.checksumIntent(context, file) }
+                .getOrElse {
+                    Toast.makeText(context, it.message ?: "SHA-256 için dosya açılamadı", Toast.LENGTH_LONG).show()
+                    return
+                }
             runCatching { context.startActivity(intent) }
                 .onFailure {
                     Toast.makeText(context, "SHA-256 ekranı açılamadı", Toast.LENGTH_SHORT).show()

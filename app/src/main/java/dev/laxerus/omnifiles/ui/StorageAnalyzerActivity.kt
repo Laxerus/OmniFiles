@@ -7,11 +7,9 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
-import android.webkit.MimeTypeMap
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.progressindicator.LinearProgressIndicator
@@ -325,7 +323,7 @@ class StorageAnalyzerActivity : OmniActivity() {
         val type = if (file.isDirectory) {
             getString(R.string.storage_analyzer_type_folder)
         } else {
-            mimeFor(file)
+            LocalFileIntents.mimeFor(file)
         }
         val message = listOf(
             getString(R.string.detail_type, type),
@@ -341,13 +339,11 @@ class StorageAnalyzerActivity : OmniActivity() {
     }
 
     private fun openFile(file: File) {
-        if (!file.isFile) return
-        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, mimeFor(file))
-            clipData = ClipData.newUri(contentResolver, file.name, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
+        val intent = runCatching { LocalFileIntents.viewIntent(this, file) }
+            .getOrElse {
+                Toast.makeText(this, R.string.storage_analyzer_entry_stale, Toast.LENGTH_LONG).show()
+                return
+            }
         try {
             startActivity(intent)
         } catch (_: ActivityNotFoundException) {
@@ -356,14 +352,11 @@ class StorageAnalyzerActivity : OmniActivity() {
     }
 
     private fun shareFile(file: File) {
-        if (!file.isFile) return
-        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = mimeFor(file)
-            putExtra(Intent.EXTRA_STREAM, uri)
-            clipData = ClipData.newUri(contentResolver, file.name, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
+        val intent = runCatching { LocalFileIntents.shareIntent(this, file) }
+            .getOrElse {
+                Toast.makeText(this, R.string.storage_analyzer_entry_stale, Toast.LENGTH_LONG).show()
+                return
+            }
         runCatching { startActivity(Intent.createChooser(intent, getString(R.string.share))) }
             .onFailure {
                 Toast.makeText(this, R.string.storage_analyzer_share_failed, Toast.LENGTH_SHORT).show()
@@ -371,13 +364,15 @@ class StorageAnalyzerActivity : OmniActivity() {
     }
 
     private fun openChecksum(file: File) {
-        if (!file.isFile) return
-        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
-        startActivity(
-            Intent(this, ChecksumActivity::class.java)
-                .setData(uri)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        )
+        val intent = runCatching { LocalFileIntents.checksumIntent(this, file) }
+            .getOrElse {
+                Toast.makeText(this, R.string.storage_analyzer_entry_stale, Toast.LENGTH_LONG).show()
+                return
+            }
+        runCatching { startActivity(intent) }
+            .onFailure {
+                Toast.makeText(this, R.string.storage_analyzer_entry_stale, Toast.LENGTH_SHORT).show()
+            }
     }
 
     private fun copyEntryPath(entry: StorageAnalyzer.Entry) {
@@ -385,11 +380,6 @@ class StorageAnalyzerActivity : OmniActivity() {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("OmniFiles path", safe.path))
         Toast.makeText(this, R.string.path_copied, Toast.LENGTH_SHORT).show()
-    }
-
-    private fun mimeFor(file: File): String {
-        val extension = file.extension.lowercase(Locale.ROOT)
-        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream"
     }
 
     private fun relativePath(path: String): String {
