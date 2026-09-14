@@ -11,6 +11,23 @@ object FileOperations {
     private const val STAGING_PREFIX = ".omnifiles-transfer-v2-"
     private const val DEFAULT_STAGING_STALE_AFTER_MS = 6L * 60L * 60L * 1000L
 
+    private data class CopyTask(
+        val source: File,
+        val destination: File,
+        val finalizeDirectory: Boolean = false,
+        val directorySnapshot: DirectorySnapshot? = null
+    )
+
+    private data class DirectorySnapshot(
+        val modifiedAt: Long,
+        val childNames: Set<String>
+    )
+
+    private data class FileSnapshot(
+        val length: Long,
+        val modifiedAt: Long
+    )
+
     fun createDirectory(parent: File, rawName: String, sharedRoot: File): File {
         val destination = FilePathPolicy.resolveChild(parent, rawName, sharedRoot)
         require(!destination.exists()) { "Bu adda bir öğe zaten var" }
@@ -104,7 +121,6 @@ object FileOperations {
                 source = safeSource,
                 destination = staging,
                 allowedRoot = root,
-                activeDirectories = mutableSetOf(),
                 created = created
             )
             commitStagingCopy(staging, preferredDestination, safeDestinationDirectory, safeSource)
@@ -139,7 +155,6 @@ object FileOperations {
                 source = safeSource,
                 destination = staging,
                 allowedRoot = root,
-                activeDirectories = mutableSetOf(),
                 created = created
             )
             require(!destination.exists()) { "Hedef klasörde aynı adda bir öğe işlem sırasında oluşturuldu" }
@@ -223,6 +238,14 @@ object FileOperations {
     }
 
     private fun deleteValidatedStagingTree(target: File, allowedRoot: File): Boolean {
+        val validated = collectValidatedTree(target, allowedRoot) ?: return false
+        for (entry in validated.asReversed()) {
+            if (entry.exists() && !entry.delete()) return false
+        }
+        return !target.exists()
+    }
+
+    private fun collectValidatedTree(target: File, allowedRoot: File): List<File>? {
         val pending = ArrayDeque<File>()
         val validated = mutableListOf<File>()
         val visitedDirectories = mutableSetOf<String>()
@@ -231,24 +254,20 @@ object FileOperations {
         while (pending.isNotEmpty()) {
             val safeCurrent = runCatching {
                 FilePathPolicy.requireDirectEntry(pending.removeFirst(), allowedRoot)
-            }.getOrNull() ?: return false
+            }.getOrNull() ?: return null
             if (!safeCurrent.exists()) continue
             validated += safeCurrent
 
             if (!safeCurrent.isDirectory) continue
-            if (!visitedDirectories.add(safeCurrent.canonicalPath)) return false
-            val children = safeCurrent.listFiles() ?: return false
+            if (!visitedDirectories.add(safeCurrent.canonicalPath)) return null
+            val children = safeCurrent.listFiles() ?: return null
             for (child in children) {
                 val safeChild = runCatching { FilePathPolicy.requireDirectEntry(child, allowedRoot) }
-                    .getOrNull() ?: return false
+                    .getOrNull() ?: return null
                 pending.addLast(safeChild)
             }
         }
-
-        for (entry in validated.asReversed()) {
-            if (entry.exists() && !entry.delete()) return false
-        }
-        return !target.exists()
+        return validated
     }
 
     private fun commitStagingCopy(
@@ -268,41 +287,68 @@ object FileOperations {
         source: File,
         destination: File,
         allowedRoot: File,
-        activeDirectories: MutableSet<String>,
         created: MutableList<File>
     ) {
-        val safeSource = FilePathPolicy.requireDirectEntry(source, allowedRoot)
-        require(safeSource.exists()) { "Kopyalanacak öğe artık mevcut değil: ${source.name}" }
-        require(!destination.exists()) { "Kopya hedefi zaten mevcut: ${destination.name}" }
+        val pending = ArrayDeque<CopyTask>()
+        val visitedDirectories = mutableSetOf<String>()
+        pending.addLast(CopyTask(source, destination))
 
-        if (safeSource.isDirectory) {
-            val canonicalPath = safeSource.canonicalPath
-            require(activeDirectories.add(canonicalPath)) { "Döngüsel klasör bağlantısı algılandı" }
-            try {
-                check(destination.mkdir()) { "Hedef klasör oluşturulamadı: ${destination.name}" }
-                created += destination
-                val children = safeSource.listFiles() ?: error("Klasör okunamadı: ${safeSource.name}")
-                children.forEach { child ->
-                    copyTree(
-                        source = child,
-                        destination = File(destination, child.name),
-                        allowedRoot = allowedRoot,
-                        activeDirectories = activeDirectories,
-                        created = created
-                    )
+        while (pending.isNotEmpty()) {
+            val task = pending.removeFirst()
+            val safeSource = FilePathPolicy.requireDirectEntry(task.source, allowedRoot)
+
+            if (task.finalizeDirectory) {
+                val snapshot = task.directorySnapshot ?: error("Klasör snapshot bilgisi eksik")
+                require(safeSource.exists() && safeSource.isDirectory) {
+                    "Kaynak klasör kopyalama sırasında değişti veya kayboldu: ${safeSource.name}"
                 }
-                destination.setLastModified(safeSource.lastModified())
-            } finally {
-                activeDirectories.remove(canonicalPath)
+                val currentChildren = safeSource.listFiles()
+                    ?: error("Kaynak klasör doğrulama sırasında okunamadı: ${safeSource.name}")
+                val currentNames = currentChildren.mapTo(mutableSetOf()) { it.name }
+                check(safeSource.lastModified() == snapshot.modifiedAt && currentNames == snapshot.childNames) {
+                    "Kaynak klasör kopyalama sırasında değişti: ${safeSource.name}"
+                }
+                task.destination.setLastModified(snapshot.modifiedAt)
+                continue
             }
-            return
-        }
 
-        copyFileVerified(safeSource, destination, created)
-        destination.setLastModified(safeSource.lastModified())
+            require(safeSource.exists()) { "Kopyalanacak öğe artık mevcut değil: ${safeSource.name}" }
+            require(!task.destination.exists()) { "Kopya hedefi zaten mevcut: ${task.destination.name}" }
+
+            if (!safeSource.isDirectory) {
+                val sourceModifiedAt = copyFileVerified(safeSource, task.destination, created)
+                task.destination.setLastModified(sourceModifiedAt)
+                continue
+            }
+
+            val canonicalPath = safeSource.canonicalPath
+            require(visitedDirectories.add(canonicalPath)) { "Döngüsel klasör bağlantısı algılandı" }
+            val children = safeSource.listFiles() ?: error("Klasör okunamadı: ${safeSource.name}")
+            val snapshot = DirectorySnapshot(
+                modifiedAt = safeSource.lastModified(),
+                childNames = children.mapTo(mutableSetOf()) { it.name }
+            )
+
+            check(task.destination.mkdir()) { "Hedef klasör oluşturulamadı: ${task.destination.name}" }
+            created += task.destination
+            pending.addFirst(
+                CopyTask(
+                    source = safeSource,
+                    destination = task.destination,
+                    finalizeDirectory = true,
+                    directorySnapshot = snapshot
+                )
+            )
+            for (index in children.indices.reversed()) {
+                val safeChild = FilePathPolicy.requireDirectEntry(children[index], allowedRoot)
+                pending.addFirst(CopyTask(safeChild, File(task.destination, safeChild.name)))
+            }
+        }
     }
 
-    private fun copyFileVerified(source: File, destination: File, created: MutableList<File>) {
+    private fun copyFileVerified(source: File, destination: File, created: MutableList<File>): Long {
+        require(source.isFile) { "Kaynak normal bir dosya değil: ${source.name}" }
+        val before = FileSnapshot(source.length(), source.lastModified())
         val sourceDigest = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(COPY_BUFFER_BYTES)
 
@@ -320,11 +366,15 @@ object FileOperations {
             output.flush()
         }
 
-        check(destination.length() == source.length()) { "Dosya kopyası boyut doğrulamasından geçmedi: ${source.name}" }
+        require(source.exists() && source.isFile) { "Kaynak dosya kopyalama sırasında kayboldu: ${source.name}" }
+        val after = FileSnapshot(source.length(), source.lastModified())
+        check(after == before) { "Kaynak dosya kopyalama sırasında değişti: ${source.name}" }
+        check(destination.length() == before.length) { "Dosya kopyası boyut doğrulamasından geçmedi: ${source.name}" }
         val copiedDigest = sha256(destination)
         check(sourceDigest.digest().contentEquals(copiedDigest)) {
             "Dosya kopyası SHA-256 doğrulamasından geçmedi: ${source.name}"
         }
+        return before.modifiedAt
     }
 
     private fun sha256(file: File): ByteArray {
@@ -349,12 +399,12 @@ object FileOperations {
 
     private fun removeVerifiedSource(target: File, allowedRoot: File) {
         val safeTarget = FilePathPolicy.requireMutableTarget(target, allowedRoot)
-        if (safeTarget.isDirectory) {
-            val children = safeTarget.listFiles() ?: error("Taşınan kaynak klasör okunamadı")
-            children.forEach { removeVerifiedSource(it, allowedRoot) }
-        }
-        check(safeTarget.delete()) {
-            "Kopya oluşturuldu ancak eski konum tamamen temizlenemedi; hedef kopya korundu"
+        val validated = collectValidatedTree(safeTarget, allowedRoot)
+            ?: error("Taşınan kaynak ağacı güvenli biçimde doğrulanamadı; hedef kopya korundu")
+        for (entry in validated.asReversed()) {
+            check(!entry.exists() || entry.delete()) {
+                "Kopya oluşturuldu ancak eski konum tamamen temizlenemedi; hedef kopya korundu"
+            }
         }
     }
 
