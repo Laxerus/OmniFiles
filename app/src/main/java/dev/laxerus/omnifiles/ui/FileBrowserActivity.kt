@@ -20,6 +20,7 @@ import com.google.android.material.snackbar.Snackbar
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.StorageAccessController
 import dev.laxerus.omnifiles.databinding.ActivityFileBrowserBinding
+import dev.laxerus.omnifiles.fs.FileInspector
 import dev.laxerus.omnifiles.fs.FileOperations
 import dev.laxerus.omnifiles.fs.FilePathPolicy
 import dev.laxerus.omnifiles.fs.TrashManager
@@ -28,12 +29,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.DateFormat
+import java.util.Date
 import java.util.Locale
 
 class FileBrowserActivity : OmniActivity() {
     private enum class SortMode { NAME, DATE, SIZE }
     private enum class TransferMode { COPY, MOVE }
-    private data class PendingTransfer(val sourcePath: String, val mode: TransferMode)
+    private data class PendingTransfer(val sourcePaths: List<String>, val mode: TransferMode)
 
     private lateinit var binding: ActivityFileBrowserBinding
     private lateinit var adapter: FileListAdapter
@@ -45,6 +48,7 @@ class FileBrowserActivity : OmniActivity() {
     private var loadGeneration = 0
     private var pendingTransfer: PendingTransfer? = null
     private var operationBusy = false
+    private val selectedPaths = linkedSetOf<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,12 +64,17 @@ class FileBrowserActivity : OmniActivity() {
             override fun handleOnBackPressed() = navigateUpOrFinish()
         })
 
-        adapter = FileListAdapter(::openEntry, ::showEntryActions)
+        adapter = FileListAdapter(::handleEntryClick, ::handleEntryLongClick)
         binding.list.layoutManager = LinearLayoutManager(this)
         binding.list.adapter = adapter
         binding.newFolderButton.setOnClickListener { showCreateFolderDialog() }
         binding.pasteButton.setOnClickListener { pastePendingTransfer() }
         binding.cancelTransferButton.setOnClickListener { clearPendingTransfer() }
+        binding.selectAllButton.setOnClickListener { selectAllVisible() }
+        binding.selectionCopyButton.setOnClickListener { stageSelectedTransfer(TransferMode.COPY) }
+        binding.selectionMoveButton.setOnClickListener { stageSelectedTransfer(TransferMode.MOVE) }
+        binding.selectionTrashButton.setOnClickListener { confirmSelectedTrash() }
+        binding.cancelSelectionButton.setOnClickListener { clearSelection() }
 
         binding.searchInput.doAfterTextChanged { renderEntries() }
         binding.hiddenSwitch.setOnCheckedChangeListener { _, checked ->
@@ -91,6 +100,7 @@ class FileBrowserActivity : OmniActivity() {
             }
         )
         savedInstanceState?.getString(STATE_SEARCH_QUERY)?.takeIf { it.isNotEmpty() }?.let(binding.searchInput::setText)
+        updateSelectionUi()
         updateTransferUi()
     }
 
@@ -99,8 +109,9 @@ class FileBrowserActivity : OmniActivity() {
         outState.putString(STATE_SORT_MODE, sortMode.name)
         outState.putBoolean(STATE_SHOW_HIDDEN, showHidden)
         outState.putString(STATE_SEARCH_QUERY, binding.searchInput.text?.toString().orEmpty())
+        outState.putStringArrayList(STATE_SELECTED_PATHS, ArrayList(selectedPaths))
         pendingTransfer?.let {
-            outState.putString(STATE_TRANSFER_PATH, it.sourcePath)
+            outState.putStringArrayList(STATE_TRANSFER_PATHS, ArrayList(it.sourcePaths))
             outState.putString(STATE_TRANSFER_MODE, it.mode.name)
         }
         super.onSaveInstanceState(outState)
@@ -110,19 +121,27 @@ class FileBrowserActivity : OmniActivity() {
         super.onResume()
         val hasAccess = StorageAccessController.hasSharedStorageAccess(this)
         val pending = pendingTransfer
-        if (pending != null && !File(pending.sourcePath).exists()) {
-            pendingTransfer = null
-            Toast.makeText(this, R.string.transfer_missing, Toast.LENGTH_LONG).show()
+        if (pending != null) {
+            val existing = pending.sourcePaths.filter { File(it).exists() }
+            if (existing.size != pending.sourcePaths.size) {
+                pendingTransfer = existing.takeIf { it.isNotEmpty() }?.let { PendingTransfer(it, pending.mode) }
+                Toast.makeText(this, R.string.transfer_missing, Toast.LENGTH_LONG).show()
+            }
         }
+        selectedPaths.removeAll { !File(it).exists() }
+        updateSelectionUi()
         updateTransferUi()
         if (hasAccess) {
             load(currentDir)
         } else {
             loadGeneration++
+            selectedPaths.clear()
             allEntries = emptyList()
             adapter.submitList(emptyList())
+            adapter.setSelectedPaths(emptySet())
             binding.emptyText.setText(R.string.storage_access_required)
             binding.emptyText.visibility = View.VISIBLE
+            updateSelectionUi()
         }
     }
 
@@ -139,16 +158,34 @@ class FileBrowserActivity : OmniActivity() {
             ?.takeIf { it.isDirectory }
             ?: sharedRoot
 
-        val restoredTransferPath = savedInstanceState?.getString(STATE_TRANSFER_PATH)
+        savedInstanceState?.getStringArrayList(STATE_SELECTED_PATHS)
+            ?.mapNotNull { path ->
+                runCatching { FilePathPolicy.requireInside(File(path), sharedRoot) }.getOrNull()
+                    ?.takeIf { it.exists() && it.parentFile?.canonicalPath == currentDir.canonicalPath }
+                    ?.canonicalPath
+            }
+            ?.let(selectedPaths::addAll)
+
+        val restoredTransferPaths = savedInstanceState?.getStringArrayList(STATE_TRANSFER_PATHS)
+            ?.mapNotNull { path ->
+                runCatching { FilePathPolicy.requireInside(File(path), sharedRoot) }.getOrNull()
+                    ?.takeIf(File::exists)
+                    ?.canonicalPath
+            }
+            .orEmpty()
         val restoredTransferMode = savedInstanceState?.getString(STATE_TRANSFER_MODE)
             ?.let { runCatching { TransferMode.valueOf(it) }.getOrNull() }
-        if (!restoredTransferPath.isNullOrBlank() && restoredTransferMode != null) {
-            pendingTransfer = PendingTransfer(restoredTransferPath, restoredTransferMode)
+        if (restoredTransferPaths.isNotEmpty() && restoredTransferMode != null) {
+            pendingTransfer = PendingTransfer(restoredTransferPaths.distinct(), restoredTransferMode)
         }
     }
 
     private fun navigateUpOrFinish() {
         if (operationBusy) return
+        if (selectedPaths.isNotEmpty()) {
+            clearSelection()
+            return
+        }
         if (currentDir.canonicalPath == sharedRoot.path) finish()
         else currentDir.parentFile?.let(::load) ?: finish()
     }
@@ -160,6 +197,10 @@ class FileBrowserActivity : OmniActivity() {
                 sharedRoot
             }
         val readableDir = if (safeDir.isDirectory) safeDir else sharedRoot
+        if (::binding.isInitialized && currentDir.canonicalPath != readableDir.canonicalPath) {
+            selectedPaths.clear()
+            updateSelectionUi()
+        }
         currentDir = readableDir
         binding.pathText.text = currentDir.path
         val generation = ++loadGeneration
@@ -174,12 +215,20 @@ class FileBrowserActivity : OmniActivity() {
             if (generation != loadGeneration || currentDir.canonicalPath != requestedDir.canonicalPath) return@launch
             result.onSuccess {
                 allEntries = it
+                val validPaths = it.mapTo(mutableSetOf()) { entry ->
+                    runCatching { entry.canonicalPath }.getOrElse { entry.absolutePath }
+                }
+                selectedPaths.retainAll(validPaths)
                 renderEntries()
+                updateSelectionUi()
             }.onFailure {
+                selectedPaths.clear()
                 allEntries = emptyList()
                 adapter.submitList(emptyList())
+                adapter.setSelectedPaths(emptySet())
                 binding.emptyText.text = it.message ?: "Klasör okunamadı"
                 binding.emptyText.visibility = View.VISIBLE
+                updateSelectionUi()
             }
         }
     }
@@ -193,6 +242,7 @@ class FileBrowserActivity : OmniActivity() {
             .toList()
 
         adapter.submitList(visible)
+        adapter.setSelectedPaths(selectedPaths)
         if (visible.isEmpty()) {
             val filtered = query.isNotEmpty() || (!showHidden && allEntries.any(::isHidden))
             binding.emptyText.setText(if (filtered) R.string.empty_search else R.string.empty_folder)
@@ -200,6 +250,7 @@ class FileBrowserActivity : OmniActivity() {
         } else {
             binding.emptyText.visibility = View.GONE
         }
+        updateSelectionUi()
     }
 
     private fun compareEntries(left: File, right: File): Int {
@@ -218,6 +269,63 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     private fun isHidden(file: File): Boolean = file.name.startsWith('.') || file.isHidden
+
+    private fun handleEntryClick(file: File) {
+        if (selectedPaths.isNotEmpty()) toggleSelection(file) else openEntry(file)
+    }
+
+    private fun handleEntryLongClick(file: File) {
+        if (operationBusy) return
+        toggleSelection(file)
+    }
+
+    private fun toggleSelection(file: File) {
+        if (operationBusy) return
+        val safe = runCatching { FilePathPolicy.requireInside(file, sharedRoot) }
+            .getOrElse {
+                Toast.makeText(this, it.message ?: "Öğe seçilemedi", Toast.LENGTH_LONG).show()
+                return
+            }
+        val path = safe.canonicalPath
+        if (!selectedPaths.add(path)) selectedPaths.remove(path)
+        updateSelectionUi()
+        adapter.setSelectedPaths(selectedPaths)
+    }
+
+    private fun selectAllVisible() {
+        if (operationBusy) return
+        adapter.currentList.forEach { file ->
+            runCatching { FilePathPolicy.requireInside(file, sharedRoot).canonicalPath }
+                .getOrNull()
+                ?.let(selectedPaths::add)
+        }
+        updateSelectionUi()
+        adapter.setSelectedPaths(selectedPaths)
+    }
+
+    private fun clearSelection() {
+        if (operationBusy) return
+        selectedPaths.clear()
+        updateSelectionUi()
+        adapter.setSelectedPaths(emptySet())
+    }
+
+    private fun updateSelectionUi() {
+        if (!::binding.isInitialized) return
+        val active = selectedPaths.isNotEmpty()
+        binding.selectionBar.visibility = if (active) View.VISIBLE else View.GONE
+        binding.selectedCountText.text = getString(R.string.selected_count, selectedPaths.size)
+        binding.selectAllButton.isEnabled = !operationBusy && adapter.currentList.isNotEmpty()
+        binding.selectionCopyButton.isEnabled = active && !operationBusy
+
+        val allMutable = active && selectedPaths.all { path ->
+            runCatching { FilePathPolicy.requireMutableTarget(File(path), sharedRoot) }.isSuccess
+        }
+        binding.selectionMoveButton.isEnabled = allMutable && !operationBusy
+        binding.selectionTrashButton.isEnabled = allMutable && !operationBusy
+        binding.cancelSelectionButton.isEnabled = active && !operationBusy
+        updateTransferUi()
+    }
 
     private fun openEntry(file: File) {
         if (operationBusy) return
@@ -250,7 +358,7 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     private fun showEntryActions(file: File) {
-        if (operationBusy) return
+        if (operationBusy || selectedPaths.isNotEmpty()) return
         val safe = runCatching { FilePathPolicy.requireInside(file, sharedRoot) }
             .getOrElse {
                 Toast.makeText(this, it.message ?: "Öğe güvenli alanın dışında", Toast.LENGTH_LONG).show()
@@ -259,6 +367,7 @@ class FileBrowserActivity : OmniActivity() {
         val mutable = runCatching { FilePathPolicy.requireMutableTarget(safe, sharedRoot) }.isSuccess
 
         val actions = buildList {
+            add(R.string.details)
             if (safe.isFile) add(R.string.share)
             add(R.string.copy)
             if (mutable) add(R.string.move)
@@ -271,9 +380,10 @@ class FileBrowserActivity : OmniActivity() {
             .setTitle(safe.name.ifBlank { safe.path })
             .setItems(labels) { _, which ->
                 when (actions[which]) {
+                    R.string.details -> showDetails(safe)
                     R.string.share -> shareFile(safe)
-                    R.string.copy -> stageTransfer(safe, TransferMode.COPY)
-                    R.string.move -> stageTransfer(safe, TransferMode.MOVE)
+                    R.string.copy -> stageTransfer(listOf(safe), TransferMode.COPY)
+                    R.string.move -> stageTransfer(listOf(safe), TransferMode.MOVE)
                     R.string.rename -> showRenameDialog(safe)
                     R.string.copy_path -> copyPath(safe)
                     R.string.move_to_trash -> confirmTrash(safe)
@@ -282,21 +392,93 @@ class FileBrowserActivity : OmniActivity() {
             .show()
     }
 
-    private fun stageTransfer(file: File, mode: TransferMode) {
+    private fun showDetails(file: File) {
+        if (operationBusy) return
         val safe = runCatching { FilePathPolicy.requireInside(file, sharedRoot) }
             .getOrElse {
-                Toast.makeText(this, it.message ?: "Öğe seçilemedi", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, it.message ?: "Ayrıntılar okunamadı", Toast.LENGTH_LONG).show()
                 return
             }
-        if (mode == TransferMode.MOVE && runCatching { FilePathPolicy.requireMutableTarget(safe, sharedRoot) }.isFailure) {
-            Toast.makeText(this, "Bu sistem klasörü taşınamaz.", Toast.LENGTH_LONG).show()
+        setOperationBusy(true)
+        lifecycleScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.IO) { FileInspector.inspect(safe, sharedRoot) }
+            }
+            setOperationBusy(false)
+            result.onSuccess { inspection ->
+                val type = if (safe.isDirectory) "Klasör" else mimeFor(safe)
+                val lines = buildList {
+                    add(getString(R.string.detail_type, type))
+                    add(getString(R.string.detail_size, formatBytes(inspection.totalBytes)))
+                    if (safe.isDirectory) {
+                        add(getString(R.string.detail_contents, inspection.fileCount, inspection.directoryCount))
+                    }
+                    if (inspection.skippedCount > 0) {
+                        add(getString(R.string.detail_skipped, inspection.skippedCount))
+                    }
+                    if (inspection.truncated) add(getString(R.string.detail_scan_limited))
+                    add(
+                        getString(
+                            R.string.detail_modified,
+                            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                                .format(Date(inspection.lastModified))
+                        )
+                    )
+                    add(
+                        getString(
+                            R.string.detail_access,
+                            getString(if (inspection.readable) R.string.yes else R.string.no),
+                            getString(if (inspection.writable) R.string.yes else R.string.no)
+                        )
+                    )
+                    add(getString(R.string.detail_path, safe.path))
+                }
+                MaterialAlertDialogBuilder(this@FileBrowserActivity)
+                    .setTitle(safe.name.ifBlank { safe.path })
+                    .setMessage(lines.joinToString("\n"))
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }.onFailure {
+                Toast.makeText(this@FileBrowserActivity, it.message ?: "Ayrıntılar okunamadı", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun stageSelectedTransfer(mode: TransferMode) {
+        if (operationBusy || selectedPaths.isEmpty()) return
+        stageTransfer(selectedPaths.map(::File), mode)
+    }
+
+    private fun stageTransfer(files: List<File>, mode: TransferMode) {
+        if (operationBusy) return
+        val safeFiles = files.mapNotNull { file ->
+            runCatching { FilePathPolicy.requireInside(file, sharedRoot) }.getOrNull()
+        }.distinctBy(File::getCanonicalPath)
+        if (safeFiles.size != files.size || safeFiles.isEmpty()) {
+            Toast.makeText(this, "Seçimin bir bölümü güvenli değil veya artık mevcut değil.", Toast.LENGTH_LONG).show()
             return
         }
-        pendingTransfer = PendingTransfer(safe.path, mode)
+        if (mode == TransferMode.MOVE && safeFiles.any {
+                runCatching { FilePathPolicy.requireMutableTarget(it, sharedRoot) }.isFailure
+            }) {
+            Toast.makeText(this, "Seçimde taşınamayan sistem klasörü var.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val paths = safeFiles.map { it.canonicalPath }
+        pendingTransfer = PendingTransfer(paths, mode)
+        selectedPaths.clear()
+        adapter.setSelectedPaths(emptySet())
+        updateSelectionUi()
         updateTransferUi()
         Toast.makeText(
             this,
-            if (mode == TransferMode.COPY) R.string.copy_ready else R.string.move_ready,
+            when {
+                paths.size == 1 && mode == TransferMode.COPY -> getString(R.string.copy_ready)
+                paths.size == 1 -> getString(R.string.move_ready)
+                mode == TransferMode.COPY -> getString(R.string.batch_copy_ready, paths.size)
+                else -> getString(R.string.batch_move_ready, paths.size)
+            },
             Toast.LENGTH_LONG
         ).show()
     }
@@ -304,33 +486,51 @@ class FileBrowserActivity : OmniActivity() {
     private fun pastePendingTransfer() {
         if (operationBusy || !StorageAccessController.hasSharedStorageAccess(this)) return
         val pending = pendingTransfer ?: return
-        val source = File(pending.sourcePath)
-        if (!source.exists()) {
-            pendingTransfer = null
-            updateTransferUi()
+        val existingPaths = pending.sourcePaths.filter { File(it).exists() }
+        if (existingPaths.size != pending.sourcePaths.size) {
+            pendingTransfer = existingPaths.takeIf { it.isNotEmpty() }?.let { PendingTransfer(it, pending.mode) }
             Toast.makeText(this, R.string.transfer_missing, Toast.LENGTH_LONG).show()
+        }
+        if (existingPaths.isEmpty()) {
+            updateTransferUi()
             return
         }
 
         val destinationDirectory = currentDir
         setOperationBusy(true)
         lifecycleScope.launch {
-            val result = runCatching {
-                withContext(Dispatchers.IO) {
-                    when (pending.mode) {
-                        TransferMode.COPY -> FileOperations.copy(source, destinationDirectory, sharedRoot)
-                        TransferMode.MOVE -> FileOperations.move(source, destinationDirectory, sharedRoot)
-                    }
+            val outcomes = withContext(Dispatchers.IO) {
+                val succeeded = mutableListOf<String>()
+                val failed = mutableListOf<String>()
+                existingPaths.forEach { path ->
+                    val source = File(path)
+                    runCatching {
+                        when (pending.mode) {
+                            TransferMode.COPY -> FileOperations.copy(source, destinationDirectory, sharedRoot)
+                            TransferMode.MOVE -> FileOperations.move(source, destinationDirectory, sharedRoot)
+                        }
+                    }.onSuccess { succeeded += path }
+                        .onFailure { failed += path }
                 }
+                succeeded to failed
             }
-            result.onSuccess {
-                if (pending.mode == TransferMode.MOVE) pendingTransfer = null
-                Toast.makeText(this@FileBrowserActivity, R.string.transfer_done, Toast.LENGTH_SHORT).show()
-            }.onFailure {
-                Toast.makeText(this@FileBrowserActivity, it.message ?: "Dosya işlemi başarısız", Toast.LENGTH_LONG).show()
+
+            val succeeded = outcomes.first
+            val failed = outcomes.second
+            if (pending.mode == TransferMode.MOVE) {
+                pendingTransfer = failed.takeIf { it.isNotEmpty() }?.let { PendingTransfer(it, TransferMode.MOVE) }
+            } else {
+                pendingTransfer = PendingTransfer(existingPaths, TransferMode.COPY)
             }
+
             setOperationBusy(false)
-            if (result.isSuccess) load(destinationDirectory) else updateTransferUi()
+            val message = when {
+                failed.isEmpty() && succeeded.size == 1 -> getString(R.string.transfer_done)
+                failed.isEmpty() -> getString(R.string.batch_transfer_done, succeeded.size)
+                else -> getString(R.string.batch_transfer_partial, succeeded.size, failed.size)
+            }
+            Toast.makeText(this@FileBrowserActivity, message, if (failed.isEmpty()) Toast.LENGTH_SHORT else Toast.LENGTH_LONG).show()
+            if (succeeded.isNotEmpty()) load(destinationDirectory) else updateTransferUi()
         }
     }
 
@@ -349,19 +549,23 @@ class FileBrowserActivity : OmniActivity() {
         binding.pasteButton.visibility = if (visible) View.VISIBLE else View.GONE
         binding.cancelTransferButton.visibility = if (visible) View.VISIBLE else View.GONE
 
-        val sourceName = pending?.sourcePath?.let { File(it).name.ifBlank { it } }.orEmpty()
-        binding.transferText.text = when (pending?.mode) {
-            TransferMode.COPY -> getString(R.string.transfer_copy_label, sourceName)
-            TransferMode.MOVE -> getString(R.string.transfer_move_label, sourceName)
-            null -> ""
+        val count = pending?.sourcePaths?.size ?: 0
+        val sourceName = pending?.sourcePaths?.singleOrNull()?.let { File(it).name.ifBlank { it } }.orEmpty()
+        binding.transferText.text = when {
+            pending == null -> ""
+            count == 1 && pending.mode == TransferMode.COPY -> getString(R.string.transfer_copy_label, sourceName)
+            count == 1 -> getString(R.string.transfer_move_label, sourceName)
+            pending.mode == TransferMode.COPY -> getString(R.string.batch_copy_label, count)
+            else -> getString(R.string.batch_move_label, count)
         }
         binding.pasteButton.text = when (pending?.mode) {
             TransferMode.MOVE -> getString(R.string.paste_move)
             else -> getString(R.string.paste_copy)
         }
-        binding.pasteButton.isEnabled = pending != null && hasAccess && !operationBusy
+        val selectionActive = selectedPaths.isNotEmpty()
+        binding.pasteButton.isEnabled = pending != null && hasAccess && !operationBusy && !selectionActive
         binding.cancelTransferButton.isEnabled = pending != null && !operationBusy
-        binding.newFolderButton.isEnabled = hasAccess && !operationBusy
+        binding.newFolderButton.isEnabled = hasAccess && !operationBusy && !selectionActive
     }
 
     private fun setOperationBusy(value: Boolean) {
@@ -373,6 +577,7 @@ class FileBrowserActivity : OmniActivity() {
             binding.sortGroup.getChildAt(index).isEnabled = !value
         }
         binding.list.alpha = if (value) 0.65f else 1f
+        updateSelectionUi()
         updateTransferUi()
     }
 
@@ -402,7 +607,7 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     private fun showCreateFolderDialog() {
-        if (operationBusy || !StorageAccessController.hasSharedStorageAccess(this)) return
+        if (operationBusy || selectedPaths.isNotEmpty() || !StorageAccessController.hasSharedStorageAccess(this)) return
         val input = EditText(this).apply {
             hint = getString(R.string.new_folder_hint)
             setSingleLine(true)
@@ -475,6 +680,21 @@ class FileBrowserActivity : OmniActivity() {
             .show()
     }
 
+    private fun confirmSelectedTrash() {
+        if (operationBusy || selectedPaths.isEmpty()) return
+        val paths = selectedPaths.toList()
+        if (paths.any { runCatching { FilePathPolicy.requireMutableTarget(File(it), sharedRoot) }.isFailure }) {
+            Toast.makeText(this, "Seçimde çöpe taşınamayan sistem klasörü var.", Toast.LENGTH_LONG).show()
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.batch_trash_title)
+            .setMessage(getString(R.string.batch_trash_message, paths.size))
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.move_to_trash) { _, _ -> moveSelectedToTrash(paths) }
+            .show()
+    }
+
     private fun moveToTrash(file: File) {
         if (operationBusy) return
         setOperationBusy(true)
@@ -483,9 +703,7 @@ class FileBrowserActivity : OmniActivity() {
                 withContext(Dispatchers.IO) { TrashManager(this@FileBrowserActivity).moveToTrash(file) }
             }
             val ticket = result.getOrNull()
-            ticket?.let {
-                invalidatePendingTransferIfAffected(file)
-            }
+            ticket?.let { invalidatePendingTransferIfAffected(file) }
             result.onFailure {
                 Toast.makeText(this@FileBrowserActivity, it.message ?: "İşlem başarısız", Toast.LENGTH_LONG).show()
             }
@@ -495,6 +713,44 @@ class FileBrowserActivity : OmniActivity() {
                 Snackbar.make(binding.root, R.string.moved_to_trash, Snackbar.LENGTH_LONG)
                     .setAction(R.string.undo) { restoreTrash(ticket) }
                     .show()
+            }
+        }
+    }
+
+    private fun moveSelectedToTrash(paths: List<String>) {
+        if (operationBusy || paths.isEmpty()) return
+        setOperationBusy(true)
+        lifecycleScope.launch {
+            val outcomes = withContext(Dispatchers.IO) {
+                val manager = TrashManager(this@FileBrowserActivity)
+                val tickets = mutableListOf<TrashTicket>()
+                val failed = mutableListOf<String>()
+                paths.forEach { path ->
+                    runCatching { manager.moveToTrash(File(path)) }
+                        .onSuccess { tickets += it }
+                        .onFailure { failed += path }
+                }
+                tickets to failed
+            }
+            val tickets = outcomes.first
+            val failed = outcomes.second
+            tickets.forEach { ticket -> invalidatePendingTransferIfAffectedPath(ticket.originalFile.path) }
+            selectedPaths.clear()
+            selectedPaths.addAll(failed.filter { File(it).exists() })
+            setOperationBusy(false)
+            load(currentDir)
+
+            val message = if (failed.isEmpty()) {
+                getString(R.string.batch_trash_done, tickets.size)
+            } else {
+                getString(R.string.batch_trash_partial, tickets.size, failed.size)
+            }
+            if (tickets.isNotEmpty()) {
+                Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG)
+                    .setAction(R.string.undo) { restoreTrashTickets(tickets) }
+                    .show()
+            } else {
+                Toast.makeText(this@FileBrowserActivity, message, Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -522,12 +778,44 @@ class FileBrowserActivity : OmniActivity() {
         }
     }
 
-    private fun invalidatePendingTransferIfAffected(file: File) {
-        val pending = pendingTransfer ?: return
-        val affectedPath = runCatching { file.canonicalPath }.getOrElse { file.absolutePath }
-        if (pending.sourcePath == affectedPath || pending.sourcePath.startsWith(affectedPath + File.separator)) {
-            pendingTransfer = null
+    private fun restoreTrashTickets(tickets: List<TrashTicket>) {
+        if (operationBusy || tickets.isEmpty()) return
+        setOperationBusy(true)
+        lifecycleScope.launch {
+            val counts = withContext(Dispatchers.IO) {
+                val manager = TrashManager(this@FileBrowserActivity)
+                var restored = 0
+                var failed = 0
+                tickets.forEach { ticket ->
+                    runCatching { manager.restore(ticket) }
+                        .onSuccess { restored++ }
+                        .onFailure { failed++ }
+                }
+                restored to failed
+            }
+            setOperationBusy(false)
+            load(currentDir)
+            val message = if (counts.second == 0) {
+                getString(R.string.batch_restore_done, counts.first)
+            } else {
+                getString(R.string.batch_restore_partial, counts.first, counts.second)
+            }
+            Toast.makeText(this@FileBrowserActivity, message, if (counts.second == 0) Toast.LENGTH_SHORT else Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun invalidatePendingTransferIfAffected(file: File) {
+        val affectedPath = runCatching { file.canonicalPath }.getOrElse { file.absolutePath }
+        invalidatePendingTransferIfAffectedPath(affectedPath)
+    }
+
+    private fun invalidatePendingTransferIfAffectedPath(affectedPath: String) {
+        val pending = pendingTransfer ?: return
+        val remaining = pending.sourcePaths.filterNot { sourcePath ->
+            sourcePath == affectedPath || sourcePath.startsWith(affectedPath + File.separator)
+        }
+        pendingTransfer = remaining.takeIf { it.isNotEmpty() }?.let { PendingTransfer(it, pending.mode) }
+        updateTransferUi()
     }
 
     private fun mimeFor(file: File): String {
@@ -535,12 +823,25 @@ class FileBrowserActivity : OmniActivity() {
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream"
     }
 
+    private fun formatBytes(bytes: Long): String {
+        if (bytes < 1024L) return "$bytes B"
+        val units = arrayOf("KB", "MB", "GB", "TB", "PB", "EB")
+        var value = bytes.toDouble()
+        var index = -1
+        while (value >= 1024.0 && index < units.lastIndex) {
+            value /= 1024.0
+            index++
+        }
+        return "%.1f %s".format(Locale.ROOT, value, units[index])
+    }
+
     companion object {
         private const val STATE_CURRENT_PATH = "current_path"
         private const val STATE_SORT_MODE = "sort_mode"
         private const val STATE_SHOW_HIDDEN = "show_hidden"
         private const val STATE_SEARCH_QUERY = "search_query"
-        private const val STATE_TRANSFER_PATH = "transfer_path"
+        private const val STATE_SELECTED_PATHS = "selected_paths"
+        private const val STATE_TRANSFER_PATHS = "transfer_paths"
         private const val STATE_TRANSFER_MODE = "transfer_mode"
     }
 }
