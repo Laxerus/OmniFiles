@@ -44,6 +44,17 @@
     <string name="create">Oluştur</string>
     <string name="rename">Yeniden adlandır</string>
     <string name="share">Paylaş</string>
+    <string name="copy">Kopyala</string>
+    <string name="move">Taşı</string>
+    <string name="paste_copy">Buraya kopyala</string>
+    <string name="paste_move">Buraya taşı</string>
+    <string name="cancel_transfer">Aktarımı iptal et</string>
+    <string name="copy_ready">Kopyalanacak öğe seçildi. Hedef klasöre gidip “Buraya kopyala”ya dokun.</string>
+    <string name="move_ready">Taşınacak öğe seçildi. Hedef klasöre gidip “Buraya taşı”ya dokun.</string>
+    <string name="copying">Öğe güvenli biçimde kopyalanıyor…</string>
+    <string name="moving">Öğe güvenli biçimde taşınıyor…</string>
+    <string name="transfer_done">Dosya işlemi tamamlandı.</string>
+    <string name="transfer_missing">Seçilen kaynak artık mevcut değil; aktarım iptal edildi.</string>
     <string name="copy_path">Yolu kopyala</string>
     <string name="path_copied">Dosya yolu panoya kopyalandı.</string>
     <string name="folder_created">Klasör oluşturuldu.</string>
