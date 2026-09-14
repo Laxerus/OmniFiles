@@ -27,6 +27,7 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <activity android:name=".ui.ChecksumActivity" android:exported="false" />
         <activity android:name=".ui.SqliteStudioActivity" android:exported="false" />
         <activity android:name=".ui.SaveScoutActivity" android:exported="false" />
         <activity android:name=".ui.AdbBrowserActivity" android:exported="false" />
