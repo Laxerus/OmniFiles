@@ -122,37 +122,53 @@ object FileOperations {
         val safeSource = FilePathPolicy.requireDirectEntry(source, root)
         require(safeSource.exists()) { "Kaynak öğe artık mevcut değil" }
         require(safeSource.path != root.path) { "Depolama kökünün tamamı kopyalanamaz" }
-        checkCancelled(isCancelled)
+        val runtimeId = TransferRuntime.begin(TransferRuntime.Operation.COPY, safeSource.name)
+        val cancellation = { isCancelled?.invoke() == true || TransferRuntime.isCancelled(runtimeId) }
+        var completed = false
+        var cancelled = false
 
-        val safeDestinationDirectory = requireDestinationDirectory(destinationDirectory, root)
-        cleanupStaleStaging(safeDestinationDirectory, root)
-        requireNotInsideSource(safeSource, safeDestinationDirectory)
-        val requiredBytes = estimateTransferBytes(safeSource, root, isCancelled)
-        requireEnoughFreeSpace(requiredBytes, safeDestinationDirectory)
-        onProgress?.invoke(0L, requiredBytes)
-        checkCancelled(isCancelled)
+        fun report(copied: Long, total: Long) {
+            TransferRuntime.update(runtimeId, copied, total)
+            onProgress?.invoke(copied, total)
+        }
 
-        val preferredDestination = nextAvailableDestination(safeDestinationDirectory, safeSource)
-        val staging = nextStagingDestination(safeDestinationDirectory)
-        val created = mutableListOf<File>()
+        try {
+            checkCancelled(cancellation)
+            val safeDestinationDirectory = requireDestinationDirectory(destinationDirectory, root)
+            cleanupStaleStaging(safeDestinationDirectory, root)
+            requireNotInsideSource(safeSource, safeDestinationDirectory)
+            val requiredBytes = estimateTransferBytes(safeSource, root, cancellation)
+            requireEnoughFreeSpace(requiredBytes, safeDestinationDirectory)
+            report(0L, requiredBytes)
+            checkCancelled(cancellation)
 
-        return try {
-            copyTree(
-                source = safeSource,
-                destination = staging,
-                allowedRoot = root,
-                created = created,
-                totalBytes = requiredBytes,
-                onProgress = onProgress,
-                isCancelled = isCancelled
-            )
-            checkCancelled(isCancelled)
-            val committed = commitStagingCopy(staging, preferredDestination, safeDestinationDirectory, safeSource)
-            onProgress?.invoke(requiredBytes, requiredBytes)
-            committed
+            val preferredDestination = nextAvailableDestination(safeDestinationDirectory, safeSource)
+            val staging = nextStagingDestination(safeDestinationDirectory)
+            val created = mutableListOf<File>()
+            val committed = try {
+                copyTree(
+                    source = safeSource,
+                    destination = staging,
+                    allowedRoot = root,
+                    created = created,
+                    totalBytes = requiredBytes,
+                    onProgress = ::report,
+                    isCancelled = cancellation
+                )
+                checkCancelled(cancellation)
+                commitStagingCopy(staging, preferredDestination, safeDestinationDirectory, safeSource)
+            } catch (error: Throwable) {
+                rollbackCreated(created)
+                throw error
+            }
+            report(requiredBytes, requiredBytes)
+            completed = true
+            return committed
         } catch (error: Throwable) {
-            rollbackCreated(created)
+            cancelled = error is TransferCancelledException
             throw error
+        } finally {
+            TransferRuntime.finish(runtimeId, completed, cancelled)
         }
     }
 
@@ -166,53 +182,72 @@ object FileOperations {
         val root = FilePathPolicy.canonical(sharedRoot)
         val safeSource = FilePathPolicy.requireMutableTarget(source, root)
         require(safeSource.exists()) { "Kaynak öğe artık mevcut değil" }
-        val safeDestinationDirectory = requireDestinationDirectory(destinationDirectory, root)
-        cleanupStaleStaging(safeDestinationDirectory, root)
-        requireNotInsideSource(safeSource, safeDestinationDirectory)
-        checkCancelled(isCancelled)
+        val runtimeId = TransferRuntime.begin(TransferRuntime.Operation.MOVE, safeSource.name)
+        val cancellation = { isCancelled?.invoke() == true || TransferRuntime.isCancelled(runtimeId) }
+        var completed = false
+        var cancelled = false
 
-        val sourceParent = safeSource.parentFile?.canonicalFile ?: error("Kaynak üst klasörü bulunamadı")
-        require(sourceParent.path != safeDestinationDirectory.path) { "Öğe zaten bu klasörde" }
-
-        val destination = File(safeDestinationDirectory, safeSource.name)
-        require(!destination.exists()) { "Hedef klasörde aynı adda bir öğe zaten var" }
-        FilePathPolicy.requireInside(destination, root)
-
-        onProgress?.invoke(0L, 0L)
-        checkCancelled(isCancelled)
-        if (safeSource.renameTo(destination)) {
-            onProgress?.invoke(1L, 1L)
-            return destination.canonicalFile
+        fun report(copied: Long, total: Long) {
+            TransferRuntime.update(runtimeId, copied, total)
+            onProgress?.invoke(copied, total)
         }
 
-        val requiredBytes = estimateTransferBytes(safeSource, root, isCancelled)
-        requireEnoughFreeSpace(requiredBytes, safeDestinationDirectory)
-        onProgress?.invoke(0L, requiredBytes)
-        checkCancelled(isCancelled)
-        val staging = nextStagingDestination(safeDestinationDirectory)
-        val created = mutableListOf<File>()
-        val committed = try {
-            copyTree(
-                source = safeSource,
-                destination = staging,
-                allowedRoot = root,
-                created = created,
-                totalBytes = requiredBytes,
-                onProgress = onProgress,
-                isCancelled = isCancelled
-            )
-            checkCancelled(isCancelled)
-            require(!destination.exists()) { "Hedef klasörde aynı adda bir öğe işlem sırasında oluşturuldu" }
-            check(staging.renameTo(destination)) { "Doğrulanan geçici kopya hedefe taşınamadı" }
-            onProgress?.invoke(requiredBytes, requiredBytes)
-            destination.canonicalFile
+        try {
+            val safeDestinationDirectory = requireDestinationDirectory(destinationDirectory, root)
+            cleanupStaleStaging(safeDestinationDirectory, root)
+            requireNotInsideSource(safeSource, safeDestinationDirectory)
+            checkCancelled(cancellation)
+
+            val sourceParent = safeSource.parentFile?.canonicalFile ?: error("Kaynak üst klasörü bulunamadı")
+            require(sourceParent.path != safeDestinationDirectory.path) { "Öğe zaten bu klasörde" }
+
+            val destination = File(safeDestinationDirectory, safeSource.name)
+            require(!destination.exists()) { "Hedef klasörde aynı adda bir öğe zaten var" }
+            FilePathPolicy.requireInside(destination, root)
+
+            report(0L, 0L)
+            checkCancelled(cancellation)
+            if (safeSource.renameTo(destination)) {
+                report(1L, 1L)
+                completed = true
+                return destination.canonicalFile
+            }
+
+            val requiredBytes = estimateTransferBytes(safeSource, root, cancellation)
+            requireEnoughFreeSpace(requiredBytes, safeDestinationDirectory)
+            report(0L, requiredBytes)
+            checkCancelled(cancellation)
+            val staging = nextStagingDestination(safeDestinationDirectory)
+            val created = mutableListOf<File>()
+            val committed = try {
+                copyTree(
+                    source = safeSource,
+                    destination = staging,
+                    allowedRoot = root,
+                    created = created,
+                    totalBytes = requiredBytes,
+                    onProgress = ::report,
+                    isCancelled = cancellation
+                )
+                checkCancelled(cancellation)
+                require(!destination.exists()) { "Hedef klasörde aynı adda bir öğe işlem sırasında oluşturuldu" }
+                check(staging.renameTo(destination)) { "Doğrulanan geçici kopya hedefe taşınamadı" }
+                destination.canonicalFile
+            } catch (error: Throwable) {
+                rollbackCreated(created)
+                throw error
+            }
+
+            removeVerifiedSource(safeSource, root)
+            report(requiredBytes, requiredBytes)
+            completed = true
+            return committed
         } catch (error: Throwable) {
-            rollbackCreated(created)
+            cancelled = error is TransferCancelledException
             throw error
+        } finally {
+            TransferRuntime.finish(runtimeId, completed, cancelled)
         }
-
-        removeVerifiedSource(safeSource, root)
-        return committed
     }
 
     private fun requireDestinationDirectory(directory: File, root: File): File {
