@@ -48,6 +48,32 @@ class FileOperationsTest {
         }
     }
 
+    @Test fun estimatesNestedTransferBytesExactly() {
+        val root = createTempDirectory("omnifiles-estimate-").toFile()
+        try {
+            val source = File(root, "World").apply { mkdir() }
+            File(source, "level.dat").writeBytes(ByteArray(17))
+            File(source, "region").apply { mkdir() }
+            File(source, "region/r.0.0.mca").writeBytes(ByteArray(33))
+
+            assertEquals(50L, FileOperations.estimateTransferBytes(source, root))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun refusesEstimatingEntireSharedRoot() {
+        val root = createTempDirectory("omnifiles-estimate-root-").toFile()
+        try {
+            File(root, "sample.bin").writeBytes(ByteArray(4))
+            assertThrows(IllegalArgumentException::class.java) {
+                FileOperations.estimateTransferBytes(root, root)
+            }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     @Test fun copiesFilesWithoutReplacingExistingNames() {
         val root = createTempDirectory("omnifiles-copy-").toFile()
         try {
