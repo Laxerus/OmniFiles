@@ -14,11 +14,16 @@ REQUIRED = [
     "gradle.properties",
     "app/build.gradle",
     "app/src/main/AndroidManifest.xml",
+    "app/src/main/java/dev/laxerus/omnifiles/access/StorageAccessController.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/fs/FilePathPolicy.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/MainActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbPairingActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbBrowserActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/scout/SaveScoutService.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/sqlite/SqliteWorkspace.kt",
+    ".github/workflows/build-apk.yml",
 ]
 
 errors: list[str] = []
@@ -41,6 +46,10 @@ if manifest.is_file():
         errors.append("AndroidManifest.xml must keep allowBackup=false")
     if "android:usesCleartextTraffic=\"false\"" not in text:
         errors.append("AndroidManifest.xml must keep usesCleartextTraffic=false")
+    if "android.permission.MANAGE_EXTERNAL_STORAGE" not in text:
+        errors.append("shared-storage manager permission is missing")
+    if "android:exported=\"false\"" not in text:
+        errors.append("internal Android components must remain non-exported")
 
 app_gradle = ROOT / "app/build.gradle"
 if app_gradle.is_file():
@@ -48,10 +57,23 @@ if app_gradle.is_file():
     version = re.search(r"versionName\s+['\"]([^'\"]+)['\"]", text)
     if not version or version.group(1) != "0.8.0-dev":
         errors.append("versionName must remain 0.8.0-dev during this development line")
+    if "compileSdk 36" not in text or "targetSdk 36" not in text:
+        errors.append("compileSdk/targetSdk must remain aligned with Android 36")
     if "com.flyfishxu:kadb:2.1.4" not in text:
         errors.append("embedded Kadb dependency is missing")
     if "com.flyfishxu:kadb-mdns:2.1.4" not in text:
         errors.append("Kadb mDNS dependency is missing")
+
+workflow = ROOT / ".github/workflows/build-apk.yml"
+if workflow.is_file():
+    text = workflow.read_text(encoding="utf-8")
+    forbidden_snapshot_markers = ("source.tar.xz", ".source/xz", "Reconstruct and verify OmniFiles source")
+    for marker in forbidden_snapshot_markers:
+        if marker in text:
+            errors.append(f"build workflow regressed to archived source snapshot: {marker}")
+    for required_step in (":app:testDebugUnitTest", ":app:lintDebug", ":app:assembleDebug"):
+        if required_step not in text:
+            errors.append(f"build workflow is missing required gate: {required_step}")
 
 for path in ROOT.glob("app/src/main/java/**/*.kt"):
     text = path.read_text(encoding="utf-8")
