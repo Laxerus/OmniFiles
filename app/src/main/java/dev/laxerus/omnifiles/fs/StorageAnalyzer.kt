@@ -6,6 +6,8 @@ import java.util.ArrayDeque
 object StorageAnalyzer {
     const val DEFAULT_MAX_ENTRIES = 40_000
     const val DEFAULT_TOP_LIMIT = 20
+    const val DEFAULT_CATEGORY_TOP_LIMIT = 8
+    const val MAX_CATEGORY_TOP_LIMIT = 20
 
     enum class FileCategory {
         IMAGE,
@@ -18,18 +20,19 @@ object StorageAnalyzer {
         OTHER
     }
 
-    data class CategoryUsage(
-        val category: FileCategory,
-        val fileCount: Int,
-        val sizeBytes: Long
-    )
-
     data class Entry(
         val path: String,
         val name: String,
         val sizeBytes: Long,
         val modifiedAt: Long,
         val isDirectory: Boolean
+    )
+
+    data class CategoryUsage(
+        val category: FileCategory,
+        val fileCount: Int,
+        val sizeBytes: Long,
+        val largestFiles: List<Entry>
     )
 
     data class Result(
@@ -49,10 +52,14 @@ object StorageAnalyzer {
         root: File,
         maxEntries: Int = DEFAULT_MAX_ENTRIES,
         topLimit: Int = DEFAULT_TOP_LIMIT,
+        categoryTopLimit: Int = DEFAULT_CATEGORY_TOP_LIMIT,
         isCancelled: () -> Boolean = { false }
     ): Result {
         require(maxEntries > 0) { "Tarama öğe sınırı pozitif olmalı" }
         require(topLimit > 0) { "Sonuç sınırı pozitif olmalı" }
+        require(categoryTopLimit in 1..MAX_CATEGORY_TOP_LIMIT) {
+            "Kategori sonuç sınırı 1-$MAX_CATEGORY_TOP_LIMIT arasında olmalı"
+        }
 
         val safeRoot = FilePathPolicy.canonical(root)
         require(safeRoot.exists() && safeRoot.isDirectory) { "Tarama kökü geçerli bir klasör değil" }
@@ -65,6 +72,7 @@ object StorageAnalyzer {
         val ranking = entryComparator()
         val categoryCounts = IntArray(FileCategory.entries.size)
         val categoryBytes = LongArray(FileCategory.entries.size)
+        val categoryLargestFiles = Array(FileCategory.entries.size) { mutableListOf<Entry>() }
 
         var visitedEntries = 0
         var fileCount = 0
@@ -124,6 +132,13 @@ object StorageAnalyzer {
 
                     if (safe.isFile) {
                         val size = safe.length().coerceAtLeast(0L)
+                        val entry = Entry(
+                            path = safe.path,
+                            name = safe.name,
+                            sizeBytes = size,
+                            modifiedAt = safe.lastModified().coerceAtLeast(0L),
+                            isDirectory = false
+                        )
                         scannedBytes = saturatingAdd(scannedBytes, size)
                         fileCount++
                         val category = classifyFileName(safe.name)
@@ -132,14 +147,14 @@ object StorageAnalyzer {
                         categoryBytes[categoryIndex] = saturatingAdd(categoryBytes[categoryIndex], size)
                         retainTop(
                             entries = largestFiles,
-                            entry = Entry(
-                                path = safe.path,
-                                name = safe.name,
-                                sizeBytes = size,
-                                modifiedAt = safe.lastModified().coerceAtLeast(0L),
-                                isDirectory = false
-                            ),
+                            entry = entry,
                             limit = topLimit,
+                            ranking = ranking
+                        )
+                        retainTop(
+                            entries = categoryLargestFiles[categoryIndex],
+                            entry = entry,
+                            limit = categoryTopLimit,
                             ranking = ranking
                         )
                         frame.parentPath?.let { parent ->
@@ -194,7 +209,8 @@ object StorageAnalyzer {
                 CategoryUsage(
                     category = category,
                     fileCount = categoryCounts[index],
-                    sizeBytes = categoryBytes[index]
+                    sizeBytes = categoryBytes[index],
+                    largestFiles = categoryLargestFiles[index].sortedWith(ranking)
                 )
             }
             .filter { it.fileCount > 0 }
