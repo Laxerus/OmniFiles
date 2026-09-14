@@ -142,11 +142,13 @@ abstract class OmniActivity : AppCompatActivity() {
             transferDetailText?.text = getString(
                 R.string.transfer_batch_preparing,
                 snapshot.preparedItems,
-                snapshot.itemCount
+                snapshot.itemCount,
+                formatTransferBytes(snapshot.preparedBytes)
             )
+            val fraction = progressFraction(snapshot.preparedItems.toLong(), snapshot.itemCount.toLong())
             progress?.apply {
                 max = PROGRESS_MAX
-                setProgressCompat(0, false)
+                setProgressCompat(fraction, true)
             }
         } else if (snapshot.totalBytes > 0L) {
             val fraction = progressFraction(snapshot.copiedBytes, snapshot.totalBytes)
