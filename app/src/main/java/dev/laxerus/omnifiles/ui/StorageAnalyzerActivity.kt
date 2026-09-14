@@ -163,19 +163,55 @@ class StorageAnalyzerActivity : OmniActivity() {
                 0.0
             }
             val percentage = String.format(Locale.getDefault(), "%.1f%%", ratio * 100.0)
-            row.findViewById<TextView>(R.id.categoryName).setText(categoryLabel(usage.category))
+            val label = getString(categoryLabel(usage.category))
+            row.findViewById<TextView>(R.id.categoryName).text = label
             row.findViewById<TextView>(R.id.categoryMeta).text = getString(
                 R.string.storage_analyzer_category_meta,
                 usage.fileCount,
                 formatBytes(usage.sizeBytes),
                 percentage
             )
+            row.findViewById<TextView>(R.id.categoryHint).text = getString(
+                R.string.storage_analyzer_category_hint,
+                usage.largestFiles.size
+            )
             row.findViewById<LinearProgressIndicator>(R.id.categoryProgress).apply {
                 max = 1000
                 progress = (ratio * 1000.0).toInt().coerceIn(0, 1000)
             }
+            row.contentDescription = getString(
+                R.string.storage_analyzer_category_action_hint,
+                label,
+                usage.fileCount,
+                formatBytes(usage.sizeBytes)
+            )
+            row.setOnClickListener { showCategoryFiles(usage) }
             container.addView(row)
         }
+    }
+
+    private fun showCategoryFiles(usage: StorageAnalyzer.CategoryUsage) {
+        val entries = usage.largestFiles
+        if (entries.isEmpty()) return
+        val labels = entries.map { entry ->
+            getString(
+                R.string.storage_analyzer_category_file_item,
+                entry.name,
+                formatBytes(entry.sizeBytes),
+                relativePath(entry.path)
+            )
+        }.toTypedArray()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(
+                getString(
+                    R.string.storage_analyzer_category_top_title,
+                    getString(categoryLabel(usage.category)),
+                    entries.size
+                )
+            )
+            .setItems(labels) { _, which -> showEntryActions(entries[which]) }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun categoryLabel(category: StorageAnalyzer.FileCategory): Int = when (category) {
