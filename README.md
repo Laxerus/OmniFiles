@@ -23,6 +23,7 @@ En güncel debug APK `main` dalından Render build hattıyla üretilir:
 - Ana ekranda ortak depolamanın **kullanılan / toplam / boş alanını ve doluluk yüzdesini** gösteren canlı depolama göstergesi.
 - Kayıtlı ADB uç noktasını gerçek shell probe ile doğrulayan **canlı ADB bağlantı sağlığı**.
 - Ortak depolama için güvenli yerel dosya tarayıcısı; arama, sıralama, gizli öğeler, favoriler, seçim ve toplu işlemler.
+- Yerel normal dosya satırlarında doğrudan **SHA** düğmesi; dosyayı ayrı belge seçici açmadan güvenli `FileProvider` URI'siyle SHA-256 ekranına gönderme.
 - Dosya ve klasörlerde **kopyala / taşı / hedefe yapıştır** akışı; sessiz overwrite yapmama ve isim çakışmasında güvenli yeni ad üretme.
 - Kopyaları önce gizli staging alanında tamamlama; her dosyada **boyut + SHA-256 doğrulaması**.
 - Yerel dosya kopyasında kaynak için **boyut + mtime snapshot doğrulaması**; kaynak aktarım sırasında değişirse staging kopyasını reddetme.
@@ -43,6 +44,9 @@ En güncel debug APK `main` dalından Render build hattıyla üretilir:
 - APK içine gömülü `Kadb 2.1.4` ile Kablosuz ADB eşleştirme/bağlantı ve mDNS keşfi.
 - ADB klasör listeleme, dosya önizleme, doğrudan paylaşım ve Android belge seçicisine dışa aktarma.
 - ADB pull işlemlerinde transfer öncesi/sonrası **boyut + mtime + mode snapshot doğrulaması**.
+- ADB normal dosya satırlarında doğrudan **SHA** düğmesi; uzak dosyayı doğrulanmış pull akışıyla geçici cache'e alıp yerelde SHA-256 hesaplama.
+- ADB checksum geçici kopyasını hash sonrasında silme ve süreç çökmesiyle kalmış checksum cache dosyalarını yaş sınırıyla temizleme.
+- ADB yol bileşenlerinde NUL/satır sonu/ISO kontrol karakterlerini ve aşırı uzun dosya adlarını reddetme; güvenli olmayan uzak girişleri liste katmanına taşımama.
 - **Save Scout** ile erişilebilir standart oyun/save konumlarını sınırlı ve güvenli biçimde tarama.
 - **SQLite Studio** ile çalışma kopyasında tablo/satır görüntüleme ve uygun hücreleri düzenleme.
 - SQLite kaydında bütünlük kontrolü, kaynak yazımı sonrası **boyut + SHA-256 + SQLite integrity** doğrulaması ve hata halinde geri yükleme denemesi.
@@ -70,7 +74,11 @@ OmniFiles Android sandbox'ını atlatıyormuş gibi davranmaz. Kablosuz ADB kull
 
 ADB pull akışı mümkün olduğunda uzak dosyayı transfer öncesi ve sonrası tekrar stat ederek boyut, değiştirilme zamanı ve mode bilgisini karşılaştırır. Dosya aktarım sırasında değişmiş veya kaybolmuşsa yerel geçici kopya güvenilir kabul edilmez ve silinir.
 
-SHA-256 aracı seçilen belgeyi değiştirmez; `ContentResolver` üzerinden salt okunur akış kullanır. Analizörden gelen yerel dosyalar da doğrudan `file://` URI ile açılmaz; uygulamanın `FileProvider` content URI'si kullanılır. Hash hesaplaması sırasında Activity yeniden oluşturulursa kaynak URI state içinde korunarak işlem yeniden başlatılabilir. SQLite düzenleme doğrudan kaynak üzerinde yapılmaz; önce çalışma ve yedek kopyaları oluşturulur.
+ADB SHA-256 işlemi cihazda `sha256sum` gibi bir shell aracının varlığını varsaymaz. İstenen uzak dosya önce aynı doğrulanmış pull mekanizmasıyla uygulamanın özel cache alanına alınır; snapshot doğrulaması geçerse yerel geçici kopyanın SHA-256 değeri hesaplanır ve kopya `finally` temizliğiyle silinir. Böylece farklı üretici ROM'larında shell araç setine bağımlılık oluşmaz.
+
+Uzak ADB yol politikası yalnız mutlak yolları kabul eder; `.`/`..`, NUL, ISO kontrol karakterleri ve 255 karakteri aşan tekil dosya adları reddedilir. ADB klasör listesinden gelen güvenli olmayan adlar `AdbRemoteEntry` oluşturulmadan elenir; bu sayede DiffUtil veya sonraki path işlemleri yanıltıcı bir ad üzerinden çalışmaz.
+
+SHA-256 aracı seçilen belgeyi değiştirmez; `ContentResolver` üzerinden salt okunur akış kullanır. Analizörden ve yerel dosya listesinden gelen dosyalar doğrudan `file://` URI ile açılmaz; uygulamanın `FileProvider` content URI'si kullanılır. Hash hesaplaması sırasında Activity yeniden oluşturulursa kaynak URI state içinde korunarak işlem yeniden başlatılabilir. SQLite düzenleme doğrudan kaynak üzerinde yapılmaz; önce çalışma ve yedek kopyaları oluşturulur.
 
 ## Build ve test
 
@@ -91,14 +99,14 @@ Build kapıları:
 4. `:app:assembleDebug`
 5. APK SHA-256 çıktısı
 
-`FileOperationsTest` transfer, staging, kaynak snapshot ve **1200 katmanlı stack-safe klasör** davranışını doğrular. `StorageAnalyzerTest` en büyük dosya/klasör sıralamasını, bounded top-N aday seçimini, yapılandırılabilir öğe sınırını, kullanıcı iptalini ve **800 katmanlı stack-safe analiz ağacını** doğrular. `DigestUtilsTest` SHA-256 yardımcılarını denetler.
+`FileOperationsTest` transfer, staging, kaynak snapshot ve **1200 katmanlı stack-safe klasör** davranışını doğrular. `StorageAnalyzerTest` en büyük dosya/klasör sıralamasını, bounded top-N aday seçimini, yapılandırılabilir öğe sınırını, kullanıcı iptalini ve **800 katmanlı stack-safe analiz ağacını** doğrular. `RemotePathPolicyTest` uzak yol normalizasyonunu, traversal engelini, kontrol karakteri/uzun ad reddini ve parent sınırlarını doğrular. `DigestUtilsTest` SHA-256 yardımcılarını denetler.
 
 `source_sanity.py`; güvenli transfer primitive'leri, staging kurtarma, ADB pull doğrulaması, checksum aracı, Storage Analyzer sınır/iptal/path korumaları ve ana ekran wiring'i kaybolursa build'i durdurur.
 
 ## Ana kaynak alanları
 
 - `app/src/main/java/dev/laxerus/omnifiles/access` — depolama erişimi ve erişim durumu
-- `app/src/main/java/dev/laxerus/omnifiles/adb` — Kablosuz ADB, mDNS, health probe ve doğrulanmış pull politikaları
+- `app/src/main/java/dev/laxerus/omnifiles/adb` — Kablosuz ADB, mDNS, health probe, doğrulanmış pull ve uzak yol politikaları
 - `app/src/main/java/dev/laxerus/omnifiles/fs` — yol güvenliği, SHA-256, transfer, çöp ve Storage Analyzer çekirdeği
 - `app/src/main/java/dev/laxerus/omnifiles/scout` — Save Scout
 - `app/src/main/java/dev/laxerus/omnifiles/sqlite` — SQLite Studio
