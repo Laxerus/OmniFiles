@@ -16,6 +16,16 @@ object FilePathPolicy {
         return item
     }
 
+    fun requireDirectEntry(target: File, allowedRoot: File): File {
+        val root = canonical(allowedRoot)
+        val absolute = target.absoluteFile
+        val item = requireInside(absolute, root)
+        require(absolute.path == item.path) {
+            "Sembolik bağlantı veya dolaylı dosya yolu bu işlem için kullanılamaz"
+        }
+        return item
+    }
+
     fun sanitizeChildName(rawName: String): String {
         val name = rawName.trim()
         require(name.isNotEmpty()) { "Ad boş olamaz" }
@@ -28,7 +38,7 @@ object FilePathPolicy {
     }
 
     fun resolveChild(parent: File, rawName: String, allowedRoot: File): File {
-        val safeParent = requireInside(parent, allowedRoot)
+        val safeParent = requireDirectEntry(parent, allowedRoot)
         require(safeParent.isDirectory) { "Hedef üst klasör geçerli değil" }
         val child = File(safeParent, sanitizeChildName(rawName))
         return requireInside(child, allowedRoot)
@@ -36,7 +46,7 @@ object FilePathPolicy {
 
     fun requireMutableTarget(target: File, sharedRoot: File): File {
         val root = canonical(sharedRoot)
-        val item = requireInside(target, root)
+        val item = requireDirectEntry(target, root)
         val protected = setOf(
             root.path,
             File(root, "Android").canonicalPath,
