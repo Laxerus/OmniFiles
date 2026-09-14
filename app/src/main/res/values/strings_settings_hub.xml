@@ -17,7 +17,7 @@
     <string name="settings_wifi_title">Wi‑Fi ayarları</string>
     <string name="settings_wifi_summary">Kablosuz ADB için bağlı olduğun ağı kontrol et veya değiştir.</string>
     <string name="settings_app_details_title">OmniFiles uygulama ayarları</string>
-    <string name="settings_app_details_summary">İzinlar, pil ve Android’in OmniFiles için sunduğu seçenekleri aç.</string>
+    <string name="settings_app_details_summary">İzinler, pil ve Android’in OmniFiles için sunduğu seçenekleri aç.</string>
 
     <string name="settings_analyzer_summary">Neyin ne kadar alan kapladığını bul ve büyük dosyaları incele.</string>
     <string name="settings_analyzer_needs_access">Analiz için önce tüm dosyalara erişim gerekli.</string>
@@ -46,6 +46,16 @@
     <string name="settings_requires_adb">Önce Kablosuz ADB bağlantısını kur.</string>
     <string name="settings_requires_storage">Önce tüm dosyalara erişim izni gerekli.</string>
     <string name="settings_open_failed">İlgili Android ayar ekranı açılamadı.</string>
+
+    <!-- Compatibility strings still used by the modern Wireless ADB screen and older guarded layouts. -->
+    <string name="settings_section_tools">OmniFiles araçları</string>
+    <string name="settings_storage_access_open">Erişimi yönet</string>
+    <string name="settings_developer_open">Geliştirici seçeneklerini aç</string>
+    <string name="settings_wifi_open">Wi‑Fi ayarlarını aç</string>
+    <string name="settings_app_details_open">Uygulama ayarlarını aç</string>
+    <string name="settings_storage_tools">Depolama ve dosyalar</string>
+    <string name="settings_adb_tools">Kablosuz ADB ve gelişmiş erişim</string>
+    <string name="settings_developer_tools">Geliştirici araçları</string>
 
     <string name="toolbar_storage_analyzer">Depolama analizi</string>
     <string name="toolbar_trash">Çöp kutusu</string>
