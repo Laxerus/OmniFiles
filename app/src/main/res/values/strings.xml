@@ -27,6 +27,7 @@
     <string name="connect_port_hint">Bağlantı portu</string>
     <string name="pair_code_hint">6 haneli eşleştirme kodu</string>
     <string name="pair_and_connect">Eşleştir ve bağlan</string>
+    <string name="connect_only">Daha önce eşleştirilmiş cihaza bağlan</string>
     <string name="open_developer_settings">Geliştirici seçeneklerini aç</string>
     <string name="browser_title">Dosyalar</string>
     <string name="search_files">Dosya ve klasör ara</string>
