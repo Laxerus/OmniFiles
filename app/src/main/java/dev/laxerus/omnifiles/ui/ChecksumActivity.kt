@@ -22,6 +22,7 @@ class ChecksumActivity : OmniActivity() {
     private lateinit var binding: ActivityChecksumBinding
     private var generation = 0
     private var lastHash: String? = null
+    private var activeUri: Uri? = null
 
     private val openDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(::calculateChecksum)
@@ -39,19 +40,26 @@ class ChecksumActivity : OmniActivity() {
         binding.copyHashButton.setOnClickListener { copyHash() }
 
         lastHash = savedInstanceState?.getString(STATE_HASH)
+        activeUri = savedInstanceState?.getString(STATE_URI)
+            ?.let(Uri::parse)
+            ?: intent?.data?.takeIf { it.scheme == "content" }
         binding.fileInfoText.text = savedInstanceState?.getString(STATE_INFO)
             ?: getString(R.string.checksum_no_file)
         binding.hashText.text = lastHash ?: getString(R.string.checksum_not_calculated)
         binding.copyHashButton.isEnabled = lastHash != null
+
+        if (lastHash == null) activeUri?.let(::calculateChecksum)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString(STATE_HASH, lastHash)
         outState.putString(STATE_INFO, binding.fileInfoText.text?.toString())
+        activeUri?.let { outState.putString(STATE_URI, it.toString()) }
         super.onSaveInstanceState(outState)
     }
 
     private fun calculateChecksum(uri: Uri) {
+        activeUri = uri
         val request = ++generation
         lastHash = null
         binding.hashText.setText(R.string.checksum_calculating)
@@ -159,5 +167,6 @@ class ChecksumActivity : OmniActivity() {
     companion object {
         private const val STATE_HASH = "checksum_hash"
         private const val STATE_INFO = "checksum_info"
+        private const val STATE_URI = "checksum_uri"
     }
 }
