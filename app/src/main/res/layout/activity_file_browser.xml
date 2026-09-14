@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <com.google.android.material.appbar.MaterialToolbar
+    <dev.laxerus.omnifiles.ui.FileManagerToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -257,7 +257,7 @@
         android:indeterminate="true"
         android:visibility="gone" />
 
-    <com.google.android.material.button.MaterialButton
+    <dev.laxerus.omnifiles.ui.StorageAccessButton
         android:id="@+id/storageAccessButton"
         style="@style/Widget.Material3.Button"
         android:layout_width="match_parent"
