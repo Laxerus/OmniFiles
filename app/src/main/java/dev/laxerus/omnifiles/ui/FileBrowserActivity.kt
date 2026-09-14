@@ -21,6 +21,7 @@ import com.google.android.material.snackbar.Snackbar
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.StorageAccessController
 import dev.laxerus.omnifiles.databinding.ActivityFileBrowserBinding
+import dev.laxerus.omnifiles.fs.FavoriteStore
 import dev.laxerus.omnifiles.fs.FileInspector
 import dev.laxerus.omnifiles.fs.FileOperations
 import dev.laxerus.omnifiles.fs.FilePathPolicy
@@ -42,6 +43,7 @@ class FileBrowserActivity : OmniActivity() {
     private lateinit var binding: ActivityFileBrowserBinding
     private lateinit var adapter: FileListAdapter
     private val sharedRoot: File by lazy { StorageAccessController.sharedRoot().canonicalFile }
+    private val favoriteStore: FavoriteStore by lazy { FavoriteStore(this) }
     private var currentDir: File = StorageAccessController.sharedRoot()
     private var allEntries: List<File> = emptyList()
     private var sortMode = SortMode.NAME
@@ -68,6 +70,8 @@ class FileBrowserActivity : OmniActivity() {
         adapter = FileListAdapter(::handleEntryClick, ::handleEntryLongClick, ::showEntryActions)
         binding.list.layoutManager = LinearLayoutManager(this)
         binding.list.adapter = adapter
+        binding.favoriteToggleButton.setOnClickListener { toggleCurrentFavorite() }
+        binding.favoritesButton.setOnClickListener { showFavoritePicker() }
         binding.newFolderButton.setOnClickListener { showCreateFolderDialog() }
         binding.pasteButton.setOnClickListener { pastePendingTransfer() }
         binding.cancelTransferButton.setOnClickListener { clearPendingTransfer() }
@@ -104,6 +108,7 @@ class FileBrowserActivity : OmniActivity() {
         savedInstanceState?.getString(STATE_SEARCH_QUERY)?.takeIf { it.isNotEmpty() }?.let(binding.searchInput::setText)
         updateSelectionUi()
         updateTransferUi()
+        updateFavoriteUi()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -144,6 +149,7 @@ class FileBrowserActivity : OmniActivity() {
             binding.emptyText.setText(R.string.storage_access_required)
             binding.emptyText.visibility = View.VISIBLE
             updateSelectionUi()
+            updateFavoriteUi()
         }
     }
 
@@ -205,6 +211,7 @@ class FileBrowserActivity : OmniActivity() {
         }
         currentDir = readableDir
         binding.pathText.text = currentDir.path
+        updateFavoriteUi()
         val generation = ++loadGeneration
         val requestedDir = readableDir
 
@@ -333,6 +340,69 @@ class FileBrowserActivity : OmniActivity() {
         binding.selectionTrashButton.isEnabled = allMutable && !operationBusy
         binding.cancelSelectionButton.isEnabled = active && !operationBusy
         updateTransferUi()
+        updateFavoriteUi()
+    }
+
+    private fun updateFavoriteUi() {
+        if (!::binding.isInitialized) return
+        val hasAccess = StorageAccessController.hasSharedStorageAccess(this)
+        if (!hasAccess) {
+            binding.favoriteToggleButton.setText(R.string.add_favorite)
+            binding.favoritesButton.setText(R.string.favorites)
+            binding.favoriteToggleButton.isEnabled = false
+            binding.favoritesButton.isEnabled = false
+            return
+        }
+
+        val favorites = runCatching { favoriteStore.list(sharedRoot) }.getOrDefault(emptyList())
+        val currentFavorite = runCatching { favoriteStore.isFavorite(currentDir, sharedRoot) }.getOrDefault(false)
+        binding.favoriteToggleButton.setText(if (currentFavorite) R.string.remove_favorite else R.string.add_favorite)
+        binding.favoritesButton.text = getString(R.string.favorites_count, favorites.size)
+        val controlsEnabled = !operationBusy && selectedPaths.isEmpty()
+        binding.favoriteToggleButton.isEnabled = controlsEnabled && currentDir.exists() && currentDir.isDirectory
+        binding.favoritesButton.isEnabled = controlsEnabled
+    }
+
+    private fun toggleCurrentFavorite() {
+        if (operationBusy || selectedPaths.isNotEmpty()) return
+        val result = runCatching { favoriteStore.toggle(currentDir, sharedRoot) }
+        result.onSuccess { nowFavorite ->
+            Toast.makeText(
+                this,
+                if (nowFavorite) R.string.favorite_added else R.string.favorite_removed,
+                Toast.LENGTH_SHORT
+            ).show()
+        }.onFailure {
+            Toast.makeText(this, it.message ?: "Favori güncellenemedi.", Toast.LENGTH_LONG).show()
+        }
+        updateFavoriteUi()
+    }
+
+    private fun showFavoritePicker() {
+        if (operationBusy || selectedPaths.isNotEmpty()) return
+        val favorites = runCatching { favoriteStore.list(sharedRoot) }
+            .getOrElse {
+                Toast.makeText(this, it.message ?: "Favoriler okunamadı.", Toast.LENGTH_LONG).show()
+                return
+            }
+        updateFavoriteUi()
+        if (favorites.isEmpty()) {
+            Toast.makeText(this, R.string.favorites_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val labels = favorites.map { folder ->
+            val relative = folder.canonicalPath.removePrefix(sharedRoot.path).trimStart(File.separatorChar)
+            if (relative.isBlank()) folder.path else relative
+        }.toTypedArray()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.favorites)
+            .setItems(labels) { _, index ->
+                binding.searchInput.setText("")
+                load(favorites[index])
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun openEntry(file: File) {
@@ -614,6 +684,7 @@ class FileBrowserActivity : OmniActivity() {
         binding.list.alpha = if (value) 0.65f else 1f
         updateSelectionUi()
         updateTransferUi()
+        updateFavoriteUi()
     }
 
     private fun shareFile(file: File) {
