@@ -41,9 +41,7 @@ object FileOperations {
                 created = created
             )
         } catch (error: Throwable) {
-            created.asReversed().forEach { createdEntry ->
-                runCatching { if (createdEntry.exists()) createdEntry.delete() }
-            }
+            rollbackCreated(created)
             throw error
         }
         return destination.canonicalFile
@@ -75,9 +73,7 @@ object FileOperations {
                 created = created
             )
         } catch (error: Throwable) {
-            created.asReversed().forEach { createdEntry ->
-                runCatching { if (createdEntry.exists()) createdEntry.delete() }
-            }
+            rollbackCreated(created)
             throw error
         }
 
@@ -148,10 +144,18 @@ object FileOperations {
             return
         }
 
-        safeSource.copyTo(destination, overwrite = false)
-        created += destination
+        destination.outputStream().use { output ->
+            created += destination
+            safeSource.inputStream().use { input -> input.copyTo(output) }
+        }
         check(destination.length() == safeSource.length()) { "Dosya kopyası doğrulanamadı: ${safeSource.name}" }
         destination.setLastModified(safeSource.lastModified())
+    }
+
+    private fun rollbackCreated(created: List<File>) {
+        created.asReversed().forEach { createdEntry ->
+            runCatching { if (createdEntry.exists()) createdEntry.delete() }
+        }
     }
 
     private fun removeVerifiedSource(target: File, allowedRoot: File) {
