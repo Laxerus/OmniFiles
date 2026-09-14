@@ -45,17 +45,25 @@ Kopyalama ve move-fallback işlemleri önce hedef klasörde gizli `.omnifiles-tr
 
 Klasör kopyalama, toplam boyut taraması ve move-fallback kaynak temizliği recursive çağrı yerine explicit `ArrayDeque` yapılarıyla yürütülür. Böylece çok derin klasör ağaçlarında stack overflow riski azaltılır. Süreç çökmesiyle kalmış staging öğeleri yalnız yapılandırılmış ad zaman damgası, gerçek dosya `mtime` yaşı ve tam canonical/direct-entry ağaç doğrulaması birlikte geçerse otomatik temizlenir.
 
+### Bounded aktarım preflight'ı
+
+Batch hazırlığında hesaplanan toplam boyut artık uygun kaynaklarda ikinci bir tam ağaç taraması gerektirmeden güvenli biçimde tekrar kullanılabilir. `prepareTransfer` kaynak ağacı taranırken canonical/direct-entry kontrollerini korur ve varsayılan olarak kaynak başına en fazla **8.192 girişlik** relative-path snapshot haritası tutar. Snapshot; giriş türü, dosya boyutu ve `mtime` bilgisini içerir. Limit aşılırsa snapshot belleği bırakılır; byte toplamı hesaplanmaya devam eder fakat sonuç tekrar kullanılabilir sayılmaz.
+
+`estimateTransferBytes` tarafından oluşturulan tekrar kullanılabilir preflight'lar yalnız process içinde, **en fazla 8 kaynak** için ve **2 dakika TTL** ile tutulur. Cache consume-once çalışır; bir `copy` veya fallback `move` denemesi preflight'ı aldığında aynı kayıt yeniden kullanılmaz. Cache yoksa, süresi dolmuşsa, snapshot limiti aşılmışsa, başka bir kaynağın preflight'ı verilmişse veya kaynak kök metadata'sı değişmişse OmniFiles otomatik olarak mevcut güvenli **fresh scan** yoluna döner.
+
+Preflight güvenlik doğrulamasının yerine geçmez. Gerçek kopyalama traversal'ında snapshot bulunan her kaynak girişi relative path üzerinden yeniden eşleştirilir; beklenmeyen yeni giriş, kaybolmuş giriş, tür/boyut/`mtime` değişikliği aktarımı durdurur. Traversal sonunda ziyaret edilen snapshot sayısı da eşit olmalıdır. Buna ek olarak mevcut per-file öncesi/sonrası snapshot, hedef boyut kontrolü, SHA-256 doğrulaması ve per-directory child-name/`mtime` kontrolü korunur. Böylece optimizasyon yalnız gereksiz **ikinci boyut taramasını** azaltır; staging/rollback ve kaynak tutarlılığı garantilerini gevşetmez.
+
 ### Toplu aktarım ilerlemesi ve tüm kuyruğu iptal
 
-Çoklu seçimle kopyala/taşı başlatıldığında `TransferBatchRunner` önce her kaynak için stack-safe byte tahmini çıkarır. `TransferBatchRuntime` toplam öğe sayısını, hazırlanmış/işlenmiş öğeleri, başarı/hata sayılarını, tamamlanmış byte miktarını ve aktif öğenin byte ilerlemesini tek yaşam döngüsü snapshot'ında tutar.
+Çoklu seçimle kopyala/taşı başlatıldığında `TransferBatchRunner` önce her kaynak için stack-safe byte tahmini çıkarır. `TransferBatchRuntime` toplam öğe sayısını, hazırlanmış/işlenmiş öğeleri, başarı/hata sayılarını, hazırlıkta şimdiye kadar keşfedilen byte miktarını, tamamlanmış byte miktarını ve aktif öğenin byte ilerlemesini tek yaşam döngüsü snapshot'ında tutar.
 
-Material aktarım penceresi örneğin **`2/7 öğe`**, aktif dosya adı, **toplam aktarılan / toplam byte** ve genel yüzdeyi gösterir. Hazırlık aşamasında kaç kaynağın boyutunun tarandığı da görünür.
+Material aktarım penceresi aktif aktarımda örneğin **`2/7 öğe`**, aktif dosya adı, **toplam aktarılan / toplam byte** ve genel yüzdeyi gösterir. Hazırlık aşaması da artık yalnız spinner gibi davranmaz; örneğin **`3/8 öğe tarandı • 12.4 GB bulundu`** bilgisini ve kaynak sayısına göre determinate hazırlık ilerlemesini gösterir. Bu byte değeri hazırlık sırasında keşfedilen miktardır; tüm kaynaklar taranana kadar final toplam anlamına gelmez.
 
 **Tüm aktarımı durdur** düğmesi yalnız görsel bir işlem değildir. Batch kimliğine bağlı iptal token'ı aktif `FileOperations.copy/move` çağrısına aktarılır. İstek; boyut taramasında, iteratif traversal sırasında, her 64 KiB kopyalama bloğunda, hedef SHA-256 doğrulamasında ve staging commitinden önce kontrol edilir. Aktif öğe `TransferCancelledException` ile mevcut rollback yoluna girer ve `TransferBatchRunner` sonraki öğeyi **başlatmaz**.
 
 İptal anına kadar tamamen bitmiş öğeler geçerli kalır. Aktif iptal edilen öğe ile henüz işlenmemiş öğeler tekrar bekleyen transfer kuyruğuna bırakılır; böylece COPY işleminde başarıyla bitmiş dosyalar gereksiz yere yeniden kopyalanmaz. MOVE işleminde henüz işlenmemiş kaynaklara dokunulmaz ve aktif öğe commit edilmediyse kaynak korunur. Normal bir öğe hatası ise bütün kuyruğu durdurmaz; hata kaydedilir ve sonraki kaynak işlenmeye devam eder.
 
-Aynı dosya sistemi içinde `renameTo` ile doğrudan tamamlanan MOVE çok kısa sürebilir; böyle bir öğe kullanıcı iptal etkileşiminden önce tamamlanabilir. Batch iptali bundan sonra sıradaki öğelerin başlamasını yine engeller.
+Aynı dosya sistemi içinde `renameTo` ile doğrudan tamamlanan MOVE çok kısa sürebilir; böyle bir öğe kullanıcı iptal etkileşiminden önce tamamlanabilir. Batch iptali bundan sonra sıradaki öğelerin başlamasını yine engeller. Başarılı doğrudan rename aynı kaynağa ait bekleyen preflight cache kaydını da tüketir.
 
 Tekil transferlerde mevcut `TransferRuntime` byte telemetrisi kullanılmaya devam eder. Batch aktifken `OmniActivity`, içteki per-item runtime olaylarını ayrı bir ikinci progress penceresi olarak göstermez; aggregate batch snapshot'ı UI için kanonik kaynaktır.
 
@@ -111,8 +119,10 @@ Build kapıları:
 Önemli regresyon testleri:
 
 - `FileOperationsTest`: staging, kaynak snapshot'ları, SHA doğrulaması, 1200 katmanlı stack-safe transfer, monotonic byte progress ve iptalde rollback.
+- `TransferPreflightTest`: cache'lenmiş preflight sonrası derin kaynak değişikliğinde rollback, bounded snapshot limiti sonrası fresh-scan fallback, yanlış kaynağa ait preflight izolasyonu ve değişmemiş ağacın güvenli reuse davranışı.
 - `TransferRuntimeTest`: tekil progress/cancel/finish yaşam döngüsü ve stale transfer kimliği izolasyonu.
 - `TransferBatchRunnerTest`: ikinci öğede iptalin sonraki öğeyi başlatmaması, aggregate byte progress, normal hata sonrası kuyruğun devam etmesi ve stale batch kimliği izolasyonu.
+- `TransferBatchPreparationTest`: hazırlık sırasında keşfedilen byte sayacının monotonic olması ve `Long.MAX_VALUE` sınırında overflow yerine saturate etmesi.
 - `StorageAnalyzerTest`: bounded global top-N, **kategori başına bounded/sıralı top-N**, sabit kategori kovaları, öğe sınırı, kullanıcı iptali ve 800 katmanlı stack-safe analiz ağacı.
 - `BrowserStartPathPolicyTest`: dosya, kayıp, kök dışı ve symlink başlangıç hedeflerinin güvenli fallback davranışı.
 - `BrowserHighlightPolicyTest`: doğrudan listelenen hedefi bulma; kayıp, liste dışı ve symlink hedeflerini reddetme.
@@ -120,13 +130,13 @@ Build kapıları:
 - `RemotePathPolicyTest`: uzak yol normalizasyonu, traversal/kontrol karakteri/uzun ad reddi.
 - `DigestUtilsTest`: SHA-256 yardımcıları.
 
-`source_sanity.py`; transfer staging güvenliği, `TransferBatchRuntime`, `TransferBatchRunner`, batch testleri, Material batch progress/cancel wiring'i, Storage Analyzer bounded kategori drill-down sözleşmesi, SHA-256 karşılaştırıcı, merkezi `LocalFileIntents`, ADB unsafe-entry metadata akışı ve Analyzer hedef vurgulama sözleşmesini zorunlu tutar. Bu parçalar yanlışlıkla silinirse APK build'i erken durur.
+`source_sanity.py`; transfer staging güvenliği, bounded/TTL'li reusable preflight cache'i, preflight regresyon testleri, `TransferBatchRuntime` hazırlık-byte telemetrisi, `TransferBatchRunner`, batch testleri, Material batch progress/cancel wiring'i, Storage Analyzer bounded kategori drill-down sözleşmesi, SHA-256 karşılaştırıcı, merkezi `LocalFileIntents`, ADB unsafe-entry metadata akışı ve Analyzer hedef vurgulama sözleşmesini zorunlu tutar. Bu parçalar yanlışlıkla silinirse APK build'i erken durur.
 
 ## Ana kaynak alanları
 
 - `app/src/main/java/dev/laxerus/omnifiles/access` — depolama erişimi
 - `app/src/main/java/dev/laxerus/omnifiles/adb` — Kablosuz ADB ve uzak yol/pull güvenliği
-- `app/src/main/java/dev/laxerus/omnifiles/fs` — yol politikaları, checksum, transfer, batch runtime/runner, çöp ve Storage Analyzer
+- `app/src/main/java/dev/laxerus/omnifiles/fs` — yol politikaları, checksum, transfer, batch runtime/runner, bounded preflight cache, çöp ve Storage Analyzer
 - `app/src/main/java/dev/laxerus/omnifiles/scout` — Save Scout
 - `app/src/main/java/dev/laxerus/omnifiles/sqlite` — SQLite Studio
 - `app/src/main/java/dev/laxerus/omnifiles/ui` — Activity ve liste arayüzleri
