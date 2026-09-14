@@ -96,6 +96,11 @@ class MainActivity : OmniActivity() {
         binding.storageStatus.text = "${getString(R.string.direct_storage)}: $storageState"
         binding.rootStatus.text = "${getString(R.string.root_status)}: $rootState"
         binding.grantAccessButton.setText(R.string.settings_storage_access_open)
+        binding.grantAccessButton.contentDescription = if (state.sharedStorage) {
+            "${getString(R.string.settings_storage_access_open)} • ${getString(R.string.storage_access_ready)}"
+        } else {
+            "${getString(R.string.settings_storage_access_open)} • ${getString(R.string.settings_status_attention)}"
+        }
         binding.storageAnalyzerButton.isEnabled = state.sharedStorage
         binding.adbFilesButton.isEnabled = state.adbEndpointConfigured
         binding.saveScoutButton.isEnabled = state.adbEndpointConfigured
