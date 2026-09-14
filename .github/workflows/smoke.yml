@@ -12,27 +12,11 @@ permissions:
   contents: read
 
 jobs:
-  ubuntu-24:
-    runs-on: ubuntu-24.04
+  slim:
+    runs-on: ubuntu-slim
     steps:
       - name: Runner probe
         run: |
-          echo "runner=ubuntu-24.04"
+          echo "runner=ubuntu-slim"
           uname -a
-
-  ubuntu-22:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Runner probe
-        run: |
-          echo "runner=ubuntu-22.04"
-          uname -a
-
-  windows:
-    runs-on: windows-latest
-    steps:
-      - name: Runner probe
-        shell: pwsh
-        run: |
-          Write-Host "runner=windows-latest"
-          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsArchitecture
+          free -h || true
