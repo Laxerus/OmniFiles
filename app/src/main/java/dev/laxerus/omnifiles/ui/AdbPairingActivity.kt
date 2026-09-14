@@ -1,13 +1,13 @@
 package dev.laxerus.omnifiles.ui
 
-import android.content.Intent
 import android.os.Bundle
-import android.provider.Settings
+import android.widget.Toast
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.flyfishxu.kadb.mdns.MdnsDiscoveryState
 import dev.laxerus.omnifiles.R
+import dev.laxerus.omnifiles.access.SystemSettingsNavigator
 import dev.laxerus.omnifiles.adb.AdbDiscoveryManager
 import dev.laxerus.omnifiles.adb.AdbSessionManager
 import dev.laxerus.omnifiles.databinding.ActivityAdbPairingBinding
@@ -40,8 +40,9 @@ class AdbPairingActivity : OmniActivity() {
         }
 
         binding.settingsButton.setOnClickListener {
-            runCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
-                .onFailure { startActivity(Intent(Settings.ACTION_SETTINGS)) }
+            if (!SystemSettingsNavigator.open(this, SystemSettingsNavigator.Destination.DEVELOPER_OPTIONS)) {
+                Toast.makeText(this, R.string.settings_open_failed, Toast.LENGTH_LONG).show()
+            }
         }
         binding.pairButton.setOnClickListener { pairAndConnect() }
         binding.connectButton.setOnClickListener { connectOnly() }
