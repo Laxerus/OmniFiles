@@ -106,7 +106,7 @@ class FileListAdapter(
             binding.root.strokeWidth = if (highlighted) dp(binding.root.context, 2) else 0
             if (highlighted) {
                 binding.root.setStrokeColor(
-                    MaterialColors.getColor(binding.root, com.google.android.material.R.attr.colorPrimary)
+                    MaterialColors.getColor(binding.root, androidx.appcompat.R.attr.colorPrimary)
                 )
             }
             binding.root.contentDescription = buildString {
