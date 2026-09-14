@@ -21,12 +21,16 @@ REQUIRED = [
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbPairingActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbBrowserActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbFileListAdapter.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/ui/ChecksumActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/fs/DigestUtils.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt",
+    "app/src/main/res/layout/activity_checksum.xml",
     "app/src/main/res/layout/activity_trash.xml",
+    "app/src/test/java/dev/laxerus/omnifiles/fs/DigestUtilsTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileOperationsTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileInspectorTest.kt",
 ]
@@ -53,6 +57,8 @@ if manifest.is_file():
         errors.append("AndroidManifest.xml must keep usesCleartextTraffic=false")
     if '.ui.TrashActivity' not in text:
         errors.append("TrashActivity must remain registered")
+    if '.ui.ChecksumActivity' not in text:
+        errors.append("ChecksumActivity must remain registered")
 
 app_gradle = ROOT / "app/build.gradle"
 if app_gradle.is_file():
@@ -104,6 +110,13 @@ if file_path_policy.is_file():
     text = file_path_policy.read_text(encoding="utf-8")
     if "Character.isISOControl" not in text:
         errors.append("file names must reject ambiguous control characters")
+
+digest_utils = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/DigestUtils.kt"
+if digest_utils.is_file():
+    text = digest_utils.read_text(encoding="utf-8")
+    for token in ("SHA-256", "sha256Hex", "BUFFER_BYTES", "toHex"):
+        if token not in text:
+            errors.append(f"checksum primitive missing: {token}")
 
 file_inspector = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt"
 if file_inspector.is_file():
@@ -177,12 +190,26 @@ if adb_browser.is_file():
         if token not in text:
             errors.append(f"ADB browser action/detail safety wiring missing: {token}")
 
+adb_manager = ROOT / "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt"
+if adb_manager.is_file():
+    text = adb_manager.read_text(encoding="utf-8")
+    for token in ("suspend fun healthCheck", "snapshotRemote", "before == after", "destination.length() == after.size"):
+        if token not in text:
+            errors.append(f"ADB health/pull verification missing: {token}")
+
 adb_adapter = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/AdbFileListAdapter.kt"
 if adb_adapter.is_file():
     text = adb_adapter.read_text(encoding="utf-8")
     for token in ("private val onMore", "binding.moreButton.setOnClickListener { onMore(entry) }"):
         if token not in text:
             errors.append(f"ADB row more-actions callback missing: {token}")
+
+checksum_activity = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/ChecksumActivity.kt"
+if checksum_activity.is_file():
+    text = checksum_activity.read_text(encoding="utf-8")
+    for token in ("ActivityResultContracts.OpenDocument", "DigestUtils::sha256Hex", "ClipboardManager", "STATE_HASH"):
+        if token not in text:
+            errors.append(f"checksum tool wiring missing: {token}")
 
 trash_manager = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt"
 if trash_manager.is_file():
@@ -203,14 +230,22 @@ if trash_activity.is_file():
 main_activity = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/MainActivity.kt"
 if main_activity.is_file():
     text = main_activity.read_text(encoding="utf-8")
-    for token in ("StatFs", "renderStorageUsage", "storageUsageProgress", "storage_access_ready"):
+    for token in (
+        "StatFs",
+        "renderStorageUsage",
+        "storageUsageProgress",
+        "storage_access_ready",
+        "ChecksumActivity::class.java",
+        "verifyAdbHealth",
+        ".healthCheck()",
+    ):
         if token not in text:
-            errors.append(f"home storage health wiring missing: {token}")
+            errors.append(f"home storage/ADB/checksum wiring missing: {token}")
 
 main_layout = ROOT / "app/src/main/res/layout/activity_main.xml"
 if main_layout.is_file():
     text = main_layout.read_text(encoding="utf-8")
-    for view_id in ("@+id/trashButton", "@+id/storageUsageText", "@+id/storageUsageProgress"):
+    for view_id in ("@+id/trashButton", "@+id/checksumButton", "@+id/storageUsageText", "@+id/storageUsageProgress"):
         if view_id not in text:
             errors.append(f"home screen control missing: {view_id}")
 
