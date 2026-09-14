@@ -149,6 +149,13 @@
                         android:text="@string/select_all" />
 
                     <com.google.android.material.button.MaterialButton
+                        android:id="@+id/selectionShareButton"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/share" />
+
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/selectionCopyButton"
                         style="@style/Widget.Material3.Button.TextButton"
                         android:layout_width="wrap_content"
