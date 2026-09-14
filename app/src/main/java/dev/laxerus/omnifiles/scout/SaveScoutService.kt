@@ -1,7 +1,9 @@
 package dev.laxerus.omnifiles.scout
 
 import android.content.Context
+import dev.laxerus.omnifiles.adb.AdbRemoteEntry
 import dev.laxerus.omnifiles.adb.AdbSessionManager
+import java.util.Locale
 
 data class SaveLocation(
     val label: String,
@@ -35,18 +37,84 @@ class SaveScoutService(context: Context) {
             "OBB" to "/sdcard/Android/obb/$pkg"
         )
 
-        val found = mutableListOf<SaveLocation>()
+        val standard = linkedMapOf<String, SaveLocation>()
+        val likely = linkedMapOf<String, SaveLocation>()
+
         for ((label, path) in candidates) {
             val entries = runCatching { adb.listDirectory(path) }.getOrNull() ?: continue
-            found += SaveLocation(label = label, path = path, entryCount = entries.count { it.name != "." && it.name != ".." })
+            val visibleEntries = entries.filter(::isUsableEntry)
+            standard[path] = SaveLocation(label = label, path = path, entryCount = visibleEntries.size)
+
+            if (path.endsWith("/files") || path.endsWith("/$pkg")) {
+                collectLikelySaveDirectories(visibleEntries, likely)
+            }
         }
-        return found.distinctBy { it.path }
+
+        return buildList {
+            addAll(likely.values.take(MAX_LIKELY_RESULTS))
+            standard.values.forEach { location ->
+                if (none { it.path == location.path }) add(location)
+            }
+        }
     }
 
+    private suspend fun collectLikelySaveDirectories(
+        entries: List<AdbRemoteEntry>,
+        output: LinkedHashMap<String, SaveLocation>
+    ) {
+        entries.asSequence()
+            .filter { it.isDirectory && !it.isSymlink && isLikelySaveDirectoryName(it.name) }
+            .take(MAX_LIKELY_RESULTS - output.size)
+            .forEach { entry ->
+                val childEntries = runCatching { adb.listDirectory(entry.path) }.getOrNull() ?: return@forEach
+                output.putIfAbsent(
+                    entry.path,
+                    SaveLocation(
+                        label = "Muhtemel save • ${entry.name}",
+                        path = entry.path,
+                        entryCount = childEntries.count(::isUsableEntry)
+                    )
+                )
+            }
+    }
+
+    private fun isUsableEntry(entry: AdbRemoteEntry): Boolean =
+        entry.name != "." && entry.name != ".." && entry.errorCode in listOf(null, 0)
+
     companion object {
+        private const val MAX_LIKELY_RESULTS = 12
         private val PACKAGE_PATTERN = Regex("^[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)+$")
+        private val LIKELY_SAVE_NAMES = setOf(
+            "save",
+            "saves",
+            "saved",
+            "savedata",
+            "savegame",
+            "savegames",
+            "savedgames",
+            "userdata",
+            "userprofile",
+            "profile",
+            "profiles",
+            "world",
+            "worlds",
+            "backup",
+            "backups",
+            "ue4game",
+            "unrealgame"
+        )
 
         fun isValidPackageName(value: String): Boolean =
             value.length in 3..255 && PACKAGE_PATTERN.matches(value)
+
+        fun isLikelySaveDirectoryName(value: String): Boolean {
+            val normalized = value.trim()
+                .lowercase(Locale.ROOT)
+                .filter { it.isLetterOrDigit() }
+            return normalized in LIKELY_SAVE_NAMES ||
+                normalized.startsWith("savegame") ||
+                normalized.startsWith("savedgame") ||
+                normalized.startsWith("userdata")
+        }
     }
 }
