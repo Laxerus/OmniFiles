@@ -7,6 +7,23 @@ object StorageAnalyzer {
     const val DEFAULT_MAX_ENTRIES = 40_000
     const val DEFAULT_TOP_LIMIT = 20
 
+    enum class FileCategory {
+        IMAGE,
+        VIDEO,
+        AUDIO,
+        APK,
+        ARCHIVE,
+        DOCUMENT,
+        DATABASE,
+        OTHER
+    }
+
+    data class CategoryUsage(
+        val category: FileCategory,
+        val fileCount: Int,
+        val sizeBytes: Long
+    )
+
     data class Entry(
         val path: String,
         val name: String,
@@ -23,6 +40,7 @@ object StorageAnalyzer {
         val scannedBytes: Long,
         val truncated: Boolean,
         val cancelled: Boolean,
+        val categories: List<CategoryUsage>,
         val largestFiles: List<Entry>,
         val largestDirectories: List<Entry>
     )
@@ -45,6 +63,8 @@ object StorageAnalyzer {
         val largestFiles = mutableListOf<Entry>()
         val largestDirectories = mutableListOf<Entry>()
         val ranking = entryComparator()
+        val categoryCounts = IntArray(FileCategory.entries.size)
+        val categoryBytes = LongArray(FileCategory.entries.size)
 
         var visitedEntries = 0
         var fileCount = 0
@@ -106,6 +126,10 @@ object StorageAnalyzer {
                         val size = safe.length().coerceAtLeast(0L)
                         scannedBytes = saturatingAdd(scannedBytes, size)
                         fileCount++
+                        val category = classifyFileName(safe.name)
+                        val categoryIndex = category.ordinal
+                        categoryCounts[categoryIndex] = saturatingIncrement(categoryCounts[categoryIndex])
+                        categoryBytes[categoryIndex] = saturatingAdd(categoryBytes[categoryIndex], size)
                         retainTop(
                             entries = largestFiles,
                             entry = Entry(
@@ -164,6 +188,22 @@ object StorageAnalyzer {
             }
         }
 
+        val categories = FileCategory.entries
+            .map { category ->
+                val index = category.ordinal
+                CategoryUsage(
+                    category = category,
+                    fileCount = categoryCounts[index],
+                    sizeBytes = categoryBytes[index]
+                )
+            }
+            .filter { it.fileCount > 0 }
+            .sortedWith(
+                compareByDescending<CategoryUsage> { it.sizeBytes }
+                    .thenByDescending { it.fileCount }
+                    .thenBy { it.category.ordinal }
+            )
+
         return Result(
             visitedEntries = visitedEntries,
             fileCount = fileCount,
@@ -172,9 +212,27 @@ object StorageAnalyzer {
             scannedBytes = scannedBytes,
             truncated = truncated,
             cancelled = cancelled,
+            categories = categories,
             largestFiles = largestFiles.sortedWith(ranking),
             largestDirectories = largestDirectories.sortedWith(ranking)
         )
+    }
+
+    internal fun classifyFileName(name: String): FileCategory {
+        val extension = name.substringAfterLast('.', missingDelimiterValue = "")
+            .lowercase(java.util.Locale.ROOT)
+        if (extension.isEmpty()) return FileCategory.OTHER
+
+        return when (extension) {
+            in IMAGE_EXTENSIONS -> FileCategory.IMAGE
+            in VIDEO_EXTENSIONS -> FileCategory.VIDEO
+            in AUDIO_EXTENSIONS -> FileCategory.AUDIO
+            in APK_EXTENSIONS -> FileCategory.APK
+            in ARCHIVE_EXTENSIONS -> FileCategory.ARCHIVE
+            in DOCUMENT_EXTENSIONS -> FileCategory.DOCUMENT
+            in DATABASE_EXTENSIONS -> FileCategory.DATABASE
+            else -> FileCategory.OTHER
+        }
     }
 
     private fun retainTop(
@@ -209,6 +267,9 @@ object StorageAnalyzer {
         return if (Long.MAX_VALUE - left < right) Long.MAX_VALUE else left + right
     }
 
+    private fun saturatingIncrement(value: Int): Int =
+        if (value == Int.MAX_VALUE) Int.MAX_VALUE else value + 1
+
     private sealed interface Frame {
         data class Enter(
             val file: File,
@@ -224,4 +285,23 @@ object StorageAnalyzer {
             val rankDirectory: Boolean
         ) : Frame
     }
+
+    private val IMAGE_EXTENSIONS = setOf(
+        "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif", "avif", "dng", "tif", "tiff", "svg"
+    )
+    private val VIDEO_EXTENSIONS = setOf(
+        "mp4", "mkv", "webm", "avi", "mov", "m4v", "3gp", "3gpp", "mpg", "mpeg", "ts", "m2ts", "flv"
+    )
+    private val AUDIO_EXTENSIONS = setOf(
+        "mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "amr", "wma", "mid", "midi"
+    )
+    private val APK_EXTENSIONS = setOf("apk", "apks", "xapk", "apkm", "aab")
+    private val ARCHIVE_EXTENSIONS = setOf(
+        "zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "zst", "lz4", "jar"
+    )
+    private val DOCUMENT_EXTENSIONS = setOf(
+        "pdf", "txt", "md", "rtf", "doc", "docx", "odt", "xls", "xlsx", "ods", "ppt", "pptx", "odp",
+        "csv", "json", "xml", "yaml", "yml", "epub", "mobi"
+    )
+    private val DATABASE_EXTENSIONS = setOf("db", "sqlite", "sqlite3", "realm")
 }
