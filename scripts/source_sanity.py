@@ -71,6 +71,8 @@ for path in ROOT.glob("app/src/main/java/**/*.kt"):
     text = path.read_text(encoding="utf-8")
     if "Runtime.getRuntime().exec" in text or "ProcessBuilder(\"su\"" in text:
         errors.append(f"unreviewed direct privilege process launch: {path.relative_to(ROOT)}")
+    if "override fun onBackPressed" in text:
+        errors.append(f"deprecated onBackPressed override: {path.relative_to(ROOT)}")
     if "deleteRecursively()" in text and path.name != "TrashManager.kt" and "cache" not in text.lower():
         errors.append(f"review recursive delete outside trash/cache layer: {path.relative_to(ROOT)}")
 
