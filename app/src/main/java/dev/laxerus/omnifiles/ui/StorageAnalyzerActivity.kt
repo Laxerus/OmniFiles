@@ -311,10 +311,12 @@ class StorageAnalyzerActivity : OmniActivity() {
             Toast.makeText(this, R.string.storage_analyzer_entry_stale, Toast.LENGTH_LONG).show()
             return
         }
-        startActivity(
-            Intent(this, FileBrowserActivity::class.java)
-                .putExtra(FileBrowserActivity.EXTRA_START_PATH, safeTarget.canonicalPath)
-        )
+        val intent = Intent(this, FileBrowserActivity::class.java)
+            .putExtra(FileBrowserActivity.EXTRA_START_PATH, safeTarget.canonicalPath)
+        if (file.isFile) {
+            intent.putExtra(BrowserLaunchExtras.EXTRA_HIGHLIGHT_PATH, file.canonicalPath)
+        }
+        startActivity(intent)
     }
 
     private fun showEntryDetails(file: File, entry: StorageAnalyzer.Entry) {
