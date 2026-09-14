@@ -33,6 +33,13 @@
     <string name="connect_only">Daha önce eşleştirilmiş cihaza bağlan</string>
     <string name="open_developer_settings">Geliştirici seçeneklerini aç</string>
     <string name="browser_title">Dosyalar</string>
+    <string name="favorites">Favoriler</string>
+    <string name="favorites_count">Favoriler • %1$d</string>
+    <string name="favorites_empty">Henüz favori klasör yok.</string>
+    <string name="add_favorite">☆ Favoriye ekle</string>
+    <string name="remove_favorite">★ Favoriden çıkar</string>
+    <string name="favorite_added">Klasör favorilere eklendi.</string>
+    <string name="favorite_removed">Klasör favorilerden çıkarıldı.</string>
     <string name="search_files">Dosya ve klasör ara</string>
     <string name="sort_name">Ad</string>
     <string name="sort_date">Tarih</string>
