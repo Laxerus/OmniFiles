@@ -10,4 +10,11 @@
     <string name="transfer_progress_preparing">%1$s\nBoyut hazırlanıyor…</string>
     <string name="transfer_progress_detail">%1$s\n%2$s / %3$s • %4$d%%</string>
     <string name="transfer_cancel_current">Bu öğeyi iptal et</string>
+    <string name="transfer_cancel_batch">Tüm aktarımı durdur</string>
+    <string name="transfer_batch_preparing">Toplam boyut hazırlanıyor…\n%1$d/%2$d öğe tarandı</string>
+    <string name="transfer_batch_detail">%1$d/%2$d öğe • %3$s\n%4$s / %5$s • %6$d%%</string>
+    <string name="transfer_batch_detail_no_bytes">%1$d/%2$d öğe • %3$s\nİşleniyor…</string>
+    <string name="transfer_batch_done_detail">%1$d/%2$d öğe tamamlandı • %3$d hata</string>
+    <string name="transfer_batch_cancelled_detail">%1$d/%2$d öğe tamamlandı • %3$d hata • %4$d bekliyor</string>
+    <string name="transfer_batch_cancelled_toast">Aktarım durduruldu • %1$d tamamlandı • %2$d bekliyor • %3$d hata</string>
 </resources>
