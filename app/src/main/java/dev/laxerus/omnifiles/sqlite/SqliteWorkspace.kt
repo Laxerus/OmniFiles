@@ -6,9 +6,12 @@ import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import java.io.Closeable
 import java.io.File
+import java.security.MessageDigest
 import java.util.UUID
 
 class SqliteWorkspace(private val context: Context) : Closeable {
+    private data class FileFingerprint(val size: Long, val sha256: String)
+
     private val root = File(context.cacheDir, "sqlite-studio").apply { mkdirs() }
     private var db: SQLiteDatabase? = null
     private var sourceUri: Uri? = null
@@ -27,9 +30,7 @@ class SqliteWorkspace(private val context: Context) : Closeable {
         val token = UUID.randomUUID().toString()
         val work = File(root, "$token-work.db")
         val backup = File(root, "$token-original.db")
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            work.outputStream().use { output -> input.copyTo(output) }
-        } ?: error("Veritabanı dosyası açılamadı")
+        copyUriToFile(uri, work)
         check(work.length() > 0L) { "Veritabanı dosyası boş" }
         work.copyTo(backup, overwrite = false)
 
@@ -99,12 +100,7 @@ class SqliteWorkspace(private val context: Context) : Closeable {
         }
     }
 
-    fun integrityOk(): Boolean {
-        val database = requireDb()
-        return database.rawQuery("PRAGMA integrity_check", null).use { cursor ->
-            cursor.moveToFirst() && cursor.getString(0).equals("ok", ignoreCase = true)
-        }
-    }
+    fun integrityOk(): Boolean = integrityOk(requireDb())
 
     fun saveToSource() {
         check(dirty) { "Kaydedilecek değişiklik yok" }
@@ -114,16 +110,29 @@ class SqliteWorkspace(private val context: Context) : Closeable {
         val backup = backupFile ?: error("Yedek dosya yok")
 
         closeDatabaseOnly()
-        var writeCompleted = false
-        try {
+        val expectedWork = fingerprint(work)
+        var failure: Throwable? = runCatching {
             writeFileToUri(work, uri)
-            writeCompleted = true
-        } finally {
-            if (!writeCompleted) {
-                runCatching { writeFileToUri(backup, uri) }
-            }
-            db = openConfiguredDatabase(work)
+            verifySource(uri, expectedWork)
+        }.exceptionOrNull()
+
+        if (failure != null) {
+            val restoreFailure = runCatching {
+                val expectedBackup = fingerprint(backup)
+                writeFileToUri(backup, uri)
+                verifySource(uri, expectedBackup)
+            }.exceptionOrNull()
+            if (restoreFailure != null) failure.addSuppressed(restoreFailure)
         }
+
+        val reopenFailure = runCatching {
+            db = openConfiguredDatabase(work)
+        }.exceptionOrNull()
+        if (reopenFailure != null) {
+            if (failure != null) failure.addSuppressed(reopenFailure) else failure = reopenFailure
+        }
+        failure?.let { throw it }
+
         work.copyTo(backup, overwrite = true)
         dirty = false
     }
@@ -177,6 +186,49 @@ class SqliteWorkspace(private val context: Context) : Closeable {
             runCatching { database.close() }
             throw error
         }
+    }
+
+    private fun verifySource(uri: Uri, expected: FileFingerprint) {
+        val verifyFile = File(root, "${UUID.randomUUID()}-verify.db")
+        try {
+            copyUriToFile(uri, verifyFile)
+            val actual = fingerprint(verifyFile)
+            check(actual == expected) { "Kaynak dosyaya yazılan baytlar doğrulanamadı" }
+
+            val verifyDb = SQLiteDatabase.openDatabase(verifyFile.path, null, SQLiteDatabase.OPEN_READONLY)
+            try {
+                check(integrityOk(verifyDb)) { "Kaydedilen veritabanı bütünlük kontrolünden geçmedi" }
+            } finally {
+                verifyDb.close()
+            }
+        } finally {
+            verifyFile.delete()
+        }
+    }
+
+    private fun integrityOk(database: SQLiteDatabase): Boolean =
+        database.rawQuery("PRAGMA integrity_check", null).use { cursor ->
+            cursor.moveToFirst() && cursor.getString(0).equals("ok", ignoreCase = true)
+        }
+
+    private fun fingerprint(file: File): FileFingerprint {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                if (read > 0) digest.update(buffer, 0, read)
+            }
+        }
+        val hash = digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+        return FileFingerprint(file.length(), hash)
+    }
+
+    private fun copyUriToFile(uri: Uri, destination: File) {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            destination.outputStream().use { output -> input.copyTo(output) }
+        } ?: error("Veritabanı dosyası açılamadı")
     }
 
     private fun writeFileToUri(file: File, uri: Uri) {
