@@ -92,7 +92,7 @@ class AdbBrowserActivity : OmniActivity() {
         binding.list.layoutManager = LinearLayoutManager(this)
         binding.list.adapter = adapter
         binding.newFolderButton.visibility = View.GONE
-        binding.favoriteButton.visibility = View.GONE
+        binding.favoriteToggleButton.visibility = View.GONE
         binding.favoritesButton.visibility = View.GONE
         binding.selectionBar.visibility = View.GONE
         binding.transferText.visibility = View.GONE
