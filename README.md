@@ -21,7 +21,13 @@ En güncel debug APK, repository'nin `main` dalından Render build hattıyla ür
 
 - Android 11+ için **Tüm dosyalara erişim** ayar akışı; eski Android sürümlerinde uygun legacy izin akışı.
 - Ortak depolama için güvenli yerel dosya tarayıcısı.
+- Yerel tarayıcıda dosya ve klasörler için **kopyala / taşı / hedef klasöre yapıştır** akışı.
+- Kopyalamada mevcut kullanıcı dosyasının üzerine yazmama; isim çakışmasında güvenli yeni ad üretme.
+- Klasörün kendi altına kopyalanmasını/taşınmasını ve depolama kökünün tamamının yanlışlıkla transfer edilmesini engelleyen path politikaları.
+- Büyük veya çok öğeli transferlerde ana UI thread'ini bloklamayan coroutine tabanlı dosya işlemleri ve işlem göstergesi.
 - Yerel ve ADB tarayıcılarında **arama**, **ad/tarih/boyut sıralama**, klasörleri üstte tutma ve **gizli öğe filtresi**.
+- Yerel/ADB tarayıcılarında klasör, arama, sıralama ve gizli öğe durumunun ekran döndürmelerinde korunması.
+- Dosya satırlarında uzun basmaya ek olarak erişilebilir, doğrudan tıklanabilir işlem düğmesi.
 - Canonical-path doğrulaması; depolama kökü dışına kaçışların engellenmesi.
 - `Android`, `Android/data`, `Android/obb` ve `Android/media` gibi kritik dizin köklerinin kendisine yönelik tehlikeli mutasyonların engellenmesi.
 - Dosyaları destekleyen uygulamalarda açmak için güvenli `FileProvider` paylaşımı.
@@ -30,7 +36,8 @@ En güncel debug APK, repository'nin `main` dalından Render build hattıyla ür
 - mDNS ile ADB uç noktası keşfi; pair/connect portlarının aynı cihaz host'u ile eşleştirilmesi.
 - Daha önce eşleştirilmiş cihaza tekrar kod istemeden **yalnızca bağlan** akışı.
 - ADB klasör listeleme, dosya önizleme ve Android'in belge seçicisine güvenli dışa aktarma.
-- Geçici ADB önizleme dosyalarının yaşa göre cache temizliği.
+- ADB tarayıcısında yükleme durumunun listeden bağımsız progress göstergesiyle yönetilmesi; başarılı yüklemeden sonra takılı kalan “yükleniyor” durumunun engellenmesi.
+- Geçici ADB önizleme/dışa aktarma dosyalarının iptal, başarı, Activity yeniden oluşturma ve yaşa bağlı cache temizliği akışlarında yönetilmesi.
 - **Save Scout** ile üçüncü taraf paketlerini listeleme ve erişilebilir standart oyun/save konumlarını tarama.
 - Save Scout'ta `SaveGames`, `Saved`, `userdata`, `profiles`, `worlds`, `UE4Game` gibi yaygın klasör adlarını sınırlı ve güvenli biçimde öne çıkarma.
 - **SQLite Studio** ile çalışma kopyasında tablo/satır görüntüleme ve uygun hücreleri düzenleme.
@@ -41,6 +48,8 @@ En güncel debug APK, repository'nin `main` dalından Render build hattıyla ür
 ## Güvenlik yaklaşımı
 
 OmniFiles, Android sandbox'ını atlatıyormuş gibi davranmaz. Kablosuz ADB kullanıcı tarafından Android ayarlarından açıkça etkinleştirilmeli ve eşleştirilmelidir. Root tespiti yalnızca durum bilgisi içindir; uygulama kendiliğinden `su` başlatmaz. Shell/path girdileri ayrı doğrulama katmanlarından geçirilir ve sembolik bağlantı önizlemeleri ADB tarayıcısında engellenir.
+
+Yerel kopyala/taşı katmanı canonical path doğrulamasından geçer. Transfer hedefinde sessiz overwrite yapılmaz; klasör kendi altına gönderilemez. Kopya sırasında hata oluşursa bu işlem tarafından yeni oluşturulan kısmi hedefler geri alınmaya çalışılır. Taşıma gerektiğinde önce hedef kopyayı doğrular, ardından eski konumu temizler; hedef kopya veri kaybına karşı korunur.
 
 SQLite düzenleme doğrudan kaynak üzerinde yapılmaz. Önce uygulama cache alanında çalışma ve yedek kopyaları oluşturulur; değişiklikler kullanıcı kaydetmeden kaynak URI'ye yazılmaz.
 
@@ -63,15 +72,17 @@ Aktif GitHub Actions akışı doğrudan repository kökündeki güncel kaynak a�
 4. `:app:assembleDebug`
 5. APK ZIP bütünlük kontrolü ve SHA-256 çıktısı
 
-Render build hattı, GitHub-hosted runner erişilemediğinde aynı `main` kaynağından taşınabilir Android toolchain kurarak APK'yı üretir ve sabit indirme adresinde yayınlar.
+`FileOperationsTest`, klasör oluşturma/yeniden adlandırmaya ek olarak dosya kopyalama, klasör ağacı kopyalama, isim çakışması, klasörün kendi içine transfer edilmesinin engellenmesi ve taşıma davranışını doğrular.
 
-`source_sanity.py`, aktif workflow'un eski `.source` snapshot'ını yeniden build kaynağı yapmasını özellikle hata kabul eder.
+Render build hattı, GitHub-hosted runner erişilemediğinde aynı `main` kaynağından taşınabilir Android toolchain kurarak APK'yı üretir ve sabit indirme adresinde yayınlar. Render hattı da unit test, Android Lint ve APK assemble kapılarını geçmeden artifact yayınlamaz.
+
+`source_sanity.py`, aktif workflow'un eski `.source` snapshot'ını yeniden build kaynağı yapmasını, deprecated geri navigasyonunu, sessiz overwrite davranışını veya güvenli transfer wiring'inin kaldırılmasını hata kabul eder.
 
 ## Ana kaynak alanları
 
 - `app/src/main/java/dev/laxerus/omnifiles/access` — depolama erişimi ve erişim durumu
 - `app/src/main/java/dev/laxerus/omnifiles/adb` — Kablosuz ADB, mDNS ve uzak yol politikaları
-- `app/src/main/java/dev/laxerus/omnifiles/fs` — yerel yol güvenliği ve çöp yönetimi
+- `app/src/main/java/dev/laxerus/omnifiles/fs` — yerel yol güvenliği, transfer işlemleri ve çöp yönetimi
 - `app/src/main/java/dev/laxerus/omnifiles/scout` — Save Scout
 - `app/src/main/java/dev/laxerus/omnifiles/sqlite` — SQLite Studio çalışma alanı
 - `app/src/main/java/dev/laxerus/omnifiles/ui` — Activity ve liste arayüzleri
