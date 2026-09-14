@@ -106,6 +106,13 @@ for path in ROOT.glob("app/src/main/java/**/*.kt"):
     if "deleteRecursively()" in text and path.name != "TrashManager.kt" and "cache" not in text.lower():
         errors.append(f"review recursive delete outside trash/cache layer: {path.relative_to(ROOT)}")
 
+for path in ROOT.glob("app/src/test/java/**/*.kt"):
+    text = path.read_text(encoding="utf-8")
+    if "createTempDir(" in text:
+        errors.append(f"deprecated Kotlin createTempDir in test: {path.relative_to(ROOT)}")
+    if "createTempFile(" in text and "kotlin.io.path.createTempFile" not in text:
+        errors.append(f"deprecated/unqualified Kotlin createTempFile in test: {path.relative_to(ROOT)}")
+
 if errors:
     print("OmniFiles source sanity: FAILED")
     for item in errors:
