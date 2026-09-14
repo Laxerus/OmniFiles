@@ -7,6 +7,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.flyfishxu.kadb.mdns.MdnsDiscoveryState
+import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.adb.AdbDiscoveryManager
 import dev.laxerus.omnifiles.adb.AdbSessionManager
 import dev.laxerus.omnifiles.databinding.ActivityAdbPairingBinding
@@ -25,7 +26,7 @@ class AdbPairingActivity : OmniActivity() {
         setContentView(binding.root)
         applySystemBarInsets(binding.root)
 
-        binding.toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+        binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
         binding.toolbar.setNavigationOnClickListener { finish() }
         manager.endpoint()?.let {
             binding.hostInput.setText(it.host)

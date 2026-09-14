@@ -13,6 +13,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.StorageAccessController
 import dev.laxerus.omnifiles.databinding.ActivityFileBrowserBinding
+import dev.laxerus.omnifiles.fs.FilePathPolicy
 import dev.laxerus.omnifiles.fs.TrashManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -22,6 +23,7 @@ import java.io.File
 class FileBrowserActivity : OmniActivity() {
     private lateinit var binding: ActivityFileBrowserBinding
     private lateinit var adapter: FileListAdapter
+    private val sharedRoot: File by lazy { StorageAccessController.sharedRoot().canonicalFile }
     private var currentDir: File = StorageAccessController.sharedRoot()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -30,7 +32,7 @@ class FileBrowserActivity : OmniActivity() {
         setContentView(binding.root)
         applySystemBarInsets(binding.root)
 
-        binding.toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+        binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
         binding.toolbar.setNavigationOnClickListener { navigateUpOrFinish() }
 
         adapter = FileListAdapter(::openEntry, ::confirmTrash)
@@ -45,7 +47,7 @@ class FileBrowserActivity : OmniActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (currentDir.canonicalPath != StorageAccessController.sharedRoot().canonicalPath) {
+        if (currentDir.canonicalPath != sharedRoot.path) {
             currentDir.parentFile?.let { load(it) } ?: super.onBackPressed()
         } else {
             super.onBackPressed()
@@ -53,12 +55,17 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     private fun navigateUpOrFinish() {
-        if (currentDir.canonicalPath == StorageAccessController.sharedRoot().canonicalPath) finish()
+        if (currentDir.canonicalPath == sharedRoot.path) finish()
         else currentDir.parentFile?.let(::load) ?: finish()
     }
 
     private fun load(directory: File) {
-        currentDir = runCatching { directory.canonicalFile }.getOrDefault(directory.absoluteFile)
+        val safeDir = runCatching { FilePathPolicy.requireInside(directory, sharedRoot) }
+            .getOrElse {
+                Toast.makeText(this, "Depolama kökünün dışına çıkılamaz.", Toast.LENGTH_LONG).show()
+                sharedRoot
+            }
+        currentDir = safeDir
         binding.pathText.text = currentDir.path
         lifecycleScope.launch {
             val files = withContext(Dispatchers.IO) {
@@ -70,12 +77,17 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     private fun openEntry(file: File) {
-        if (file.isDirectory) {
-            load(file)
+        val safe = runCatching { FilePathPolicy.requireInside(file, sharedRoot) }
+            .getOrElse {
+                Toast.makeText(this, "Güvenli depolama alanının dışına yönlenen öğe engellendi.", Toast.LENGTH_LONG).show()
+                return
+            }
+        if (safe.isDirectory) {
+            load(safe)
             return
         }
-        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
-        val extension = file.extension.lowercase()
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", safe)
+        val extension = safe.extension.lowercase()
         val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream"
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mime)

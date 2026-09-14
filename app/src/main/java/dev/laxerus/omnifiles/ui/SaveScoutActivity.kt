@@ -2,8 +2,8 @@ package dev.laxerus.omnifiles.ui
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.ViewGroup
 import android.widget.ArrayAdapter
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
@@ -26,7 +26,7 @@ class SaveScoutActivity : OmniActivity() {
         setContentView(binding.root)
         applySystemBarInsets(binding.root)
 
-        binding.toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+        binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
         binding.toolbar.setNavigationOnClickListener { finish() }
         binding.scanButton.setOnClickListener { scan() }
         binding.refreshAppsButton.setOnClickListener { loadPackages() }
@@ -93,9 +93,9 @@ class SaveScoutActivity : OmniActivity() {
                 }
             }
             val margin = (10 * resources.displayMetrics.density).toInt()
-            button.layoutParams = ViewGroup.MarginLayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+            button.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = margin }
             binding.resultsContainer.addView(button)
         }

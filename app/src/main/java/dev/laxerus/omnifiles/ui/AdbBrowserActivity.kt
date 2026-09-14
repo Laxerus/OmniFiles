@@ -63,7 +63,7 @@ class AdbBrowserActivity : OmniActivity() {
         currentPath = rootPath
 
         binding.toolbar.title = getString(R.string.adb_browse_title)
-        binding.toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+        binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
         binding.toolbar.setNavigationOnClickListener { navigateUpOrFinish() }
         adapter = AdbFileListAdapter(::openEntry, ::exportEntry)
         binding.list.layoutManager = LinearLayoutManager(this)
@@ -96,13 +96,20 @@ class AdbBrowserActivity : OmniActivity() {
 
     private fun safeParentWithinRoot(path: String): String? {
         val parent = RemotePathPolicy.parent(path) ?: return null
+        if (rootPath == "/") return parent
         return if (parent == rootPath || parent.startsWith("$rootPath/")) parent else null
     }
+
+    private fun isInsideRoot(path: String): Boolean =
+        rootPath == "/" || path == rootPath || path.startsWith("$rootPath/")
 
     private fun load(path: String) {
         if (loading) return
         val safePath = RemotePathPolicy.normalizeAbsolute(path)
-        require(safePath == rootPath || safePath.startsWith("$rootPath/")) { "Tarayıcı kökünün dışına çıkılamaz" }
+        if (!isInsideRoot(safePath)) {
+            Toast.makeText(this, "Tarayıcı kökünün dışına çıkılamaz.", Toast.LENGTH_LONG).show()
+            return
+        }
         loading = true
         binding.pathText.text = safePath
         binding.emptyText.visibility = View.VISIBLE
