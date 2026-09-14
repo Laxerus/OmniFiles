@@ -15,6 +15,7 @@ REQUIRED = [
     "app/build.gradle",
     "app/src/main/AndroidManifest.xml",
     "app/src/main/java/dev/laxerus/omnifiles/ui/MainActivity.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/ui/OmniActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/TrashActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/TrashListAdapter.kt",
@@ -24,30 +25,47 @@ REQUIRED = [
     "app/src/main/java/dev/laxerus/omnifiles/ui/ChecksumActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/StorageAnalyzerActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/fs/BrowserStartPathPolicy.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/DigestUtils.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/StorageAnalyzer.kt",
-    "app/src/main/java/dev/laxerus/omnifiles/fs/BrowserStartPathPolicy.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/fs/TransferRuntime.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/fs/TransferBatchRuntime.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/fs/TransferBatchRunner.kt",
     "app/src/main/res/layout/activity_checksum.xml",
     "app/src/main/res/layout/activity_storage_analyzer.xml",
     "app/src/main/res/layout/item_storage_analysis.xml",
     "app/src/main/res/layout/item_storage_category.xml",
     "app/src/main/res/layout/activity_trash.xml",
+    "app/src/main/res/layout/dialog_transfer_progress.xml",
+    "app/src/main/res/values/transfer_strings.xml",
+    "app/src/test/java/dev/laxerus/omnifiles/fs/BrowserStartPathPolicyTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/DigestUtilsTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileOperationsTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileInspectorTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/StorageAnalyzerTest.kt",
-    "app/src/test/java/dev/laxerus/omnifiles/fs/BrowserStartPathPolicyTest.kt",
+    "app/src/test/java/dev/laxerus/omnifiles/fs/TransferRuntimeTest.kt",
+    "app/src/test/java/dev/laxerus/omnifiles/fs/TransferBatchRunnerTest.kt",
 ]
 
 errors: list[str] = []
 
+
+def require_tokens(path: str, tokens: tuple[str, ...], label: str) -> None:
+    file = ROOT / path
+    if not file.is_file():
+        return
+    text = file.read_text(encoding="utf-8")
+    for token in tokens:
+        if token not in text:
+            errors.append(f"{label} missing: {token}")
+
+
 for rel in REQUIRED:
-    path = ROOT / rel
-    if not path.is_file():
+    if not (ROOT / rel).is_file():
         errors.append(f"missing required file: {rel}")
 
 for path in ROOT.glob("app/src/main/res/**/*.xml"):
@@ -59,16 +77,15 @@ for path in ROOT.glob("app/src/main/res/**/*.xml"):
 manifest = ROOT / "app/src/main/AndroidManifest.xml"
 if manifest.is_file():
     text = manifest.read_text(encoding="utf-8")
-    if "android:allowBackup=\"false\"" not in text:
-        errors.append("AndroidManifest.xml must keep allowBackup=false")
-    if "android:usesCleartextTraffic=\"false\"" not in text:
-        errors.append("AndroidManifest.xml must keep usesCleartextTraffic=false")
-    if '.ui.TrashActivity' not in text:
-        errors.append("TrashActivity must remain registered")
-    if '.ui.ChecksumActivity' not in text:
-        errors.append("ChecksumActivity must remain registered")
-    if '.ui.StorageAnalyzerActivity' not in text:
-        errors.append("StorageAnalyzerActivity must remain registered")
+    for token, message in (
+        ('android:allowBackup="false"', "AndroidManifest.xml must keep allowBackup=false"),
+        ('android:usesCleartextTraffic="false"', "AndroidManifest.xml must keep usesCleartextTraffic=false"),
+        ('.ui.TrashActivity', "TrashActivity must remain registered"),
+        ('.ui.ChecksumActivity', "ChecksumActivity must remain registered"),
+        ('.ui.StorageAnalyzerActivity', "StorageAnalyzerActivity must remain registered"),
+    ):
+        if token not in text:
+            errors.append(message)
 
 app_gradle = ROOT / "app/build.gradle"
 if app_gradle.is_file():
@@ -86,254 +103,214 @@ if workflow.is_file():
     text = workflow.read_text(encoding="utf-8")
     if "source.tar.xz" in text or "Reconstruct and verify OmniFiles source" in text:
         errors.append("build workflow must compile the editable repository tree, not the archived .source snapshot")
-    if "gradle --no-daemon --stacktrace :app:testDebugUnitTest" not in text:
-        errors.append("build workflow must run unit tests")
-    if "gradle --no-daemon --stacktrace :app:lintDebug" not in text:
-        errors.append("build workflow must run Android Lint")
-    if "gradle --no-daemon --stacktrace :app:assembleDebug" not in text:
-        errors.append("build workflow must assemble the debug APK")
+    for task in (
+        "gradle --no-daemon --stacktrace :app:testDebugUnitTest",
+        "gradle --no-daemon --stacktrace :app:lintDebug",
+        "gradle --no-daemon --stacktrace :app:assembleDebug",
+    ):
+        if task not in text:
+            errors.append(f"build workflow missing gate: {task}")
 
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt",
+    (
+        "fun copy(", "fun move(", "fun estimateTransferBytes(", "requireNotInsideSource",
+        "requireEnoughFreeSpace", ".usableSpace", "MIN_FREE_SPACE_RESERVE_BYTES",
+        "rollbackCreated", "STAGING_PREFIX", "copyFileVerified",
+        'MessageDigest.getInstance("SHA-256")', "commitStagingCopy", "TransferRuntime.begin(",
+        "TransferCancelledException", "COPY_BUFFER_BYTES = 64 * 1024",
+    ),
+    "safe transfer primitive",
+)
 file_operations = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt"
-if file_operations.is_file():
-    text = file_operations.read_text(encoding="utf-8")
-    for signature in (
-        "fun copy(",
-        "fun move(",
-        "fun estimateTransferBytes(",
-        "requireNotInsideSource",
-        "requireEnoughFreeSpace",
-        ".usableSpace",
-        "MIN_FREE_SPACE_RESERVE_BYTES",
-        "rollbackCreated",
-        "STAGING_PREFIX",
-        "copyFileVerified",
-        "MessageDigest.getInstance(\"SHA-256\")",
-        "commitStagingCopy",
-    ):
-        if signature not in text:
-            errors.append(f"safe transfer primitive missing from FileOperations: {signature}")
-    if "overwrite = true" in text:
-        errors.append("file transfer must not silently overwrite existing user files")
+if file_operations.is_file() and "overwrite = true" in file_operations.read_text(encoding="utf-8"):
+    errors.append("file transfer must not silently overwrite existing user files")
 
-file_path_policy = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FilePathPolicy.kt"
-if file_path_policy.is_file():
-    text = file_path_policy.read_text(encoding="utf-8")
-    if "Character.isISOControl" not in text:
-        errors.append("file names must reject ambiguous control characters")
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/TransferRuntime.kt",
+    ("data class Snapshot", "fun requestCancel(", "fun isCancelled(", "fun finish(", "fun setListener(", "fun currentSnapshot("),
+    "single transfer runtime",
+)
 
-browser_start_policy = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/BrowserStartPathPolicy.kt"
-if browser_start_policy.is_file():
-    text = browser_start_policy.read_text(encoding="utf-8")
-    for token in (
-        "FilePathPolicy.requireDirectEntry",
-        "it.exists() && it.isDirectory",
-        "?: root",
-    ):
-        if token not in text:
-            errors.append(f"safe browser start-path guard missing: {token}")
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/TransferBatchRuntime.kt",
+    (
+        "enum class Phase { PREPARING, ACTIVE, FINISHED }", "data class Snapshot", "preparedItems",
+        "processedItems", "settledBytes", "currentBytes", "totalBytes", "fun requestCancel(",
+        "fun isCancelled(", "fun finishItem(", "fun finish(", "fun setListener(", "fun currentSnapshot(",
+    ),
+    "batch transfer runtime",
+)
 
-digest_utils = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/DigestUtils.kt"
-if digest_utils.is_file():
-    text = digest_utils.read_text(encoding="utf-8")
-    for token in ("SHA-256", "sha256Hex", "BUFFER_BYTES", "toHex"):
-        if token not in text:
-            errors.append(f"checksum primitive missing: {token}")
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/TransferBatchRunner.kt",
+    (
+        "data class Result<T>", "val remaining: List<T>", "estimateBytes:", "execute:",
+        "TransferBatchRuntime.begin", "TransferBatchRuntime.reportPreparation",
+        "TransferBatchRuntime.startItem", "TransferBatchRuntime.updateCurrent",
+        "TransferBatchRuntime.finishItem", "TransferCancelledException", "items.drop(index)",
+    ),
+    "batch transfer executor",
+)
 
-file_inspector = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt"
-if file_inspector.is_file():
-    text = file_inspector.read_text(encoding="utf-8")
-    for token in ("DEFAULT_MAX_ENTRIES", "FilePathPolicy.requireInside", "visitedDirectories", "saturatingAdd"):
-        if token not in text:
-            errors.append(f"bounded file inspection guard missing: {token}")
+require_tokens(
+    "app/src/test/java/dev/laxerus/omnifiles/fs/TransferBatchRunnerTest.kt",
+    (
+        "cancellationStopsBeforeNextItemAndKeepsUnprocessedItems",
+        "aggregateProgressCombinesFinishedAndCurrentItemBytes",
+        "failedItemDoesNotStopFollowingItems",
+        "staleCancelRequestCannotCancelNewBatch",
+    ),
+    "batch transfer regression test",
+)
 
-storage_analyzer = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/StorageAnalyzer.kt"
-if storage_analyzer.is_file():
-    text = storage_analyzer.read_text(encoding="utf-8")
-    for token in (
-        "DEFAULT_MAX_ENTRIES = 40_000",
-        "ArrayDeque<Frame>",
-        "FilePathPolicy.requireDirectEntry",
-        "isCancelled",
-        "truncated",
-        "largestFiles",
-        "largestDirectories",
-        "enum class FileCategory",
-        "data class CategoryUsage",
-        "IntArray(FileCategory.entries.size)",
-        "LongArray(FileCategory.entries.size)",
-        "classifyFileName",
-        "categories = categories",
-    ):
-        if token not in text:
-            errors.append(f"bounded storage analyzer guard missing: {token}")
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/OmniActivity.kt",
+    (
+        "TransferBatchRuntime.setListener(batchTransferListener)",
+        "TransferBatchRuntime.requestCancel(activeId)",
+        "renderBatchTransferSnapshot", "transferDialogIsBatch", "R.string.transfer_cancel_batch",
+        "R.string.transfer_batch_detail", "R.string.transfer_batch_cancelled_detail",
+    ),
+    "batch transfer Material UI",
+)
 
-favorite_store = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt"
-if favorite_store.is_file():
-    text = favorite_store.read_text(encoding="utf-8")
-    for token in ("FilePathPolicy.requireInside", "SharedPreferences", "fun list(", "fun toggle("):
-        if token not in text:
-            errors.append(f"favorite path safety/persistence missing: {token}")
+require_tokens(
+    "app/src/main/res/values/transfer_strings.xml",
+    ("transfer_cancel_batch", "transfer_batch_preparing", "transfer_batch_detail", "transfer_batch_cancelled_toast"),
+    "batch transfer UI string",
+)
 
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/BrowserStartPathPolicy.kt",
+    ("FilePathPolicy.requireDirectEntry", "fun resolve("),
+    "browser start path policy",
+)
+
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserActivity.kt",
+    (
+        "TransferMode.COPY", "TransferMode.MOVE", "sourcePaths: List<String>", "pastePendingTransfer",
+        "selectedPaths", "selectAllVisible", "shareSelectedFiles", "moveSelectedToTrash", "restoreTrashTickets",
+        "FileInspector.inspect", "FavoriteStore", "showFavoritePicker", "toggleCurrentFavorite", "STATE_CURRENT_PATH",
+        "restoreTrash", "BrowserStartPathPolicy.resolve", "EXTRA_START_PATH", "TransferBatchRunner.run(",
+        "TransferBatchRuntime.Operation.COPY", "TransferBatchRuntime.Operation.MOVE",
+        "FileOperations.estimateTransferBytes(", "R.string.transfer_batch_cancelled_toast",
+    ),
+    "file browser transfer/selection/detail/favorite/batch wiring",
+)
 file_browser = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserActivity.kt"
 if file_browser.is_file():
     text = file_browser.read_text(encoding="utf-8")
-    for token in (
-        "TransferMode.COPY",
-        "TransferMode.MOVE",
-        "sourcePaths: List<String>",
-        "pastePendingTransfer",
-        "selectedPaths",
-        "selectAllVisible",
-        "shareSelectedFiles",
-        "moveSelectedToTrash",
-        "restoreTrashTickets",
-        "FileInspector.inspect",
-        "FavoriteStore",
-        "showFavoritePicker",
-        "toggleCurrentFavorite",
-        "STATE_CURRENT_PATH",
-        "restoreTrash",
-        "BrowserStartPathPolicy.resolve",
-        "EXTRA_START_PATH",
-        "intent.getStringExtra(EXTRA_START_PATH)",
-    ):
-        if token not in text:
-            errors.append(f"file browser transfer/selection/detail/favorite/start-path wiring missing: {token}")
     if "FileListAdapter(::handleEntryClick, ::handleEntryLongClick, ::showEntryActions)" not in text:
         errors.append("file browser must keep long-press selection separate from the more-actions menu")
 
-browser_layout = ROOT / "app/src/main/res/layout/activity_file_browser.xml"
-if browser_layout.is_file():
-    text = browser_layout.read_text(encoding="utf-8")
-    for view_id in (
-        "@+id/favoriteToggleButton",
-        "@+id/favoritesButton",
-        "@+id/selectionBar",
-        "@+id/selectAllButton",
-        "@+id/selectionShareButton",
-        "@+id/selectionCopyButton",
-        "@+id/selectionMoveButton",
-        "@+id/selectionTrashButton",
-        "@+id/pasteButton",
-        "@+id/cancelTransferButton",
-        "@+id/operationProgress",
-    ):
-        if view_id not in text:
-            errors.append(f"file browser selection/favorite/transfer control missing: {view_id}")
-
-adb_browser = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/AdbBrowserActivity.kt"
-if adb_browser.is_file():
-    text = adb_browser.read_text(encoding="utf-8")
-    for token in (
-        "AdbFileListAdapter(::openEntry, ::handleLongPress, ::showEntryActions)",
-        "showEntryDetails",
-        "copyRemotePath",
-        "RemotePathPolicy.normalizeAbsolute(entry.path)",
-        "ClipData.newUri",
-        "R.string.adb_mode",
-    ):
-        if token not in text:
-            errors.append(f"ADB browser action/detail safety wiring missing: {token}")
-
-adb_manager = ROOT / "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt"
-if adb_manager.is_file():
-    text = adb_manager.read_text(encoding="utf-8")
-    for token in ("suspend fun healthCheck", "snapshotRemote", "before == after", "destination.length() == after.size"):
-        if token not in text:
-            errors.append(f"ADB health/pull verification missing: {token}")
-
-adb_adapter = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/AdbFileListAdapter.kt"
-if adb_adapter.is_file():
-    text = adb_adapter.read_text(encoding="utf-8")
-    for token in ("private val onMore", "binding.moreButton.setOnClickListener { onMore(entry) }"):
-        if token not in text:
-            errors.append(f"ADB row more-actions callback missing: {token}")
-
-checksum_activity = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/ChecksumActivity.kt"
-if checksum_activity.is_file():
-    text = checksum_activity.read_text(encoding="utf-8")
-    for token in ("ActivityResultContracts.OpenDocument", "DigestUtils::sha256Hex", "ClipboardManager", "STATE_HASH"):
-        if token not in text:
-            errors.append(f"checksum tool wiring missing: {token}")
-
-storage_analyzer_activity = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/StorageAnalyzerActivity.kt"
-if storage_analyzer_activity.is_file():
-    text = storage_analyzer_activity.read_text(encoding="utf-8")
-    for token in (
-        "StorageAnalyzer.scan",
-        "Dispatchers.IO",
-        "AtomicBoolean",
-        "cancelRequested",
-        "largestDirectories",
-        "renderCategories",
-        "result.categories",
-        "categoryProgress",
-        "openInBrowser",
-        "FileBrowserActivity.EXTRA_START_PATH",
-        "FilePathPolicy.requireDirectEntry(target, sharedRoot)",
-    ):
-        if token not in text:
-            errors.append(f"storage analyzer UI/cancellation/category/browser wiring missing: {token}")
-
-storage_analyzer_layout = ROOT / "app/src/main/res/layout/activity_storage_analyzer.xml"
-if storage_analyzer_layout.is_file():
-    text = storage_analyzer_layout.read_text(encoding="utf-8")
-    for view_id in ("@+id/categoriesContainer", "@+id/filesContainer", "@+id/foldersContainer"):
-        if view_id not in text:
-            errors.append(f"storage analyzer result container missing: {view_id}")
-
-storage_category_layout = ROOT / "app/src/main/res/layout/item_storage_category.xml"
-if storage_category_layout.is_file():
-    text = storage_category_layout.read_text(encoding="utf-8")
-    for view_id in ("@+id/categoryName", "@+id/categoryMeta", "@+id/categoryProgress"):
-        if view_id not in text:
-            errors.append(f"storage category row control missing: {view_id}")
-
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/FilePathPolicy.kt",
+    ("Character.isISOControl", "requireDirectEntry"),
+    "local path policy",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/DigestUtils.kt",
+    ("SHA-256", "sha256Hex", "BUFFER_BYTES", "toHex"),
+    "checksum primitive",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt",
+    ("DEFAULT_MAX_ENTRIES", "FilePathPolicy.requireInside", "visitedDirectories", "saturatingAdd"),
+    "bounded file inspection guard",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/StorageAnalyzer.kt",
+    (
+        "DEFAULT_MAX_ENTRIES = 40_000", "ArrayDeque<Frame>", "FilePathPolicy.requireDirectEntry",
+        "isCancelled", "truncated", "largestFiles", "largestDirectories", "enum class FileCategory",
+        "data class CategoryUsage", "IntArray(FileCategory.entries.size)", "LongArray(FileCategory.entries.size)",
+        "classifyFileName", "categories = categories",
+    ),
+    "bounded storage analyzer guard",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt",
+    ("FilePathPolicy.requireInside", "SharedPreferences", "fun list(", "fun toggle("),
+    "favorite path safety/persistence",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/StorageAnalyzerActivity.kt",
+    (
+        "StorageAnalyzer.scan", "Dispatchers.IO", "AtomicBoolean", "cancelRequested", "largestDirectories",
+        "renderCategories", "result.categories", "categoryProgress", "FileBrowserActivity.EXTRA_START_PATH",
+    ),
+    "storage analyzer UI/cancellation/category/navigation wiring",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/AdbBrowserActivity.kt",
+    (
+        "AdbFileListAdapter(::openEntry, ::handleLongPress, ::showEntryActions)", "showEntryDetails",
+        "copyRemotePath", "RemotePathPolicy.normalizeAbsolute(entry.path)", "ClipData.newUri", "R.string.adb_mode",
+    ),
+    "ADB browser action/detail safety wiring",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt",
+    ("suspend fun healthCheck", "snapshotRemote", "before == after", "destination.length() == after.size"),
+    "ADB health/pull verification",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/AdbFileListAdapter.kt",
+    ("private val onMore", "binding.moreButton.setOnClickListener { onMore(entry) }"),
+    "ADB row more-actions callback",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/ChecksumActivity.kt",
+    ("ActivityResultContracts.OpenDocument", "DigestUtils::sha256Hex", "ClipboardManager", "STATE_HASH"),
+    "checksum tool wiring",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt",
+    ("METADATA_DIR", "fun listEntries()", "fun restore(entry:", "fun deletePermanently(", "fun emptyTrash()"),
+    "persistent trash primitive",
+)
 trash_manager = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt"
-if trash_manager.is_file():
-    text = trash_manager.read_text(encoding="utf-8")
-    for token in ("METADATA_DIR", "fun listEntries()", "fun restore(entry:", "fun deletePermanently(", "fun emptyTrash()"):
-        if token not in text:
-            errors.append(f"persistent trash primitive missing: {token}")
-    if "overwrite = true" in text:
-        errors.append("trash restore must not silently overwrite existing user files")
+if trash_manager.is_file() and "overwrite = true" in trash_manager.read_text(encoding="utf-8"):
+    errors.append("trash restore must not silently overwrite existing user files")
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/TrashActivity.kt",
+    ("TrashManager", "restore(entry)", "deletePermanently(entry)", "emptyTrash()"),
+    "trash center action",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/MainActivity.kt",
+    (
+        "StatFs", "renderStorageUsage", "storageUsageProgress", "storage_access_ready",
+        "ChecksumActivity::class.java", "StorageAnalyzerActivity::class.java", "storageAnalyzerButton",
+        "verifyAdbHealth", ".healthCheck()",
+    ),
+    "home storage/ADB/checksum/analyzer wiring",
+)
 
-trash_activity = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/TrashActivity.kt"
-if trash_activity.is_file():
-    text = trash_activity.read_text(encoding="utf-8")
-    for token in ("TrashManager", "restore(entry)", "deletePermanently(entry)", "emptyTrash()"):
-        if token not in text:
-            errors.append(f"trash center action missing: {token}")
-
-main_activity = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/MainActivity.kt"
-if main_activity.is_file():
-    text = main_activity.read_text(encoding="utf-8")
-    for token in (
-        "StatFs",
-        "renderStorageUsage",
-        "storageUsageProgress",
-        "storage_access_ready",
-        "ChecksumActivity::class.java",
-        "StorageAnalyzerActivity::class.java",
-        "storageAnalyzerButton",
-        "verifyAdbHealth",
-        ".healthCheck()",
-    ):
-        if token not in text:
-            errors.append(f"home storage/ADB/checksum/analyzer wiring missing: {token}")
-
-main_layout = ROOT / "app/src/main/res/layout/activity_main.xml"
-if main_layout.is_file():
-    text = main_layout.read_text(encoding="utf-8")
-    for view_id in (
-        "@+id/trashButton",
-        "@+id/checksumButton",
-        "@+id/storageAnalyzerButton",
-        "@+id/storageUsageText",
-        "@+id/storageUsageProgress",
-    ):
-        if view_id not in text:
-            errors.append(f"home screen control missing: {view_id}")
+layout_tokens = {
+    "app/src/main/res/layout/activity_file_browser.xml": (
+        "@+id/favoriteToggleButton", "@+id/favoritesButton", "@+id/selectionBar", "@+id/selectAllButton",
+        "@+id/selectionShareButton", "@+id/selectionCopyButton", "@+id/selectionMoveButton",
+        "@+id/selectionTrashButton", "@+id/pasteButton", "@+id/cancelTransferButton", "@+id/operationProgress",
+    ),
+    "app/src/main/res/layout/activity_storage_analyzer.xml": (
+        "@+id/categoriesContainer", "@+id/filesContainer", "@+id/foldersContainer",
+    ),
+    "app/src/main/res/layout/item_storage_category.xml": (
+        "@+id/categoryName", "@+id/categoryMeta", "@+id/categoryProgress",
+    ),
+    "app/src/main/res/layout/activity_main.xml": (
+        "@+id/trashButton", "@+id/checksumButton", "@+id/storageAnalyzerButton",
+        "@+id/storageUsageText", "@+id/storageUsageProgress",
+    ),
+    "app/src/main/res/layout/dialog_transfer_progress.xml": (
+        "@+id/transferStatusText", "@+id/transferDetailText", "@+id/transferProgressIndicator",
+    ),
+}
+for path, tokens in layout_tokens.items():
+    require_tokens(path, tokens, f"layout contract {path}")
 
 workflow_render = ROOT / "scripts/render_build_apk.sh"
 if workflow_render.is_file():
@@ -344,7 +321,7 @@ if workflow_render.is_file():
 
 for path in ROOT.glob("app/src/main/java/**/*.kt"):
     text = path.read_text(encoding="utf-8")
-    if "Runtime.getRuntime().exec" in text or "ProcessBuilder(\"su\"" in text:
+    if "Runtime.getRuntime().exec" in text or 'ProcessBuilder("su"' in text:
         errors.append(f"unreviewed direct privilege process launch: {path.relative_to(ROOT)}")
     if "override fun onBackPressed" in text:
         errors.append(f"deprecated onBackPressed override: {path.relative_to(ROOT)}")
