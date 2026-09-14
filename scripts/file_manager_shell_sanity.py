@@ -162,7 +162,8 @@ require(
     "DEFAULT_MAX_ENTRIES",
     "skippedTopLevelDirectories",
     "FilePathPolicy.requireDirectEntry",
-    "trash.moveToTrash",
+    "refreshed.modifiedAt == scannedCandidate.modifiedAt",
+    "val removed = safe.delete()",
     "classifyFile",
     "classifyDirectory",
 )
