@@ -1,9 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+
     <item
         android:id="@+id/actionSettingsTools"
         android:icon="@drawable/ic_settings_24"
         android:title="@string/settings_tools"
         app:showAsAction="always" />
+
+    <item
+        android:id="@+id/actionStorageAnalyzer"
+        android:icon="@drawable/ic_storage_24"
+        android:title="@string/toolbar_storage_analyzer"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/actionTrash"
+        android:icon="@drawable/ic_delete_24"
+        android:title="@string/toolbar_trash"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/actionChecksum"
+        android:icon="@drawable/ic_hash_24"
+        android:title="@string/toolbar_checksum"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/actionWirelessAdb"
+        android:icon="@drawable/ic_wifi_24"
+        android:title="@string/toolbar_wireless_adb"
+        app:showAsAction="never" />
 </menu>
