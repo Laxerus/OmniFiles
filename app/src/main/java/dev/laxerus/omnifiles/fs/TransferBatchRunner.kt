@@ -37,7 +37,11 @@ object TransferBatchRunner {
                     0L
                 }
                 totalBytes = saturatingAdd(totalBytes, estimates[index])
-                TransferBatchRuntime.reportPreparation(runtimeId, index + 1)
+                TransferBatchRuntime.reportPreparation(
+                    runtimeId,
+                    preparedItems = index + 1,
+                    preparedBytes = totalBytes
+                )
             }
             TransferBatchRuntime.setTotalBytes(runtimeId, totalBytes)
 
