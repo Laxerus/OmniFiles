@@ -40,9 +40,10 @@ class AdbPairingActivity : OmniActivity() {
         }
 
         binding.settingsButton.setOnClickListener {
-            if (!SystemSettingsNavigator.open(this, SystemSettingsNavigator.Destination.DEVELOPER_OPTIONS)) {
-                Toast.makeText(this, R.string.settings_open_failed, Toast.LENGTH_LONG).show()
-            }
+            openSystemSettings(SystemSettingsNavigator.Destination.DEVELOPER_OPTIONS)
+        }
+        binding.wifiSettingsButton.setOnClickListener {
+            openSystemSettings(SystemSettingsNavigator.Destination.WIFI)
         }
         binding.pairButton.setOnClickListener { pairAndConnect() }
         binding.connectButton.setOnClickListener { connectOnly() }
@@ -70,6 +71,12 @@ class AdbPairingActivity : OmniActivity() {
     override fun onDestroy() {
         discovery.close()
         super.onDestroy()
+    }
+
+    private fun openSystemSettings(destination: SystemSettingsNavigator.Destination) {
+        if (!SystemSettingsNavigator.open(this, destination)) {
+            Toast.makeText(this, R.string.settings_open_failed, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun applyDiscoveredEndpoints(state: MdnsDiscoveryState) {
@@ -173,6 +180,7 @@ class AdbPairingActivity : OmniActivity() {
         binding.pairButton.isEnabled = !value
         binding.connectButton.isEnabled = !value
         binding.settingsButton.isEnabled = !value
+        binding.wifiSettingsButton.isEnabled = !value
         if (value && message != null) binding.resultText.text = message
     }
 }
