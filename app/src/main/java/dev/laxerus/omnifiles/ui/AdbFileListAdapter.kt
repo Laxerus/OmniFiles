@@ -5,6 +5,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.adb.AdbRemoteEntry
 import dev.laxerus.omnifiles.databinding.RowFileBinding
 import java.text.DateFormat
@@ -38,6 +39,9 @@ class AdbFileListAdapter(
                 onLongClick(entry)
                 true
             }
+            binding.moreButton.isEnabled = !entry.isDirectory && !entry.isSymlink
+            binding.moreButton.contentDescription = binding.root.context.getString(R.string.export_file)
+            binding.moreButton.setOnClickListener { if (binding.moreButton.isEnabled) onLongClick(entry) }
         }
     }
 
