@@ -101,7 +101,6 @@ class JunkCleanerActivity : OmniActivity() {
             val result = runCatching {
                 withContext(Dispatchers.IO) {
                     JunkCleaner.clean(
-                        context = this@JunkCleanerActivity,
                         sharedRoot = StorageAccessController.sharedRoot(),
                         candidates = candidates,
                     )
@@ -113,7 +112,7 @@ class JunkCleanerActivity : OmniActivity() {
                     this@JunkCleanerActivity,
                     getString(
                         R.string.junk_cleaner_done,
-                        cleanup.movedToTrash,
+                        cleanup.deleted,
                         cleanup.failed,
                         formatBytes(cleanup.reclaimedBytes),
                     ),
