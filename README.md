@@ -20,15 +20,18 @@ APK, `main` dalından Render build hattında kaynak sanity kontrolü, unit test,
 - Android 11+ için Tüm Dosyalara Erişim akışı ve eski Android sürümlerinde uygun legacy izin davranışı.
 - Arama, sıralama, gizli öğeler, favoriler, seçim ve toplu işlemler içeren yerel dosya yöneticisi.
 - Güvenli `FileProvider` üzerinden dosya açma/paylaşma; `file://` kullanmama.
+- Yerel VIEW, SEND ve SHA-256 Intent üretimini tek güvenli `LocalFileIntents` katmanında toplama; normal dosya/direct-path kontrolünü aksiyonlar arasında aynı tutma.
 - Uygulama içi kalıcı çöp alanı, geri alma ve toplu çöp işlemleri.
 - Dosya/klasör ayrıntıları, yol kopyalama, doğrudan yerel SHA-256 işlemi.
+- **SHA-256 karşılaştırma:** beklenen 64 hex değeri veya `sha256:` önekli değeri girip/yapıştırıp hesaplanan dosya hash'iyle doğrudan eşleşme kontrolü yapma.
 - Ana ekranda kullanılan/toplam/boş ortak depolama alanı ve doluluk göstergesi.
 - **Depolama Analizi:** stack-safe ve bounded tarama, en büyük dosya/klasörler, sabit sekiz dosya kategorisi ve alan kullanım yüzdeleri.
 - Kategori kartına dokunarak o türdeki **en büyük dosyaları** bounded drill-down listesinde inceleme; dosyayı açma, paylaşma, SHA-256 hesaplama, klasöründe gösterme, ayrıntı ve yol kopyalama.
 - Analiz sonucundaki klasörü dosya yöneticisinde açma veya büyük bir dosyanın bulunduğu klasöre doğrudan gitme.
-- **SHA-256 Doğrulama:** Android belge seçiciden veya OmniFiles içindeki güvenli URI'lerden dosya hash'i üretme.
+- Analizden bir dosyanın klasörüne geçildiğinde hedef dosyayı güvenli biçimde bulup **otomatik kaydırma + seçimden bağımsız Material vurgu** ile gösterme.
 - APK içine gömülü **Kadb 2.1.4** ile Kablosuz ADB eşleştirme, bağlantı, mDNS keşfi, klasör listeleme, önizleme, paylaşım ve dışa aktarma.
 - ADB bağlantısı için gerçek shell health probe ve doğrulanmış pull işlemleri.
+- Güvenli olmayan ADB dosya adlarını UI/path katmanına taşımama ve filtrelenen giriş sayısını kullanıcıya bildirme.
 - Uzak dosyada doğrulanmış pull sonrası yerel SHA-256 hesaplama; uzak cihazda `sha256sum` bulunmasına bağımlı olmama.
 - **Save Scout** ile erişilebilir standart oyun/save konumlarını sınırlı tarama.
 - **SQLite Studio** ile çalışma kopyasında tablo/satır görüntüleme ve uygun hücreleri düzenleme; geri yazım sonrası boyut + SHA-256 + SQLite integrity doğrulaması.
@@ -46,7 +49,7 @@ Klasör kopyalama, toplam boyut taraması ve move-fallback kaynak temizliği rec
 
 Çoklu seçimle kopyala/taşı başlatıldığında `TransferBatchRunner` önce her kaynak için stack-safe byte tahmini çıkarır. `TransferBatchRuntime` toplam öğe sayısını, hazırlanmış/işlenmiş öğeleri, başarı/hata sayılarını, tamamlanmış byte miktarını ve aktif öğenin byte ilerlemesini tek yaşam döngüsü snapshot'ında tutar.
 
-Material aktarım penceresi artık örneğin **`2/7 öğe`**, aktif dosya adı, **toplam aktarılan / toplam byte** ve genel yüzdeyi gösterir. Hazırlık aşamasında kaç kaynağın boyutunun tarandığı da görünür.
+Material aktarım penceresi örneğin **`2/7 öğe`**, aktif dosya adı, **toplam aktarılan / toplam byte** ve genel yüzdeyi gösterir. Hazırlık aşamasında kaç kaynağın boyutunun tarandığı da görünür.
 
 **Tüm aktarımı durdur** düğmesi yalnız görsel bir işlem değildir. Batch kimliğine bağlı iptal token'ı aktif `FileOperations.copy/move` çağrısına aktarılır. İstek; boyut taramasında, iteratif traversal sırasında, her 64 KiB kopyalama bloğunda, hedef SHA-256 doğrulamasında ve staging commitinden önce kontrol edilir. Aktif öğe `TransferCancelledException` ile mevcut rollback yoluna girer ve `TransferBatchRunner` sonraki öğeyi **başlatmaz**.
 
@@ -55,6 +58,12 @@ Material aktarım penceresi artık örneğin **`2/7 öğe`**, aktif dosya adı, 
 Aynı dosya sistemi içinde `renameTo` ile doğrudan tamamlanan MOVE çok kısa sürebilir; böyle bir öğe kullanıcı iptal etkileşiminden önce tamamlanabilir. Batch iptali bundan sonra sıradaki öğelerin başlamasını yine engeller.
 
 Tekil transferlerde mevcut `TransferRuntime` byte telemetrisi kullanılmaya devam eder. Batch aktifken `OmniActivity`, içteki per-item runtime olaylarını ayrı bir ikinci progress penceresi olarak göstermez; aggregate batch snapshot'ı UI için kanonik kaynaktır.
+
+## SHA-256 doğrulama ve güvenli yerel Intent katmanı
+
+SHA-256 ekranı dosyanın hash'ini üretmenin yanında beklenen değeri de doğrular. Kullanıcı düz **64 hex karakter** veya case-insensitive `sha256:` önekli değer girebilir; panodan yapıştırma desteklenir. `Sha256Verifier` beklenen değeri normalize eder, geçersiz formatı hesaplanan hash'ten bağımsız olarak reddeder ve sonucu `WAITING_FOR_HASH`, `MATCH` veya `MISMATCH` durumlarından biriyle açıkça ayırır. Beklenen değer, seçili URI ve hesaplanan hash Activity yeniden oluşturulurken korunur.
+
+Yerel normal dosyaların VIEW, SEND ve Checksum Intent'leri `LocalFileIntents` içinde merkezileştirilmiştir. Yardımcı katman doğrudan normal dosya şartını tekrar doğrular, güvenli `FileProvider` `content://` URI'si üretir, MIME tipini tek noktadan çözer ve URI okuma iznini `ClipData` ile birlikte taşır. Böylece Analyzer, normal dosya listesi ve ADB'den güvenli cache'e alınmış önizlemeler aynı URI/Intent politikasını kullanır.
 
 ## Depolama Analizi güvenlik modeli
 
@@ -68,13 +77,17 @@ Kategori drill-down da bounded kalır. Her kategori için varsayılan olarak yal
 
 Bir analiz sonucuna işlem yapılacağı anda yol yeniden doğrulanır. Taramadan sonra taşınmış/değişmiş, kök dışına çıkan veya dolaylı/symlink hedefe dönüşmüş öğe reddedilir. `BrowserStartPathPolicy` yalnız mevcut, doğrudan ve ortak depolama içindeki klasörleri başlangıç yolu olarak kabul eder. `EXTRA_START_PATH` yalnız Activity'nin ilk oluşturuluşunda uygulanır; ekran yeniden oluşturulurken kaydedilmiş gezinme durumu korunur.
 
+Dosya sonucu için **Bulunduğu klasörü aç** kullanıldığında Analyzer ayrıca hedef dosyanın canonical yolunu tek kullanımlık highlight ekstra alanıyla taşır. `BrowserHighlightPolicy` yalnız mevcut, doğrudan/canonical ve gerçekten yüklenmiş liste içinde bulunan hedefi kabul eder. Eşleşme varsa RecyclerView hedefe kaydırılır ve satır tema `colorPrimary` stroke'u ile vurgulanır. Bu vurgu seçim durumundan ayrıdır, dokunulduğunda temizlenir ve Activity yeniden oluşturulurken tekrar zorlanmaz. Symlink, kayıp, liste dışı veya başka konumdaki hedef görsel olarak vurgulanmaz.
+
 ## ADB ve veri güvenliği
 
 Kablosuz ADB kullanıcı tarafından Android ayarlarından etkinleştirilip eşleştirilmelidir. Root tespiti yalnız durum bilgisidir; OmniFiles kendiliğinden `su` başlatmaz.
 
 ADB pull işlemi uzak dosyanın transfer öncesi/sonrası boyut, `mtime` ve mode snapshot'ını karşılaştırır; yerel uzunluk da son snapshot ile eşleşmelidir. Uzak dosya aktarım sırasında değişmişse geçici çıktı güvenilir kabul edilmez.
 
-ADB yol politikası yalnız mutlak yolları kabul eder; `.`/`..`, NUL, ISO kontrol karakterleri ve 255 karakteri aşan tekil dosya adları reddedilir. Güvenli olmayan uzak girişler sonraki UI/path katmanlarına taşınmaz.
+ADB yol politikası yalnız mutlak yolları kabul eder; `.`/`..`, NUL, ISO kontrol karakterleri ve 255 karakteri aşan tekil dosya adları reddedilir. `listDirectoryDetailed` güvenli giriş listesinin yanında `skippedUnsafeEntries` sayısını da üretir. Böylece güvensiz uzak adlar sonraki UI/path katmanlarına taşınmazken kullanıcı klasörde güvenlik politikası nedeniyle kaç girişin gizlendiğini görür. Eski `listDirectory` çağrısı uyumluluk için güvenli giriş listesini döndürmeye devam eder.
+
+ADB pull ile uygulama cache'ine alınan önizleme/paylaşım dosyaları da `LocalFileIntents` üzerinden açılır veya paylaşılır; uzak isim doğrudan bir `file://` URI'ye dönüştürülmez.
 
 ## Build ve test
 
@@ -102,10 +115,12 @@ Build kapıları:
 - `TransferBatchRunnerTest`: ikinci öğede iptalin sonraki öğeyi başlatmaması, aggregate byte progress, normal hata sonrası kuyruğun devam etmesi ve stale batch kimliği izolasyonu.
 - `StorageAnalyzerTest`: bounded global top-N, **kategori başına bounded/sıralı top-N**, sabit kategori kovaları, öğe sınırı, kullanıcı iptali ve 800 katmanlı stack-safe analiz ağacı.
 - `BrowserStartPathPolicyTest`: dosya, kayıp, kök dışı ve symlink başlangıç hedeflerinin güvenli fallback davranışı.
+- `BrowserHighlightPolicyTest`: doğrudan listelenen hedefi bulma; kayıp, liste dışı ve symlink hedeflerini reddetme.
+- `Sha256VerifierTest`: `sha256:` öneki ve uppercase normalizasyonu, bozuk format reddi, bekleme/eşleşme/eşleşmeme durumları.
 - `RemotePathPolicyTest`: uzak yol normalizasyonu, traversal/kontrol karakteri/uzun ad reddi.
 - `DigestUtilsTest`: SHA-256 yardımcıları.
 
-`source_sanity.py`, transfer staging güvenliği yanında `TransferBatchRuntime`, `TransferBatchRunner`, batch testleri, FileBrowser entegrasyonu, Material batch progress/cancel wiring'i, Storage Analyzer bounded kategori drill-down sözleşmesi ve ilgili kaynak/string/layout bağlantılarını zorunlu tutar. Bu parçalar yanlışlıkla silinirse APK build'i erken durur.
+`source_sanity.py`; transfer staging güvenliği, `TransferBatchRuntime`, `TransferBatchRunner`, batch testleri, Material batch progress/cancel wiring'i, Storage Analyzer bounded kategori drill-down sözleşmesi, SHA-256 karşılaştırıcı, merkezi `LocalFileIntents`, ADB unsafe-entry metadata akışı ve Analyzer hedef vurgulama sözleşmesini zorunlu tutar. Bu parçalar yanlışlıkla silinirse APK build'i erken durur.
 
 ## Ana kaynak alanları
 
