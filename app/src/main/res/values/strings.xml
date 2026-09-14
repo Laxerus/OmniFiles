@@ -29,6 +29,13 @@
     <string name="pair_and_connect">Eşleştir ve bağlan</string>
     <string name="open_developer_settings">Geliştirici seçeneklerini aç</string>
     <string name="browser_title">Dosyalar</string>
+    <string name="search_files">Dosya ve klasör ara</string>
+    <string name="sort_name">Ad</string>
+    <string name="sort_date">Tarih</string>
+    <string name="sort_size">Boyut</string>
+    <string name="show_hidden">Gizlileri göster</string>
+    <string name="storage_access_required">Ortak depolamayı listelemek için dosya erişimi gerekli.</string>
+    <string name="empty_search">Bu filtreyle eşleşen öğe yok.</string>
     <string name="empty_folder">Bu klasör boş veya okunamıyor.</string>
     <string name="delete_title">Çöpe taşı?</string>
     <string name="delete_message">Seçilen öğe doğrudan silinmek yerine OmniFiles çöp alanına taşınacak.</string>
