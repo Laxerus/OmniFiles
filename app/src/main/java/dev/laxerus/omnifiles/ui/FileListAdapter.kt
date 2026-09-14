@@ -1,6 +1,7 @@
 package dev.laxerus.omnifiles.ui
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -16,6 +17,14 @@ class FileListAdapter(
     private val onLongClick: (File) -> Unit
 ) : ListAdapter<File, FileListAdapter.Holder>(Diff) {
 
+    private var selectedPaths: Set<String> = emptySet()
+
+    fun setSelectedPaths(paths: Set<String>) {
+        if (selectedPaths == paths) return
+        selectedPaths = paths.toSet()
+        notifyDataSetChanged()
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
         val binding = RowFileBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return Holder(binding)
@@ -25,12 +34,22 @@ class FileListAdapter(
 
     inner class Holder(private val binding: RowFileBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(file: File) {
+            val path = runCatching { file.canonicalPath }.getOrElse { file.absolutePath }
+            val selected = path in selectedPaths
+            val selectionMode = selectedPaths.isNotEmpty()
+
             binding.icon.text = iconFor(file)
             binding.name.text = file.name.ifEmpty { file.path }
             binding.meta.text = if (file.isDirectory) {
                 "Klasör • ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(file.lastModified())}"
             } else {
                 "${formatBytes(file.length())} • ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(file.lastModified())}"
+            }
+            binding.selectionMark.visibility = if (selected) View.VISIBLE else View.GONE
+            binding.moreButton.visibility = if (selectionMode) View.GONE else View.VISIBLE
+            binding.root.contentDescription = buildString {
+                append(binding.name.text)
+                if (selected) append(" • seçili")
             }
             binding.root.setOnClickListener { onClick(file) }
             binding.root.setOnLongClickListener {
