@@ -33,9 +33,13 @@ En güncel debug APK `main` dalından Render build hattıyla üretilir:
 - Dosya/klasör adlarında yol ayırıcıları, NUL, satır sonu ve kontrol karakterlerini reddetme.
 - **Depolama Analizi**: ortak depolamayı salt okunur ve stack-safe biçimde tarayıp en büyük dosya ve klasörleri gösterme.
 - Depolama Analizi taramasında **40.000 öğelik sert güvenlik sınırı**, kullanıcı iptali, canonical/direct-entry kontrolü ve symlink izlememe.
+- Analiz sırasında bütün 40.000 sonucu RAM'de biriktirmek yerine yalnız gösterilecek **en büyük N dosya ve N klasör adayını** tutma.
+- Depolama Analizi sonuçlarında dosya açma, paylaşma, SHA-256 hesaplama, ayrıntıları görme ve yolu kopyalama; klasörlerde ayrıntı/yol işlemleri.
+- Analiz sonucu üzerinde işlem yapılacağı anda yolu tekrar direct-entry/canonical politikasıyla doğrulama; taramadan sonra taşınan/değişen güvensiz öğeyi reddetme.
 - Büyük veya çok öğeli işlemlerde UI thread'ini bloklamayan coroutine tabanlı iş akışları.
 - Güvenli `FileProvider` ile dosya açma/paylaşma ve doğrudan kalıcı silme yerine uygulama içi çöp alanı.
 - **SHA-256 Doğrulama** aracı: Android belge seçiciden salt okunur dosya açma, hash üretme ve panoya kopyalama.
+- SHA-256 ekranının OmniFiles içindeki güvenli `FileProvider` URI'lerini doğrudan kabul etmesi ve Activity yeniden oluşturulurken seçili URI'yi koruması.
 - APK içine gömülü `Kadb 2.1.4` ile Kablosuz ADB eşleştirme/bağlantı ve mDNS keşfi.
 - ADB klasör listeleme, dosya önizleme, doğrudan paylaşım ve Android belge seçicisine dışa aktarma.
 - ADB pull işlemlerinde transfer öncesi/sonrası **boyut + mtime + mode snapshot doğrulaması**.
@@ -48,7 +52,9 @@ En güncel debug APK `main` dalından Render build hattıyla üretilir:
 
 Storage Analyzer ortak depolama kökünü değiştirmez; yalnız dosya metadata'sını ve dosya boyutlarını okur. Tarama recursive fonksiyon çağrıları yerine explicit bir `ArrayDeque` iş kuyruğuyla ilerler. Her öğe `FilePathPolicy.requireDirectEntry` üzerinden doğrulandığı için sembolik bağlantı veya canonical path kaçışı taranmaya devam edilmez.
 
-Tarama varsayılan olarak en fazla **40.000 öğe** işler ve en büyük 20 dosya ile 20 klasörü gösterir. Klasör boyutları çocuk dosya ve klasörlerin taranan toplamlarından post-order olarak hesaplanır. Kullanıcı iptal ettiğinde tarayıcı yeni öğe işlemeyi bırakır ve güvenilir kısmi sonuç döndürür; güvenlik sınırında durduğunda sonuç açıkça kısmi olarak işaretlenir.
+Tarama varsayılan olarak en fazla **40.000 öğe** işler ve en büyük 20 dosya ile 20 klasörü gösterir. Sonuç seçimi bounded top-N mantığıyla yapılır; taranan her öğenin `Entry` nesnesini sonuç listesinde tutmak yerine yalnız sonuç limitine girebilecek adaylar bellekte tutulur. Klasör boyutları çocuk dosya ve klasörlerin taranan toplamlarından post-order olarak hesaplanır. Kullanıcı iptal ettiğinde tarayıcı yeni öğe işlemeyi bırakır ve güvenilir kısmi sonuç döndürür; güvenlik sınırında durduğunda sonuç açıkça kısmi olarak işaretlenir.
+
+Sonuç kartına dokunulduğunda dosyanın tarama anındaki yoluna körlemesine güvenilmez. Öğenin hâlâ ortak depolama kökü içinde doğrudan bir giriş olduğu, mevcut olduğu ve dosya/klasör tipinin beklenen türle eşleştiği yeniden doğrulanır. Ancak bundan sonra `FileProvider` URI'si oluşturularak açma/paylaşma veya SHA-256 ekranına geçiş yapılır. Uzun basma yolu güvenli biçimde panoya kopyalar.
 
 ## Transfer güvenliği
 
@@ -64,7 +70,7 @@ OmniFiles Android sandbox'ını atlatıyormuş gibi davranmaz. Kablosuz ADB kull
 
 ADB pull akışı mümkün olduğunda uzak dosyayı transfer öncesi ve sonrası tekrar stat ederek boyut, değiştirilme zamanı ve mode bilgisini karşılaştırır. Dosya aktarım sırasında değişmiş veya kaybolmuşsa yerel geçici kopya güvenilir kabul edilmez ve silinir.
 
-SHA-256 aracı seçilen belgeyi değiştirmez; `ContentResolver` üzerinden salt okunur akış kullanır. SQLite düzenleme doğrudan kaynak üzerinde yapılmaz; önce çalışma ve yedek kopyaları oluşturulur.
+SHA-256 aracı seçilen belgeyi değiştirmez; `ContentResolver` üzerinden salt okunur akış kullanır. Analizörden gelen yerel dosyalar da doğrudan `file://` URI ile açılmaz; uygulamanın `FileProvider` content URI'si kullanılır. Hash hesaplaması sırasında Activity yeniden oluşturulursa kaynak URI state içinde korunarak işlem yeniden başlatılabilir. SQLite düzenleme doğrudan kaynak üzerinde yapılmaz; önce çalışma ve yedek kopyaları oluşturulur.
 
 ## Build ve test
 
@@ -85,7 +91,7 @@ Build kapıları:
 4. `:app:assembleDebug`
 5. APK SHA-256 çıktısı
 
-`FileOperationsTest` transfer, staging, kaynak snapshot ve **1200 katmanlı stack-safe klasör** davranışını doğrular. `StorageAnalyzerTest` en büyük dosya/klasör sıralamasını, 40.000 öğe mantığının yapılandırılabilir sınırını, kullanıcı iptalini ve **800 katmanlı stack-safe analiz ağacını** doğrular. `DigestUtilsTest` SHA-256 yardımcılarını denetler.
+`FileOperationsTest` transfer, staging, kaynak snapshot ve **1200 katmanlı stack-safe klasör** davranışını doğrular. `StorageAnalyzerTest` en büyük dosya/klasör sıralamasını, bounded top-N aday seçimini, yapılandırılabilir öğe sınırını, kullanıcı iptalini ve **800 katmanlı stack-safe analiz ağacını** doğrular. `DigestUtilsTest` SHA-256 yardımcılarını denetler.
 
 `source_sanity.py`; güvenli transfer primitive'leri, staging kurtarma, ADB pull doğrulaması, checksum aracı, Storage Analyzer sınır/iptal/path korumaları ve ana ekran wiring'i kaybolursa build'i durdurur.
 
