@@ -42,8 +42,9 @@ object StorageAnalyzer {
         val pending = ArrayDeque<Frame>()
         val directorySizes = mutableMapOf<String, Long>()
         val visitedDirectories = mutableSetOf<String>()
-        val files = mutableListOf<Entry>()
-        val directories = mutableListOf<Entry>()
+        val largestFiles = mutableListOf<Entry>()
+        val largestDirectories = mutableListOf<Entry>()
+        val ranking = entryComparator()
 
         var visitedEntries = 0
         var fileCount = 0
@@ -63,14 +64,19 @@ object StorageAnalyzer {
 
             when (val frame = pending.removeLast()) {
                 is Frame.Exit -> {
-                    val size = directorySizes[frame.path] ?: 0L
+                    val size = directorySizes.remove(frame.path) ?: 0L
                     if (frame.rankDirectory) {
-                        directories += Entry(
-                            path = frame.path,
-                            name = frame.name,
-                            sizeBytes = size,
-                            modifiedAt = frame.modifiedAt,
-                            isDirectory = true
+                        retainTop(
+                            entries = largestDirectories,
+                            entry = Entry(
+                                path = frame.path,
+                                name = frame.name,
+                                sizeBytes = size,
+                                modifiedAt = frame.modifiedAt,
+                                isDirectory = true
+                            ),
+                            limit = topLimit,
+                            ranking = ranking
                         )
                     }
                     frame.parentPath?.let { parent ->
@@ -100,12 +106,17 @@ object StorageAnalyzer {
                         val size = safe.length().coerceAtLeast(0L)
                         scannedBytes = saturatingAdd(scannedBytes, size)
                         fileCount++
-                        files += Entry(
-                            path = safe.path,
-                            name = safe.name,
-                            sizeBytes = size,
-                            modifiedAt = safe.lastModified().coerceAtLeast(0L),
-                            isDirectory = false
+                        retainTop(
+                            entries = largestFiles,
+                            entry = Entry(
+                                path = safe.path,
+                                name = safe.name,
+                                sizeBytes = size,
+                                modifiedAt = safe.lastModified().coerceAtLeast(0L),
+                                isDirectory = false
+                            ),
+                            limit = topLimit,
+                            ranking = ranking
                         )
                         frame.parentPath?.let { parent ->
                             directorySizes[parent] = saturatingAdd(directorySizes[parent] ?: 0L, size)
@@ -161,9 +172,31 @@ object StorageAnalyzer {
             scannedBytes = scannedBytes,
             truncated = truncated,
             cancelled = cancelled,
-            largestFiles = files.sortedWith(entryComparator()).take(topLimit),
-            largestDirectories = directories.sortedWith(entryComparator()).take(topLimit)
+            largestFiles = largestFiles.sortedWith(ranking),
+            largestDirectories = largestDirectories.sortedWith(ranking)
         )
+    }
+
+    private fun retainTop(
+        entries: MutableList<Entry>,
+        entry: Entry,
+        limit: Int,
+        ranking: Comparator<Entry>
+    ) {
+        if (entries.size < limit) {
+            entries += entry
+            return
+        }
+
+        var worstIndex = 0
+        for (index in 1 until entries.size) {
+            if (ranking.compare(entries[worstIndex], entries[index]) < 0) {
+                worstIndex = index
+            }
+        }
+        if (ranking.compare(entry, entries[worstIndex]) < 0) {
+            entries[worstIndex] = entry
+        }
     }
 
     private fun entryComparator(): Comparator<Entry> =
