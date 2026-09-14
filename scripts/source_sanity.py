@@ -61,6 +61,8 @@ REQUIRED = [
     "app/src/test/java/dev/laxerus/omnifiles/fs/StorageAnalyzerTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/TransferRuntimeTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/TransferBatchRunnerTest.kt",
+    "app/src/test/java/dev/laxerus/omnifiles/fs/TransferPreflightTest.kt",
+    "app/src/test/java/dev/laxerus/omnifiles/fs/TransferBatchPreparationTest.kt",
 ]
 
 errors: list[str] = []
@@ -126,17 +128,32 @@ if workflow.is_file():
 require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt",
     (
-        "fun copy(", "fun move(", "fun estimateTransferBytes(", "requireNotInsideSource",
-        "requireEnoughFreeSpace", ".usableSpace", "MIN_FREE_SPACE_RESERVE_BYTES",
+        "fun copy(", "fun move(", "fun estimateTransferBytes(", "fun prepareTransfer(",
+        "class TransferPreflight", "DEFAULT_PREFLIGHT_SNAPSHOT_LIMIT = 8_192",
+        "PREFLIGHT_CACHE_MAX_ENTRIES = 8", "PREFLIGHT_CACHE_TTL_MS = 2L * 60L * 1000L",
+        "cachePreflight(", "consumeCachedPreflight(", "preflightSnapshots",
+        "relativePreflightPath", "validatePreflightEntry", "snapshotLimit = 0",
+        "requireNotInsideSource", "requireEnoughFreeSpace", ".usableSpace", "MIN_FREE_SPACE_RESERVE_BYTES",
         "rollbackCreated", "STAGING_PREFIX", "copyFileVerified",
         'MessageDigest.getInstance("SHA-256")', "commitStagingCopy", "TransferRuntime.begin(",
         "TransferCancelledException", "COPY_BUFFER_BYTES = 64 * 1024",
     ),
-    "safe transfer primitive",
+    "safe transfer primitive and bounded reusable preflight",
 )
 file_operations = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt"
 if file_operations.is_file() and "overwrite = true" in file_operations.read_text(encoding="utf-8"):
     errors.append("file transfer must not silently overwrite existing user files")
+
+require_tokens(
+    "app/src/test/java/dev/laxerus/omnifiles/fs/TransferPreflightTest.kt",
+    (
+        "cachedPreflightRejectsNestedMutationAndRollsBack",
+        "snapshotLimitFallsBackToFreshScan",
+        "preflightFromDifferentSourceCannotOverrideActualSource",
+        "reusablePreflightCopiesUnchangedTree",
+    ),
+    "bounded transfer preflight regression test",
+)
 
 require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/fs/TransferRuntime.kt",
@@ -148,6 +165,7 @@ require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/fs/TransferBatchRuntime.kt",
     (
         "enum class Phase { PREPARING, ACTIVE, FINISHED }", "data class Snapshot", "preparedItems",
+        "preparedBytes", "fun reportPreparation(id: Long, preparedItems: Int, preparedBytes: Long)",
         "processedItems", "settledBytes", "currentBytes", "totalBytes", "fun requestCancel(",
         "fun isCancelled(", "fun finishItem(", "fun finish(", "fun setListener(", "fun currentSnapshot(",
     ),
@@ -159,7 +177,7 @@ require_tokens(
     (
         "data class Result<T>", "val remaining: List<T>", "estimateBytes:", "execute:",
         "TransferBatchRuntime.begin", "TransferBatchRuntime.reportPreparation",
-        "TransferBatchRuntime.startItem", "TransferBatchRuntime.updateCurrent",
+        "preparedBytes = totalBytes", "TransferBatchRuntime.startItem", "TransferBatchRuntime.updateCurrent",
         "TransferBatchRuntime.finishItem", "TransferCancelledException", "items.drop(index)",
     ),
     "batch transfer executor",
@@ -175,6 +193,11 @@ require_tokens(
     ),
     "batch transfer regression test",
 )
+require_tokens(
+    "app/src/test/java/dev/laxerus/omnifiles/fs/TransferBatchPreparationTest.kt",
+    ("preparationPublishesMonotonicDiscoveredBytes", "preparationByteCounterSaturatesInsteadOfOverflowing"),
+    "batch preparation byte telemetry regression test",
+)
 
 require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/ui/OmniActivity.kt",
@@ -183,13 +206,17 @@ require_tokens(
         "TransferBatchRuntime.requestCancel(activeId)",
         "renderBatchTransferSnapshot", "transferDialogIsBatch", "R.string.transfer_cancel_batch",
         "R.string.transfer_batch_detail", "R.string.transfer_batch_cancelled_detail",
+        "snapshot.preparedBytes", "snapshot.preparedItems.toLong()", "snapshot.itemCount.toLong()",
     ),
-    "batch transfer Material UI",
+    "batch transfer Material UI and preparation telemetry",
 )
 
 require_tokens(
     "app/src/main/res/values/transfer_strings.xml",
-    ("transfer_cancel_batch", "transfer_batch_preparing", "transfer_batch_detail", "transfer_batch_cancelled_toast"),
+    (
+        "transfer_cancel_batch", "transfer_batch_preparing", "transfer_batch_detail",
+        "transfer_batch_cancelled_toast", "%3$s bulundu",
+    ),
     "batch transfer UI string",
 )
 
