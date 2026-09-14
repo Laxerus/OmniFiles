@@ -10,6 +10,7 @@ import android.view.View
 import android.webkit.MimeTypeMap
 import android.widget.EditText
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.core.content.FileProvider
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
@@ -47,6 +48,9 @@ class FileBrowserActivity : OmniActivity() {
 
         binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
         binding.toolbar.setNavigationOnClickListener { navigateUpOrFinish() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = navigateUpOrFinish()
+        })
 
         adapter = FileListAdapter(::openEntry, ::showEntryActions)
         binding.list.layoutManager = LinearLayoutManager(this)
@@ -84,15 +88,6 @@ class FileBrowserActivity : OmniActivity() {
         }
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (currentDir.canonicalPath != sharedRoot.path) {
-            currentDir.parentFile?.let { load(it) } ?: super.onBackPressed()
-        } else {
-            super.onBackPressed()
-        }
-    }
-
     private fun navigateUpOrFinish() {
         if (currentDir.canonicalPath == sharedRoot.path) finish()
         else currentDir.parentFile?.let(::load) ?: finish()
@@ -104,18 +99,28 @@ class FileBrowserActivity : OmniActivity() {
                 Toast.makeText(this, "Depolama kökünün dışına çıkılamaz.", Toast.LENGTH_LONG).show()
                 sharedRoot
             }
-        currentDir = safeDir
+        val readableDir = if (safeDir.isDirectory) safeDir else sharedRoot
+        currentDir = readableDir
         binding.pathText.text = currentDir.path
         val generation = ++loadGeneration
-        val requestedDir = safeDir
+        val requestedDir = readableDir
 
         lifecycleScope.launch {
-            val files = withContext(Dispatchers.IO) {
-                requestedDir.listFiles()?.toList().orEmpty()
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    requestedDir.listFiles()?.toList() ?: error("Klasör okunamadı")
+                }
             }
             if (generation != loadGeneration || currentDir.canonicalPath != requestedDir.canonicalPath) return@launch
-            allEntries = files
-            renderEntries()
+            result.onSuccess {
+                allEntries = it
+                renderEntries()
+            }.onFailure {
+                allEntries = emptyList()
+                adapter.submitList(emptyList())
+                binding.emptyText.text = it.message ?: "Klasör okunamadı"
+                binding.emptyText.visibility = View.VISIBLE
+            }
         }
     }
 
