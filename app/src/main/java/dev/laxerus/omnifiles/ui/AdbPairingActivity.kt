@@ -18,7 +18,7 @@ class AdbPairingActivity : OmniActivity() {
         setContentView(binding.root)
         applySystemBarInsets(binding.root)
 
-        binding.toolbar.setNavigationIcon(com.google.android.material.R.drawable.abc_ic_ab_back_material)
+        binding.toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
         binding.toolbar.setNavigationOnClickListener { finish() }
         manager.endpoint()?.let {
             binding.hostInput.setText(it.host)
@@ -38,7 +38,12 @@ class AdbPairingActivity : OmniActivity() {
         val connectPort = binding.connectPortInput.text?.toString()?.toIntOrNull()
         val code = binding.codeInput.text?.toString()?.trim().orEmpty()
 
-        if (host.isEmpty() || pairPort !in 1..65535 || connectPort !in 1..65535 || !code.matches(Regex("\\d{6}"))) {
+        val invalid = host.isEmpty() ||
+            pairPort == null || pairPort !in 1..65535 ||
+            connectPort == null || connectPort !in 1..65535 ||
+            !code.matches(Regex("\\d{6}"))
+
+        if (invalid) {
             binding.resultText.text = "Host, iki port ve 6 haneli eşleştirme kodunu kontrol et."
             return
         }
@@ -46,8 +51,8 @@ class AdbPairingActivity : OmniActivity() {
         setBusy(true)
         lifecycleScope.launch {
             runCatching {
-                manager.pair(host, pairPort!!, code)
-                manager.connect(host, connectPort!!)
+                manager.pair(host, requireNotNull(pairPort), code)
+                manager.connect(host, requireNotNull(connectPort))
             }.onSuccess { identity ->
                 binding.resultText.text = "Bağlantı hazır: $identity"
             }.onFailure { error ->
