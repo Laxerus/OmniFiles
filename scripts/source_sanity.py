@@ -20,6 +20,7 @@ REQUIRED = [
     "app/src/main/java/dev/laxerus/omnifiles/ui/TrashListAdapter.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbPairingActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbBrowserActivity.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/ui/AdbFileListAdapter.kt",
     "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt",
@@ -79,7 +80,16 @@ if workflow.is_file():
 file_operations = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt"
 if file_operations.is_file():
     text = file_operations.read_text(encoding="utf-8")
-    for signature in ("fun copy(", "fun move(", "requireNotInsideSource", "rollbackCreated"):
+    for signature in (
+        "fun copy(",
+        "fun move(",
+        "fun estimateTransferBytes(",
+        "requireNotInsideSource",
+        "requireEnoughFreeSpace",
+        ".usableSpace",
+        "MIN_FREE_SPACE_RESERVE_BYTES",
+        "rollbackCreated",
+    ):
         if signature not in text:
             errors.append(f"safe transfer primitive missing from FileOperations: {signature}")
     if "overwrite = true" in text:
@@ -95,9 +105,9 @@ if file_inspector.is_file():
 favorite_store = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt"
 if favorite_store.is_file():
     text = favorite_store.read_text(encoding="utf-8")
-    for token in ("FilePathPolicy.requireInside", "fun list(", "fun isFavorite(", "fun toggle("):
+    for token in ("FilePathPolicy.requireInside", "SharedPreferences", "fun list()", "fun toggle("):
         if token not in text:
-            errors.append(f"safe favorite folder primitive missing: {token}")
+            errors.append(f"favorite path safety/persistence missing: {token}")
 
 file_browser = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserActivity.kt"
 if file_browser.is_file():
@@ -114,20 +124,21 @@ if file_browser.is_file():
         "restoreTrashTickets",
         "FileInspector.inspect",
         "FavoriteStore",
+        "showFavorites",
         "toggleCurrentFavorite",
-        "showFavoritePicker",
-        "FileListAdapter(::handleEntryClick, ::handleEntryLongClick, ::showEntryActions)",
         "STATE_CURRENT_PATH",
         "restoreTrash",
     ):
         if token not in text:
             errors.append(f"file browser transfer/selection/detail/favorite wiring missing: {token}")
+    if "FileListAdapter(::handleEntryClick, ::handleEntryLongClick, ::showEntryActions)" not in text:
+        errors.append("file browser must keep long-press selection separate from the more-actions menu")
 
 browser_layout = ROOT / "app/src/main/res/layout/activity_file_browser.xml"
 if browser_layout.is_file():
     text = browser_layout.read_text(encoding="utf-8")
     for view_id in (
-        "@+id/favoriteToggleButton",
+        "@+id/favoriteButton",
         "@+id/favoritesButton",
         "@+id/selectionBar",
         "@+id/selectAllButton",
@@ -140,13 +151,28 @@ if browser_layout.is_file():
         "@+id/operationProgress",
     ):
         if view_id not in text:
-            errors.append(f"file browser selection/transfer/favorite control missing: {view_id}")
+            errors.append(f"file browser selection/favorite/transfer control missing: {view_id}")
 
-file_adapter = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/FileListAdapter.kt"
-if file_adapter.is_file():
-    text = file_adapter.read_text(encoding="utf-8")
-    if "onMoreClick" not in text or "binding.moreButton.setOnClickListener { onMoreClick(file) }" not in text:
-        errors.append("file row more button must stay separate from long-press selection")
+adb_browser = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/AdbBrowserActivity.kt"
+if adb_browser.is_file():
+    text = adb_browser.read_text(encoding="utf-8")
+    for token in (
+        "AdbFileListAdapter(::openEntry, ::handleLongPress, ::showEntryActions)",
+        "showEntryDetails",
+        "copyRemotePath",
+        "RemotePathPolicy.normalizeAbsolute(entry.path)",
+        "ClipData.newUri",
+        "R.string.adb_mode",
+    ):
+        if token not in text:
+            errors.append(f"ADB browser action/detail safety wiring missing: {token}")
+
+adb_adapter = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/AdbFileListAdapter.kt"
+if adb_adapter.is_file():
+    text = adb_adapter.read_text(encoding="utf-8")
+    for token in ("private val onMore", "binding.moreButton.setOnClickListener { onMore(entry) }"):
+        if token not in text:
+            errors.append(f"ADB row more-actions callback missing: {token}")
 
 trash_manager = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt"
 if trash_manager.is_file():
