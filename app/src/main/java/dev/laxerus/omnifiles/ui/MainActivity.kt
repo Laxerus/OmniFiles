@@ -16,21 +16,12 @@ class MainActivity : OmniActivity() {
         setContentView(binding.root)
         applySystemBarInsets(binding.root)
 
-        binding.openFilesButton.setOnClickListener {
-            startActivity(Intent(this, FileBrowserActivity::class.java))
-        }
-        binding.grantAccessButton.setOnClickListener {
-            StorageAccessController.requestSharedStorageAccess(this)
-        }
-        binding.adbButton.setOnClickListener {
-            startActivity(Intent(this, AdbPairingActivity::class.java))
-        }
-        binding.adbFilesButton.setOnClickListener {
-            startActivity(Intent(this, AdbBrowserActivity::class.java))
-        }
-        binding.saveScoutButton.setOnClickListener {
-            startActivity(Intent(this, SaveScoutActivity::class.java))
-        }
+        binding.openFilesButton.setOnClickListener { startActivity(Intent(this, FileBrowserActivity::class.java)) }
+        binding.grantAccessButton.setOnClickListener { StorageAccessController.requestSharedStorageAccess(this) }
+        binding.adbButton.setOnClickListener { startActivity(Intent(this, AdbPairingActivity::class.java)) }
+        binding.adbFilesButton.setOnClickListener { startActivity(Intent(this, AdbBrowserActivity::class.java)) }
+        binding.saveScoutButton.setOnClickListener { startActivity(Intent(this, SaveScoutActivity::class.java)) }
+        binding.sqliteStudioButton.setOnClickListener { startActivity(Intent(this, SqliteStudioActivity::class.java)) }
     }
 
     override fun onResume() {

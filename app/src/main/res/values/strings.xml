@@ -11,6 +11,7 @@
     <string name="wireless_debugging">Kablosuz ADB</string>
     <string name="adb_browse">ADB ile Android/data</string>
     <string name="save_scout">Save Scout</string>
+    <string name="sqlite_studio">SQLite Studio</string>
     <string name="adb_browse_title">ADB Dosyaları</string>
     <string name="adb_not_ready">Önce Kablosuz ADB bağlantısını kur.</string>
     <string name="adb_loading">ADB üzerinden okunuyor…</string>
@@ -41,4 +42,19 @@
     <string name="save_scout_loading_apps">Yüklü uygulamalar ADB üzerinden okunuyor…</string>
     <string name="save_scout_scanning">Muhtemel save klasörleri taranıyor…</string>
     <string name="save_scout_none">Erişilebilir standart save klasörü bulunamadı.</string>
+    <string name="sqlite_title">SQLite Studio</string>
+    <string name="sqlite_help">Veritabanı önce güvenli çalışma kopyasına alınır. Hücre değişiklikleri orijinale ancak Kaydet düğmesine bastığında yazılır.</string>
+    <string name="sqlite_open">Veritabanı seç</string>
+    <string name="sqlite_save">Kaydet</string>
+    <string name="sqlite_table_hint">Tablo seç</string>
+    <string name="sqlite_no_database">Henüz veritabanı seçilmedi.</string>
+    <string name="sqlite_no_tables">Kullanıcı tablosu bulunamadı.</string>
+    <string name="sqlite_integrity_failed">Veritabanı bütünlük kontrolünden geçmedi; kaydetme engellendi.</string>
+    <string name="sqlite_saved">Değişiklikler kaydedildi.</string>
+    <string name="sqlite_save_failed">Kaydetme başarısız; OmniFiles mümkünse orijinal kopyayı geri yükledi.</string>
+    <string name="sqlite_blob_readonly">BLOB hücreleri güvenlik için salt okunur.</string>
+    <string name="sqlite_without_rowid">WITHOUT ROWID tablo: hücre düzenleme salt okunur.</string>
+    <string name="sqlite_edit_cell">Hücreyi düzenle</string>
+    <string name="sqlite_apply">Uygula</string>
+    <string name="discard_changes">Değişiklikleri at</string>
 </resources>
