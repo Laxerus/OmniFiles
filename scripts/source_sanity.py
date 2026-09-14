@@ -23,6 +23,7 @@ REQUIRED = [
     "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt",
     "app/src/main/res/layout/activity_trash.xml",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileOperationsTest.kt",
@@ -91,6 +92,13 @@ if file_inspector.is_file():
         if token not in text:
             errors.append(f"bounded file inspection guard missing: {token}")
 
+favorite_store = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt"
+if favorite_store.is_file():
+    text = favorite_store.read_text(encoding="utf-8")
+    for token in ("FilePathPolicy.requireInside", "fun list(", "fun isFavorite(", "fun toggle("):
+        if token not in text:
+            errors.append(f"safe favorite folder primitive missing: {token}")
+
 file_browser = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserActivity.kt"
 if file_browser.is_file():
     text = file_browser.read_text(encoding="utf-8")
@@ -101,21 +109,29 @@ if file_browser.is_file():
         "pastePendingTransfer",
         "selectedPaths",
         "selectAllVisible",
+        "shareSelectedFiles",
         "moveSelectedToTrash",
         "restoreTrashTickets",
         "FileInspector.inspect",
+        "FavoriteStore",
+        "toggleCurrentFavorite",
+        "showFavoritePicker",
+        "FileListAdapter(::handleEntryClick, ::handleEntryLongClick, ::showEntryActions)",
         "STATE_CURRENT_PATH",
         "restoreTrash",
     ):
         if token not in text:
-            errors.append(f"file browser transfer/selection/detail wiring missing: {token}")
+            errors.append(f"file browser transfer/selection/detail/favorite wiring missing: {token}")
 
 browser_layout = ROOT / "app/src/main/res/layout/activity_file_browser.xml"
 if browser_layout.is_file():
     text = browser_layout.read_text(encoding="utf-8")
     for view_id in (
+        "@+id/favoriteToggleButton",
+        "@+id/favoritesButton",
         "@+id/selectionBar",
         "@+id/selectAllButton",
+        "@+id/selectionShareButton",
         "@+id/selectionCopyButton",
         "@+id/selectionMoveButton",
         "@+id/selectionTrashButton",
@@ -124,7 +140,13 @@ if browser_layout.is_file():
         "@+id/operationProgress",
     ):
         if view_id not in text:
-            errors.append(f"file browser selection/transfer control missing: {view_id}")
+            errors.append(f"file browser selection/transfer/favorite control missing: {view_id}")
+
+file_adapter = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/FileListAdapter.kt"
+if file_adapter.is_file():
+    text = file_adapter.read_text(encoding="utf-8")
+    if "onMoreClick" not in text or "binding.moreButton.setOnClickListener { onMoreClick(file) }" not in text:
+        errors.append("file row more button must stay separate from long-press selection")
 
 trash_manager = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt"
 if trash_manager.is_file():
