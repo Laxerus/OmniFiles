@@ -14,7 +14,8 @@ import java.util.Locale
 
 class FileListAdapter(
     private val onClick: (File) -> Unit,
-    private val onLongClick: (File) -> Unit
+    private val onLongClick: (File) -> Unit,
+    private val onMoreClick: (File) -> Unit
 ) : ListAdapter<File, FileListAdapter.Holder>(Diff) {
 
     private var selectedPaths: Set<String> = emptySet()
@@ -57,7 +58,7 @@ class FileListAdapter(
                 true
             }
             binding.moreButton.contentDescription = binding.root.context.getString(R.string.more_actions)
-            binding.moreButton.setOnClickListener { onLongClick(file) }
+            binding.moreButton.setOnClickListener { onMoreClick(file) }
         }
     }
 
