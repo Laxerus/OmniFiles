@@ -1,6 +1,7 @@
 package dev.laxerus.omnifiles.ui
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -14,7 +15,8 @@ import java.util.Locale
 
 class AdbFileListAdapter(
     private val onClick: (AdbRemoteEntry) -> Unit,
-    private val onLongClick: (AdbRemoteEntry) -> Unit
+    private val onLongClick: (AdbRemoteEntry) -> Unit,
+    private val onMore: (AdbRemoteEntry) -> Unit
 ) : ListAdapter<AdbRemoteEntry, AdbFileListAdapter.Holder>(Diff) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder =
@@ -34,14 +36,16 @@ class AdbFileListAdapter(
             val date = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
                 .format(Date(entry.modifiedAtMillis))
             binding.meta.text = "$type • $date"
+            binding.selectionMark.visibility = View.GONE
             binding.root.setOnClickListener { onClick(entry) }
             binding.root.setOnLongClickListener {
                 onLongClick(entry)
                 true
             }
-            binding.moreButton.isEnabled = !entry.isDirectory && !entry.isSymlink
-            binding.moreButton.contentDescription = binding.root.context.getString(R.string.export_file)
-            binding.moreButton.setOnClickListener { if (binding.moreButton.isEnabled) onLongClick(entry) }
+            binding.moreButton.isEnabled = true
+            binding.moreButton.visibility = View.VISIBLE
+            binding.moreButton.contentDescription = binding.root.context.getString(R.string.more_actions)
+            binding.moreButton.setOnClickListener { onMore(entry) }
         }
     }
 
