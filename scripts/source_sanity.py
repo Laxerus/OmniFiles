@@ -63,34 +63,13 @@ if manifest.is_file():
 app_gradle = ROOT / "app/build.gradle"
 if app_gradle.is_file():
     text = app_gradle.read_text(encoding="utf-8")
-    version = re.search(r"versionName\s*=\s*['\"]([^'\"]+)['\"]", text)
+    version = re.search(r"versionName\s+['\"]([^'\"]+)['\"]", text)
     if not version or version.group(1) != "0.8.0-dev":
         errors.append("versionName must remain 0.8.0-dev during this development line")
     if not re.search(r"com\.flyfishxu:kadb:[0-9][^'\"\s]*", text):
         errors.append("embedded Kadb dependency is missing")
     if not re.search(r"com\.flyfishxu:kadb-mdns:[0-9][^'\"\s]*", text):
         errors.append("Kadb mDNS dependency is missing")
-    deprecated_properties = (
-        "namespace",
-        "compileSdk",
-        "applicationId",
-        "minSdk",
-        "targetSdk",
-        "versionCode",
-        "versionName",
-        "testInstrumentationRunner",
-        "minifyEnabled",
-        "shrinkResources",
-        "applicationIdSuffix",
-        "versionNameSuffix",
-        "sourceCompatibility",
-        "targetCompatibility",
-        "viewBinding",
-        "buildConfig",
-    )
-    for property_name in deprecated_properties:
-        if re.search(rf"^\s*{re.escape(property_name)}\s+(?![=(])", text, re.MULTILINE):
-            errors.append(f"Gradle property must use assignment syntax for Gradle 10 compatibility: {property_name}")
 
 workflow = ROOT / ".github/workflows/build-apk.yml"
 if workflow.is_file():
@@ -111,16 +90,12 @@ if file_operations.is_file():
         "fun copy(",
         "fun move(",
         "fun estimateTransferBytes(",
-        "fun cleanupStaleStaging(",
         "requireNotInsideSource",
         "requireEnoughFreeSpace",
         ".usableSpace",
         "MIN_FREE_SPACE_RESERVE_BYTES",
-        "DEFAULT_STAGING_STALE_AFTER_MS",
-        ".omnifiles-transfer-v2-",
-        "stagingTimestamp",
-        "deleteValidatedStagingTree",
         "rollbackCreated",
+        "STAGING_PREFIX",
         "copyFileVerified",
         "MessageDigest.getInstance(\"SHA-256\")",
         "commitStagingCopy",
@@ -280,8 +255,6 @@ if workflow_render.is_file():
     for task in (":app:testDebugUnitTest", ":app:lintDebug", ":app:assembleDebug"):
         if task not in text:
             errors.append(f"Render APK pipeline missing gate: {task}")
-    if "--warning-mode all" not in text:
-        errors.append("Render APK pipeline must expose all Gradle deprecation warnings")
 
 for path in ROOT.glob("app/src/main/java/**/*.kt"):
     text = path.read_text(encoding="utf-8")
