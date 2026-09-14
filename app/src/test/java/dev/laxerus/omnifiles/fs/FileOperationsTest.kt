@@ -185,6 +185,66 @@ class FileOperationsTest {
         }
     }
 
+    @Test fun removesOnlyOldStructuredTransferStaging() {
+        val root = createTempDirectory("omnifiles-staging-clean-").toFile()
+        try {
+            val destination = File(root, "Target").apply { mkdir() }
+            val now = 2_000_000_000_000L
+            val staleAfter = 6L * 60L * 60L * 1000L
+            val oldTime = now - staleAfter - 10_000L
+            val freshTime = now - 30_000L
+
+            val stale = File(destination, ".omnifiles-transfer-v2-$oldTime-deadbeef").apply {
+                mkdir()
+                File(this, "partial.bin").writeText("partial")
+                setLastModified(oldTime)
+            }
+            File(stale, "partial.bin").setLastModified(oldTime)
+            val fresh = File(destination, ".omnifiles-transfer-v2-$freshTime-cafebabe").apply {
+                writeText("active")
+                setLastModified(freshTime)
+            }
+            val malformed = File(destination, ".omnifiles-transfer-v2-not-a-time-user-file").apply {
+                writeText("keep")
+                setLastModified(oldTime)
+            }
+            val legacy = File(destination, ".omnifiles-transfer-legacy").apply {
+                writeText("keep")
+                setLastModified(oldTime)
+            }
+
+            val removed = FileOperations.cleanupStaleStaging(destination, root, now, staleAfter)
+
+            assertEquals(1, removed)
+            assertFalse(stale.exists())
+            assertTrue(fresh.exists())
+            assertTrue(malformed.exists())
+            assertTrue(legacy.exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun stagingCleanupRequiresBothEncodedAgeAndFilesystemAge() {
+        val root = createTempDirectory("omnifiles-staging-age-").toFile()
+        try {
+            val destination = File(root, "Target").apply { mkdir() }
+            val now = 2_000_000_000_000L
+            val staleAfter = 6L * 60L * 60L * 1000L
+            val oldTime = now - staleAfter - 10_000L
+            val recentFilesystemTime = now - 5_000L
+            val candidate = File(destination, ".omnifiles-transfer-v2-$oldTime-feedface").apply {
+                writeText("still-active")
+                setLastModified(recentFilesystemTime)
+            }
+
+            assertEquals(0, FileOperations.cleanupStaleStaging(destination, root, now, staleAfter))
+            assertTrue(candidate.exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     private fun assertNoTransferStaging(directory: File) {
         assertTrue(
             directory.listFiles().orEmpty().none { it.name.startsWith(".omnifiles-transfer-") }
