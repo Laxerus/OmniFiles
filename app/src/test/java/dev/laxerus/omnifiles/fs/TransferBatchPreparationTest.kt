@@ -44,7 +44,7 @@ class TransferBatchPreparationTest {
                 items = listOf(Long.MAX_VALUE - 5L, 100L),
                 labelOf = { "item" },
                 estimateBytes = { bytes, _ -> bytes },
-                execute = { _, _, _ -> Unit }
+                execute = { _, _, _ -> }
             )
 
             assertTrue(events.any {
