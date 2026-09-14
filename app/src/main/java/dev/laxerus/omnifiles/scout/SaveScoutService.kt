@@ -66,14 +66,12 @@ class SaveScoutService(context: Context) {
             .filter { it.isDirectory && !it.isSymlink && isLikelySaveDirectoryName(it.name) }
             .take(MAX_LIKELY_RESULTS - output.size)
             .forEach { entry ->
+                if (output.containsKey(entry.path)) return@forEach
                 val childEntries = runCatching { adb.listDirectory(entry.path) }.getOrNull() ?: return@forEach
-                output.putIfAbsent(
-                    entry.path,
-                    SaveLocation(
-                        label = "Muhtemel save • ${entry.name}",
-                        path = entry.path,
-                        entryCount = childEntries.count(::isUsableEntry)
-                    )
+                output[entry.path] = SaveLocation(
+                    label = "Muhtemel save • ${entry.name}",
+                    path = entry.path,
+                    entryCount = childEntries.count(::isUsableEntry)
                 )
             }
     }
