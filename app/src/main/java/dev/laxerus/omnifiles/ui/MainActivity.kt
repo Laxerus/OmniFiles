@@ -2,6 +2,7 @@ package dev.laxerus.omnifiles.ui
 
 import android.content.Intent
 import android.os.Bundle
+import dev.laxerus.omnifiles.BuildConfig
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.AccessSnapshot
 import dev.laxerus.omnifiles.access.StorageAccessController
@@ -16,6 +17,7 @@ class MainActivity : OmniActivity() {
         setContentView(binding.root)
         applySystemBarInsets(binding.root)
 
+        binding.versionText.text = getString(R.string.version_label, BuildConfig.VERSION_NAME)
         binding.openFilesButton.setOnClickListener { startActivity(Intent(this, FileBrowserActivity::class.java)) }
         binding.grantAccessButton.setOnClickListener { StorageAccessController.requestSharedStorageAccess(this) }
         binding.adbButton.setOnClickListener { startActivity(Intent(this, AdbPairingActivity::class.java)) }
