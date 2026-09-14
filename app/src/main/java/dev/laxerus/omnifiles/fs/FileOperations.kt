@@ -27,7 +27,7 @@ object FileOperations {
 
     fun estimateTransferBytes(source: File, sharedRoot: File): Long {
         val root = FilePathPolicy.canonical(sharedRoot)
-        val safeSource = FilePathPolicy.requireInside(source, root)
+        val safeSource = FilePathPolicy.requireDirectEntry(source, root)
         require(safeSource.exists()) { "Kaynak öğe artık mevcut değil" }
         require(safeSource.path != root.path) { "Depolama kökünün tamamı aktarılamaz" }
 
@@ -37,7 +37,7 @@ object FileOperations {
         pending.add(safeSource)
 
         while (pending.isNotEmpty()) {
-            val current = FilePathPolicy.requireInside(pending.removeFirst(), root)
+            val current = FilePathPolicy.requireDirectEntry(pending.removeFirst(), root)
             require(current.exists()) { "Kaynak öğe tarama sırasında kayboldu: ${current.name}" }
             if (current.isFile) {
                 total = saturatingAdd(total, current.length().coerceAtLeast(0L))
@@ -48,7 +48,7 @@ object FileOperations {
             require(visitedDirectories.add(canonicalPath)) { "Döngüsel klasör bağlantısı algılandı" }
             val children = current.listFiles() ?: error("Klasör okunamadı: ${current.name}")
             children.forEach { child ->
-                pending.addLast(FilePathPolicy.requireInside(child, root))
+                pending.addLast(FilePathPolicy.requireDirectEntry(child, root))
             }
         }
         return total
@@ -56,7 +56,7 @@ object FileOperations {
 
     fun copy(source: File, destinationDirectory: File, sharedRoot: File): File {
         val root = FilePathPolicy.canonical(sharedRoot)
-        val safeSource = FilePathPolicy.requireInside(source, root)
+        val safeSource = FilePathPolicy.requireDirectEntry(source, root)
         require(safeSource.exists()) { "Kaynak öğe artık mevcut değil" }
         require(safeSource.path != root.path) { "Depolama kökünün tamamı kopyalanamaz" }
 
@@ -117,7 +117,7 @@ object FileOperations {
     }
 
     private fun requireDestinationDirectory(directory: File, root: File): File {
-        val safe = FilePathPolicy.requireInside(directory, root)
+        val safe = FilePathPolicy.requireDirectEntry(directory, root)
         require(safe.exists() && safe.isDirectory) { "Hedef klasör geçerli değil" }
         return safe
     }
@@ -168,7 +168,7 @@ object FileOperations {
         activeDirectories: MutableSet<String>,
         created: MutableList<File>
     ) {
-        val safeSource = FilePathPolicy.requireInside(source, allowedRoot)
+        val safeSource = FilePathPolicy.requireDirectEntry(source, allowedRoot)
         require(safeSource.exists()) { "Kopyalanacak öğe artık mevcut değil: ${source.name}" }
         require(!destination.exists()) { "Kopya hedefi zaten mevcut: ${destination.name}" }
 
