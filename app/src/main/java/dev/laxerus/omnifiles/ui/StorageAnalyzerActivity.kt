@@ -14,6 +14,7 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.AccessSnapshot
 import dev.laxerus.omnifiles.access.StorageAccessController
@@ -88,6 +89,7 @@ class StorageAnalyzerActivity : OmniActivity() {
         binding.cancelButton.isEnabled = true
         binding.progress.visibility = View.VISIBLE
         binding.summaryText.setText(R.string.storage_analyzer_scanning)
+        binding.categoriesContainer.removeAllViews()
         binding.filesContainer.removeAllViews()
         binding.foldersContainer.removeAllViews()
 
@@ -137,8 +139,54 @@ class StorageAnalyzerActivity : OmniActivity() {
         }
         binding.summaryText.text = summary.joinToString("\n")
 
+        renderCategories(result.categories, result.scannedBytes)
         renderEntries(binding.filesContainer, result.largestFiles)
         renderEntries(binding.foldersContainer, result.largestDirectories)
+    }
+
+    private fun renderCategories(categories: List<StorageAnalyzer.CategoryUsage>, totalBytes: Long) {
+        val container = binding.categoriesContainer
+        container.removeAllViews()
+        if (categories.isEmpty()) {
+            container.addView(TextView(this).apply {
+                setText(R.string.storage_analyzer_none)
+                setPadding(0, dp(8), 0, dp(8))
+            })
+            return
+        }
+
+        categories.forEach { usage ->
+            val row = layoutInflater.inflate(R.layout.item_storage_category, container, false)
+            val ratio = if (totalBytes > 0L) {
+                (usage.sizeBytes.toDouble() / totalBytes.toDouble()).coerceIn(0.0, 1.0)
+            } else {
+                0.0
+            }
+            val percentage = String.format(Locale.getDefault(), "%.1f%%", ratio * 100.0)
+            row.findViewById<TextView>(R.id.categoryName).setText(categoryLabel(usage.category))
+            row.findViewById<TextView>(R.id.categoryMeta).text = getString(
+                R.string.storage_analyzer_category_meta,
+                usage.fileCount,
+                formatBytes(usage.sizeBytes),
+                percentage
+            )
+            row.findViewById<LinearProgressIndicator>(R.id.categoryProgress).apply {
+                max = 1000
+                progress = (ratio * 1000.0).toInt().coerceIn(0, 1000)
+            }
+            container.addView(row)
+        }
+    }
+
+    private fun categoryLabel(category: StorageAnalyzer.FileCategory): Int = when (category) {
+        StorageAnalyzer.FileCategory.IMAGE -> R.string.storage_analyzer_category_image
+        StorageAnalyzer.FileCategory.VIDEO -> R.string.storage_analyzer_category_video
+        StorageAnalyzer.FileCategory.AUDIO -> R.string.storage_analyzer_category_audio
+        StorageAnalyzer.FileCategory.APK -> R.string.storage_analyzer_category_apk
+        StorageAnalyzer.FileCategory.ARCHIVE -> R.string.storage_analyzer_category_archive
+        StorageAnalyzer.FileCategory.DOCUMENT -> R.string.storage_analyzer_category_document
+        StorageAnalyzer.FileCategory.DATABASE -> R.string.storage_analyzer_category_database
+        StorageAnalyzer.FileCategory.OTHER -> R.string.storage_analyzer_category_other
     }
 
     private fun renderEntries(container: LinearLayout, entries: List<StorageAnalyzer.Entry>) {
