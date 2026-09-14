@@ -8,7 +8,7 @@ TOOLS="$ROOT/.render-tools"
 SDK="$ROOT/.android-sdk"
 PUBLIC="$ROOT/public"
 GRADLE_VERSION="8.11.1"
-ANDROID_PLATFORM="36"
+ANDROID_PLATFORM="37"
 BUILD_TOOLS="36.0.0"
 CMDLINE_TOOLS_REV="11076708"
 
@@ -29,12 +29,8 @@ fetch() {
   fi
 }
 
-if ! command -v unzip >/dev/null 2>&1; then
-  echo "unzip bulunamadı" >&2
-  exit 1
-fi
+command -v unzip >/dev/null 2>&1 || { echo "unzip bulunamadı" >&2; exit 1; }
 
-# Render image'ında uygun Java yoksa taşınabilir Temurin JDK 17 kullan.
 JAVA_MAJOR=""
 if command -v java >/dev/null 2>&1; then
   JAVA_MAJOR="$(java -version 2>&1 | awk -F'[\".]' '/version/ {print $2; exit}')"
@@ -86,10 +82,7 @@ log "Android SDK lisansları kabul ediliyor"
 yes | sdkmanager --licenses >/dev/null 2>&1 || true
 
 log "Android SDK $ANDROID_PLATFORM kuruluyor"
-sdkmanager \
-  "platform-tools" \
-  "platforms;android-${ANDROID_PLATFORM}" \
-  "build-tools;${BUILD_TOOLS}"
+sdkmanager "platform-tools" "platforms;android-${ANDROID_PLATFORM}" "build-tools;${BUILD_TOOLS}"
 
 log "Kaynak sanity kontrolü"
 python3 scripts/source_sanity.py
@@ -111,28 +104,7 @@ COMMIT="${RENDER_GIT_COMMIT:-unknown}"
 SIZE="$(du -h "$PUBLIC/$OUT_NAME" | awk '{print $1}')"
 cat > "$PUBLIC/index.html" <<HTML
 <!doctype html>
-<html lang="tr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>OmniFiles APK</title>
-  <style>
-    body{font-family:system-ui,sans-serif;max-width:720px;margin:48px auto;padding:0 20px;line-height:1.55;background:#111;color:#eee}
-    .card{padding:24px;border:1px solid #333;border-radius:18px;background:#181818}
-    a.button{display:inline-block;margin-top:14px;padding:13px 18px;border-radius:12px;background:#eee;color:#111;text-decoration:none;font-weight:700}
-    code{word-break:break-all;color:#bbb}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>OmniFiles</h1>
-    <p>Sürüm: <strong>0.8.0-dev-debug</strong> · Boyut: <strong>${SIZE}</strong></p>
-    <p>Kaynak commit: <code>${COMMIT}</code></p>
-    <a class="button" href="/$OUT_NAME">APK'yı indir</a>
-    <p><a href="/$OUT_NAME.sha256">SHA-256</a></p>
-  </div>
-</body>
-</html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OmniFiles APK</title><style>body{font-family:system-ui,sans-serif;max-width:720px;margin:48px auto;padding:0 20px;line-height:1.55;background:#111;color:#eee}.card{padding:24px;border:1px solid #333;border-radius:18px;background:#181818}a.button{display:inline-block;margin-top:14px;padding:13px 18px;border-radius:12px;background:#eee;color:#111;text-decoration:none;font-weight:700}code{word-break:break-all;color:#bbb}</style></head><body><div class="card"><h1>OmniFiles</h1><p>Sürüm: <strong>0.8.0-dev-debug</strong> · Boyut: <strong>${SIZE}</strong></p><p>Kaynak commit: <code>${COMMIT}</code></p><a class="button" href="/$OUT_NAME">APK'yı indir</a><p><a href="/$OUT_NAME.sha256">SHA-256</a></p></div></body></html>
 HTML
 
 log "Hazır: $PUBLIC/$OUT_NAME"
