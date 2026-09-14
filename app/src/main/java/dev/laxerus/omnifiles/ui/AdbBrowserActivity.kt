@@ -11,7 +11,6 @@ import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.FileProvider
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -186,13 +185,20 @@ class AdbBrowserActivity : OmniActivity() {
         setLoading(true)
 
         lifecycleScope.launch {
-            val result = runCatching { manager.listDirectory(safePath) }
-            result.onSuccess { entries ->
+            val result = runCatching { manager.listDirectoryDetailed(safePath) }
+            result.onSuccess { listing ->
                 currentPath = safePath
-                allEntries = entries.filter {
+                allEntries = listing.entries.filter {
                     it.name != "." && it.name != ".." && it.errorCode in listOf(null, 0)
                 }
                 binding.searchInput.setText("")
+                if (listing.skippedUnsafeEntries > 0) {
+                    Toast.makeText(
+                        this@AdbBrowserActivity,
+                        getString(R.string.adb_unsafe_entries_skipped, listing.skippedUnsafeEntries),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }.onFailure { error ->
                 allEntries = emptyList()
                 adapter.submitList(emptyList())
@@ -325,15 +331,12 @@ class AdbBrowserActivity : OmniActivity() {
     }
 
     private fun shareLocalFile(file: File) {
-        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
-        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase(Locale.ROOT))
-            ?: "application/octet-stream"
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = mime
-            putExtra(Intent.EXTRA_STREAM, uri)
-            clipData = ClipData.newUri(contentResolver, file.name, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
+        val intent = runCatching { LocalFileIntents.shareIntent(this, file) }
+            .getOrElse {
+                file.delete()
+                Toast.makeText(this, it.message ?: "Paylaşım için güvenli dosya URI'si oluşturulamadı.", Toast.LENGTH_LONG).show()
+                return
+            }
         runCatching { startActivity(Intent.createChooser(intent, getString(R.string.share))) }
             .onFailure {
                 file.delete()
@@ -389,13 +392,11 @@ class AdbBrowserActivity : OmniActivity() {
     }
 
     private fun openLocalPreview(file: File) {
-        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
-        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase(Locale.ROOT)) ?: "application/octet-stream"
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, mime)
-            clipData = ClipData.newUri(contentResolver, file.name, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
+        val intent = runCatching { LocalFileIntents.viewIntent(this, file) }
+            .getOrElse {
+                Toast.makeText(this, it.message ?: "Önizleme için güvenli dosya URI'si oluşturulamadı.", Toast.LENGTH_LONG).show()
+                return
+            }
         try {
             startActivity(intent)
         } catch (_: ActivityNotFoundException) {

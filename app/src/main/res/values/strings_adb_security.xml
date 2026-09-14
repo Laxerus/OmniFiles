@@ -1,0 +1,3 @@
+<resources>
+    <string name="adb_unsafe_entries_skipped">Güvenlik politikası nedeniyle %1$d uzak giriş gösterilmedi.</string>
+</resources>

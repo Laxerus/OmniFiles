@@ -69,22 +69,34 @@ class AdbSessionManager private constructor(context: Context) {
         }
     }
 
-    suspend fun listDirectory(path: String): List<AdbRemoteEntry> = mutex.withLock {
+    suspend fun listDirectory(path: String): List<AdbRemoteEntry> =
+        listDirectoryDetailed(path).entries
+
+    suspend fun listDirectoryDetailed(path: String): AdbDirectoryListing = mutex.withLock {
         val safePath = RemotePathPolicy.normalizeAbsolute(path)
         withContext(Dispatchers.IO) {
             withReconnectOnce { active ->
                 active.openSync().use { sync ->
-                    sync.list(safePath).mapNotNull { entry ->
-                        if (!RemotePathPolicy.isSafeChildName(entry.name)) return@mapNotNull null
-                        AdbRemoteEntry(
-                            parentPath = safePath,
-                            name = entry.name,
-                            mode = entry.mode,
-                            size = entry.size,
-                            modifiedAtMillis = entry.mtimeSec * 1000L,
-                            errorCode = entry.errorCode
-                        )
+                    val safeEntries = mutableListOf<AdbRemoteEntry>()
+                    var skippedUnsafeEntries = 0
+                    sync.list(safePath).forEach { entry ->
+                        if (!RemotePathPolicy.isSafeChildName(entry.name)) {
+                            skippedUnsafeEntries++
+                        } else {
+                            safeEntries += AdbRemoteEntry(
+                                parentPath = safePath,
+                                name = entry.name,
+                                mode = entry.mode,
+                                size = entry.size,
+                                modifiedAtMillis = entry.mtimeSec * 1000L,
+                                errorCode = entry.errorCode
+                            )
+                        }
                     }
+                    AdbDirectoryListing(
+                        entries = safeEntries,
+                        skippedUnsafeEntries = skippedUnsafeEntries
+                    )
                 }
             }
         }
@@ -157,8 +169,8 @@ class AdbSessionManager private constructor(context: Context) {
         val name = safePath.substringAfterLast('/')
         return active.openSync().use { sync ->
             sync.list(parent)
-                .firstOrNull {
-                    entry -> entry.name == name &&
+                .firstOrNull { entry ->
+                    entry.name == name &&
                         RemotePathPolicy.isSafeChildName(entry.name) &&
                         (entry.errorCode == null || entry.errorCode == 0)
                 }
