@@ -29,7 +29,7 @@ class MainActivity : OmniActivity() {
         applySystemBarInsets(binding.root)
 
         binding.versionText.text = getString(R.string.version_label, BuildConfig.VERSION_NAME)
-        binding.openFilesButton.setOnClickListener { startActivity(Intent(this, FileBrowserActivity::class.java)) }
+        binding.openFilesButton.setOnClickListener { finish() }
         binding.storageAnalyzerButton.setOnClickListener { startActivity(Intent(this, StorageAnalyzerActivity::class.java)) }
         binding.trashButton.setOnClickListener { startActivity(Intent(this, TrashActivity::class.java)) }
         binding.checksumButton.setOnClickListener { startActivity(Intent(this, ChecksumActivity::class.java)) }
