@@ -12,6 +12,7 @@ object FileOperations {
     private const val COPY_BUFFER_BYTES = 64 * 1024
     private const val STAGING_PREFIX = ".omnifiles-transfer-v2-"
     private const val DEFAULT_STAGING_STALE_AFTER_MS = 6L * 60L * 60L * 1000L
+    private const val DEFAULT_PREFLIGHT_SNAPSHOT_LIMIT = 8_192
 
     private data class CopyTask(
         val source: File,
@@ -28,6 +29,26 @@ object FileOperations {
     private data class FileSnapshot(
         val length: Long,
         val modifiedAt: Long
+    )
+
+    internal data class PreflightEntry(
+        val isDirectory: Boolean,
+        val length: Long,
+        val modifiedAt: Long
+    )
+
+    class TransferPreflight internal constructor(
+        val sourcePath: String,
+        val totalBytes: Long,
+        internal val snapshots: Map<String, PreflightEntry>?
+    ) {
+        val reusable: Boolean get() = snapshots != null
+        val snapshotCount: Int get() = snapshots?.size ?: 0
+    }
+
+    private data class ResolvedPreflight(
+        val totalBytes: Long,
+        val snapshots: Map<String, PreflightEntry>?
     )
 
     fun createDirectory(parent: File, rawName: String, sharedRoot: File): File {
@@ -48,11 +69,13 @@ object FileOperations {
         return destination.canonicalFile
     }
 
-    fun estimateTransferBytes(
+    fun prepareTransfer(
         source: File,
         sharedRoot: File,
-        isCancelled: (() -> Boolean)? = null
-    ): Long {
+        isCancelled: (() -> Boolean)? = null,
+        snapshotLimit: Int = DEFAULT_PREFLIGHT_SNAPSHOT_LIMIT
+    ): TransferPreflight {
+        require(snapshotLimit >= 0) { "Ön tarama snapshot sınırı negatif olamaz" }
         val root = FilePathPolicy.canonical(sharedRoot)
         val safeSource = FilePathPolicy.requireDirectEntry(source, root)
         require(safeSource.exists()) { "Kaynak öğe artık mevcut değil" }
@@ -61,12 +84,23 @@ object FileOperations {
         var total = 0L
         val pending = ArrayDeque<File>()
         val visitedDirectories = mutableSetOf<String>()
+        var snapshots: MutableMap<String, PreflightEntry>? =
+            if (snapshotLimit > 0) LinkedHashMap() else null
         pending.add(safeSource)
 
         while (pending.isNotEmpty()) {
             checkCancelled(isCancelled)
             val current = FilePathPolicy.requireDirectEntry(pending.removeFirst(), root)
             require(current.exists()) { "Kaynak öğe tarama sırasında kayboldu: ${current.name}" }
+
+            snapshots?.let { active ->
+                if (active.size >= snapshotLimit) {
+                    snapshots = null
+                } else {
+                    active[relativePreflightPath(safeSource, current)] = preflightEntry(current)
+                }
+            }
+
             if (current.isFile) {
                 total = saturatingAdd(total, current.length().coerceAtLeast(0L))
                 continue
@@ -81,8 +115,23 @@ object FileOperations {
             }
         }
         checkCancelled(isCancelled)
-        return total
+        return TransferPreflight(
+            sourcePath = safeSource.canonicalPath,
+            totalBytes = total,
+            snapshots = snapshots?.toMap()
+        )
     }
+
+    fun estimateTransferBytes(
+        source: File,
+        sharedRoot: File,
+        isCancelled: (() -> Boolean)? = null
+    ): Long = prepareTransfer(
+        source = source,
+        sharedRoot = sharedRoot,
+        isCancelled = isCancelled,
+        snapshotLimit = 0
+    ).totalBytes
 
     fun cleanupStaleStaging(
         directory: File,
@@ -116,7 +165,8 @@ object FileOperations {
         destinationDirectory: File,
         sharedRoot: File,
         onProgress: ((Long, Long) -> Unit)? = null,
-        isCancelled: (() -> Boolean)? = null
+        isCancelled: (() -> Boolean)? = null,
+        preflight: TransferPreflight? = null
     ): File {
         val root = FilePathPolicy.canonical(sharedRoot)
         val safeSource = FilePathPolicy.requireDirectEntry(source, root)
@@ -137,7 +187,8 @@ object FileOperations {
             val safeDestinationDirectory = requireDestinationDirectory(destinationDirectory, root)
             cleanupStaleStaging(safeDestinationDirectory, root)
             requireNotInsideSource(safeSource, safeDestinationDirectory)
-            val requiredBytes = estimateTransferBytes(safeSource, root, cancellation)
+            val resolved = resolvePreflight(safeSource, root, preflight, cancellation)
+            val requiredBytes = resolved.totalBytes
             requireEnoughFreeSpace(requiredBytes, safeDestinationDirectory)
             report(0L, requiredBytes)
             checkCancelled(cancellation)
@@ -153,7 +204,8 @@ object FileOperations {
                     created = created,
                     totalBytes = requiredBytes,
                     onProgress = ::report,
-                    isCancelled = cancellation
+                    isCancelled = cancellation,
+                    preflightSnapshots = resolved.snapshots
                 )
                 checkCancelled(cancellation)
                 commitStagingCopy(staging, preferredDestination, safeDestinationDirectory, safeSource)
@@ -177,7 +229,8 @@ object FileOperations {
         destinationDirectory: File,
         sharedRoot: File,
         onProgress: ((Long, Long) -> Unit)? = null,
-        isCancelled: (() -> Boolean)? = null
+        isCancelled: (() -> Boolean)? = null,
+        preflight: TransferPreflight? = null
     ): File {
         val root = FilePathPolicy.canonical(sharedRoot)
         val safeSource = FilePathPolicy.requireMutableTarget(source, root)
@@ -213,7 +266,8 @@ object FileOperations {
                 return destination.canonicalFile
             }
 
-            val requiredBytes = estimateTransferBytes(safeSource, root, cancellation)
+            val resolved = resolvePreflight(safeSource, root, preflight, cancellation)
+            val requiredBytes = resolved.totalBytes
             requireEnoughFreeSpace(requiredBytes, safeDestinationDirectory)
             report(0L, requiredBytes)
             checkCancelled(cancellation)
@@ -227,7 +281,8 @@ object FileOperations {
                     created = created,
                     totalBytes = requiredBytes,
                     onProgress = ::report,
-                    isCancelled = cancellation
+                    isCancelled = cancellation,
+                    preflightSnapshots = resolved.snapshots
                 )
                 checkCancelled(cancellation)
                 require(!destination.exists()) { "Hedef klasörde aynı adda bir öğe işlem sırasında oluşturuldu" }
@@ -247,6 +302,71 @@ object FileOperations {
             throw error
         } finally {
             TransferRuntime.finish(runtimeId, completed, cancelled)
+        }
+    }
+
+    private fun resolvePreflight(
+        safeSource: File,
+        root: File,
+        preflight: TransferPreflight?,
+        isCancelled: (() -> Boolean)?
+    ): ResolvedPreflight {
+        checkCancelled(isCancelled)
+        val snapshots = preflight?.snapshots
+        val rootSnapshot = snapshots?.get("")
+        if (
+            preflight != null &&
+            preflight.sourcePath == safeSource.canonicalPath &&
+            snapshots != null &&
+            rootSnapshot != null &&
+            matchesPreflight(rootSnapshot, safeSource)
+        ) {
+            return ResolvedPreflight(preflight.totalBytes.coerceAtLeast(0L), snapshots)
+        }
+
+        return ResolvedPreflight(
+            totalBytes = estimateTransferBytes(safeSource, root, isCancelled),
+            snapshots = null
+        )
+    }
+
+    private fun preflightEntry(file: File): PreflightEntry = PreflightEntry(
+        isDirectory = file.isDirectory,
+        length = if (file.isFile) file.length().coerceAtLeast(0L) else 0L,
+        modifiedAt = file.lastModified()
+    )
+
+    private fun matchesPreflight(expected: PreflightEntry, file: File): Boolean {
+        if (!file.exists()) return false
+        if (expected.isDirectory != file.isDirectory) return false
+        if (!expected.isDirectory && expected.length != file.length().coerceAtLeast(0L)) return false
+        return expected.modifiedAt == file.lastModified()
+    }
+
+    private fun relativePreflightPath(sourceRoot: File, current: File): String {
+        val rootPath = sourceRoot.canonicalPath
+        val currentPath = current.canonicalPath
+        if (currentPath == rootPath) return ""
+        require(currentPath.startsWith(rootPath + File.separator)) {
+            "Ön tarama girdisi kaynak ağacının dışında"
+        }
+        return currentPath.substring(rootPath.length + 1)
+    }
+
+    private fun validatePreflightEntry(
+        sourceRoot: File,
+        current: File,
+        snapshots: Map<String, PreflightEntry>,
+        visited: MutableSet<String>
+    ) {
+        val relative = relativePreflightPath(sourceRoot, current)
+        val expected = snapshots[relative]
+            ?: error("Kaynak ön taramadan sonra değişti; aktarımı yeniden başlat")
+        check(visited.add(relative)) {
+            "Ön tarama girdisi birden fazla kez ziyaret edildi"
+        }
+        check(matchesPreflight(expected, current)) {
+            "Kaynak ön taramadan sonra değişti; aktarımı yeniden başlat"
         }
     }
 
@@ -370,10 +490,12 @@ object FileOperations {
         created: MutableList<File>,
         totalBytes: Long,
         onProgress: ((Long, Long) -> Unit)?,
-        isCancelled: (() -> Boolean)?
+        isCancelled: (() -> Boolean)?,
+        preflightSnapshots: Map<String, PreflightEntry>?
     ) {
         val pending = ArrayDeque<CopyTask>()
         val visitedDirectories = mutableSetOf<String>()
+        val visitedPreflight = if (preflightSnapshots != null) mutableSetOf<String>() else null
         var copiedBytes = 0L
         pending.addLast(CopyTask(source, destination))
 
@@ -398,6 +520,9 @@ object FileOperations {
             }
 
             require(safeSource.exists()) { "Kopyalanacak öğe artık mevcut değil: ${safeSource.name}" }
+            if (preflightSnapshots != null && visitedPreflight != null) {
+                validatePreflightEntry(source, safeSource, preflightSnapshots, visitedPreflight)
+            }
             require(!task.destination.exists()) { "Kopya hedefi zaten mevcut: ${task.destination.name}" }
 
             if (!safeSource.isDirectory) {
@@ -437,6 +562,12 @@ object FileOperations {
                 checkCancelled(isCancelled)
                 val safeChild = FilePathPolicy.requireDirectEntry(children[index], allowedRoot)
                 pending.addFirst(CopyTask(safeChild, File(task.destination, safeChild.name)))
+            }
+        }
+
+        if (preflightSnapshots != null && visitedPreflight != null) {
+            check(visitedPreflight.size == preflightSnapshots.size) {
+                "Kaynak ön taramadan sonra değişti; aktarımı yeniden başlat"
             }
         }
     }
