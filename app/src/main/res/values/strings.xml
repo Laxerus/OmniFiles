@@ -67,6 +67,10 @@
     <string name="delete_message">Seçilen öğe doğrudan silinmek yerine OmniFiles çöp alanına taşınacak.</string>
     <string name="cancel">İptal</string>
     <string name="move_to_trash">Çöpe taşı</string>
+    <string name="moved_to_trash">Çöpe taşındı.</string>
+    <string name="undo">Geri al</string>
+    <string name="trash_restored">Öğe eski konumuna geri yüklendi.</string>
+    <string name="trash_restore_failed">Geri alma başarısız; çöp kopyası korunuyor.</string>
     <string name="save_scout_title">Save Scout</string>
     <string name="save_scout_help">Bir uygulama seç veya paket adını yaz. OmniFiles standart oyun/save klasörlerini ADB üzerinden güvenli biçimde tarar.</string>
     <string name="package_name_hint">Paket adı (ör. com.example.game)</string>
