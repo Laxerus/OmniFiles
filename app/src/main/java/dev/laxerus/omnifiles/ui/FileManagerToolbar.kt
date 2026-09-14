@@ -15,8 +15,15 @@ class FileManagerToolbar @JvmOverloads constructor(
     init {
         inflateMenu(R.menu.menu_file_browser)
         setOnMenuItemClickListener { item ->
-            if (item.itemId != R.id.actionSettingsTools) return@setOnMenuItemClickListener false
-            context.startActivity(Intent(context, MainActivity::class.java))
+            val target = when (item.itemId) {
+                R.id.actionSettingsTools -> MainActivity::class.java
+                R.id.actionStorageAnalyzer -> StorageAnalyzerActivity::class.java
+                R.id.actionTrash -> TrashActivity::class.java
+                R.id.actionChecksum -> ChecksumActivity::class.java
+                R.id.actionWirelessAdb -> AdbPairingActivity::class.java
+                else -> null
+            } ?: return@setOnMenuItemClickListener false
+            context.startActivity(Intent(context, target))
             true
         }
     }
