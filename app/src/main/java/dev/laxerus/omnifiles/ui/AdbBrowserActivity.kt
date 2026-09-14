@@ -46,6 +46,7 @@ class AdbBrowserActivity : OmniActivity() {
             source.delete()
             return@registerForActivityResult
         }
+        setLoading(true)
         lifecycleScope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) {
@@ -55,6 +56,7 @@ class AdbBrowserActivity : OmniActivity() {
                 }
             }
             source.delete()
+            setLoading(false)
             Toast.makeText(
                 this@AdbBrowserActivity,
                 if (result.isSuccess) R.string.adb_export_done else R.string.adb_export_failed,
@@ -72,7 +74,7 @@ class AdbBrowserActivity : OmniActivity() {
         rootPath = runCatching {
             RemotePathPolicy.normalizeAbsolute(intent.getStringExtra(EXTRA_INITIAL_PATH) ?: DEFAULT_PATH)
         }.getOrDefault(DEFAULT_PATH)
-        currentPath = rootPath
+        restoreState(savedInstanceState)
 
         binding.toolbar.title = getString(R.string.adb_browse_title)
         binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
@@ -84,6 +86,9 @@ class AdbBrowserActivity : OmniActivity() {
         binding.list.layoutManager = LinearLayoutManager(this)
         binding.list.adapter = adapter
         binding.newFolderButton.visibility = View.GONE
+        binding.transferText.visibility = View.GONE
+        binding.pasteButton.visibility = View.GONE
+        binding.cancelTransferButton.visibility = View.GONE
 
         binding.searchInput.doAfterTextChanged { renderEntries() }
         binding.hiddenSwitch.setOnCheckedChangeListener { _, checked ->
@@ -99,6 +104,15 @@ class AdbBrowserActivity : OmniActivity() {
             }
             renderEntries()
         }
+        binding.hiddenSwitch.isChecked = showHidden
+        binding.sortGroup.check(
+            when (sortMode) {
+                SortMode.NAME -> R.id.sortNameButton
+                SortMode.DATE -> R.id.sortDateButton
+                SortMode.SIZE -> R.id.sortSizeButton
+            }
+        )
+        savedInstanceState?.getString(STATE_SEARCH_QUERY)?.takeIf { it.isNotEmpty() }?.let(binding.searchInput::setText)
 
         prunePreviewCache()
         if (manager.endpoint() == null) {
@@ -108,6 +122,31 @@ class AdbBrowserActivity : OmniActivity() {
         }
         Toast.makeText(this, R.string.adb_long_press_export, Toast.LENGTH_SHORT).show()
         load(currentPath)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_CURRENT_PATH, currentPath)
+        outState.putString(STATE_SORT_MODE, sortMode.name)
+        outState.putBoolean(STATE_SHOW_HIDDEN, showHidden)
+        outState.putString(STATE_SEARCH_QUERY, binding.searchInput.text?.toString().orEmpty())
+        pendingExport?.let { outState.putString(STATE_PENDING_EXPORT, it.path) }
+        super.onSaveInstanceState(outState)
+    }
+
+    private fun restoreState(savedInstanceState: Bundle?) {
+        showHidden = savedInstanceState?.getBoolean(STATE_SHOW_HIDDEN, false) ?: false
+        sortMode = savedInstanceState?.getString(STATE_SORT_MODE)
+            ?.let { runCatching { SortMode.valueOf(it) }.getOrNull() }
+            ?: SortMode.NAME
+
+        currentPath = savedInstanceState?.getString(STATE_CURRENT_PATH)
+            ?.let { runCatching { RemotePathPolicy.normalizeAbsolute(it) }.getOrNull() }
+            ?.takeIf(::isInsideRoot)
+            ?: rootPath
+
+        pendingExport = savedInstanceState?.getString(STATE_PENDING_EXPORT)
+            ?.let(::File)
+            ?.let(::safePreviewFileOrNull)
     }
 
     private fun navigateUpOrFinish() {
@@ -132,28 +171,27 @@ class AdbBrowserActivity : OmniActivity() {
             Toast.makeText(this, "Tarayıcı kökünün dışına çıkılamaz.", Toast.LENGTH_LONG).show()
             return
         }
-        loading = true
         binding.pathText.text = safePath
         binding.emptyText.visibility = View.VISIBLE
         binding.emptyText.text = getString(R.string.adb_loading)
+        setLoading(true)
 
         lifecycleScope.launch {
-            runCatching { manager.listDirectory(safePath) }
-                .onSuccess { entries ->
-                    currentPath = safePath
-                    allEntries = entries.filter {
-                        it.name != "." && it.name != ".." && it.errorCode in listOf(null, 0)
-                    }
-                    binding.searchInput.setText("")
-                    renderEntries()
+            val result = runCatching { manager.listDirectory(safePath) }
+            result.onSuccess { entries ->
+                currentPath = safePath
+                allEntries = entries.filter {
+                    it.name != "." && it.name != ".." && it.errorCode in listOf(null, 0)
                 }
-                .onFailure { error ->
-                    allEntries = emptyList()
-                    adapter.submitList(emptyList())
-                    binding.emptyText.text = error.message ?: "ADB klasörü okunamadı"
-                    binding.emptyText.visibility = View.VISIBLE
-                }
-            loading = false
+                binding.searchInput.setText("")
+            }.onFailure { error ->
+                allEntries = emptyList()
+                adapter.submitList(emptyList())
+                binding.emptyText.text = error.message ?: "ADB klasörü okunamadı"
+                binding.emptyText.visibility = View.VISIBLE
+            }
+            setLoading(false)
+            if (result.isSuccess) renderEntries()
         }
     }
 
@@ -187,6 +225,7 @@ class AdbBrowserActivity : OmniActivity() {
     }
 
     private fun openEntry(entry: AdbRemoteEntry) {
+        if (loading) return
         when {
             entry.isDirectory -> load(entry.path)
             entry.isSymlink -> Toast.makeText(this, R.string.adb_symlink_blocked, Toast.LENGTH_SHORT).show()
@@ -196,9 +235,7 @@ class AdbBrowserActivity : OmniActivity() {
 
     private fun exportEntry(entry: AdbRemoteEntry) {
         if (entry.isDirectory || entry.isSymlink || loading) return
-        loading = true
-        binding.emptyText.visibility = View.VISIBLE
-        binding.emptyText.text = "Dosya dışa aktarım için hazırlanıyor…"
+        setLoading(true)
         lifecycleScope.launch {
             val target = newPreviewFile(entry.name)
             runCatching { manager.pull(entry.path, target) }
@@ -212,16 +249,13 @@ class AdbBrowserActivity : OmniActivity() {
                     target.delete()
                     Toast.makeText(this@AdbBrowserActivity, it.message ?: "Dosya alınamadı", Toast.LENGTH_LONG).show()
                 }
-            binding.emptyText.visibility = if (adapter.currentList.isEmpty()) View.VISIBLE else View.GONE
-            loading = false
+            setLoading(false)
         }
     }
 
     private fun preview(entry: AdbRemoteEntry) {
         if (loading) return
-        loading = true
-        binding.emptyText.visibility = View.VISIBLE
-        binding.emptyText.text = "Dosya geçici alana alınıyor…"
+        setLoading(true)
         lifecycleScope.launch {
             val target = newPreviewFile(entry.name)
             runCatching { manager.pull(entry.path, target) }
@@ -230,9 +264,20 @@ class AdbBrowserActivity : OmniActivity() {
                     target.delete()
                     Toast.makeText(this@AdbBrowserActivity, it.message ?: "Dosya alınamadı", Toast.LENGTH_LONG).show()
                 }
-            binding.emptyText.visibility = if (adapter.currentList.isEmpty()) View.VISIBLE else View.GONE
-            loading = false
+            setLoading(false)
         }
+    }
+
+    private fun setLoading(value: Boolean) {
+        loading = value
+        binding.operationProgress.visibility = if (value) View.VISIBLE else View.GONE
+        binding.searchInput.isEnabled = !value
+        binding.hiddenSwitch.isEnabled = !value
+        for (index in 0 until binding.sortGroup.childCount) {
+            binding.sortGroup.getChildAt(index).isEnabled = !value
+        }
+        binding.list.alpha = if (value) 0.65f else 1f
+        if (!value && adapter.currentList.isNotEmpty()) binding.emptyText.visibility = View.GONE
     }
 
     private fun openLocalPreview(file: File) {
@@ -254,6 +299,12 @@ class AdbBrowserActivity : OmniActivity() {
 
     private fun previewRoot(): File = File(cacheDir, "adb-preview").apply { mkdirs() }
 
+    private fun safePreviewFileOrNull(candidate: File): File? = runCatching {
+        val root = previewRoot().canonicalFile
+        val file = candidate.canonicalFile
+        file.takeIf { it.isFile && it.path.startsWith(root.path + File.separator) }
+    }.getOrNull()
+
     private fun prunePreviewCache() {
         previewRoot().listFiles()?.forEach { file ->
             if (file.isFile && System.currentTimeMillis() - file.lastModified() > PREVIEW_MAX_AGE_MS) file.delete()
@@ -264,8 +315,10 @@ class AdbBrowserActivity : OmniActivity() {
         name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(96).ifBlank { "preview.bin" }
 
     override fun onDestroy() {
-        pendingExport?.delete()
-        pendingExport = null
+        if (!isChangingConfigurations) {
+            pendingExport?.delete()
+            pendingExport = null
+        }
         super.onDestroy()
     }
 
@@ -273,5 +326,10 @@ class AdbBrowserActivity : OmniActivity() {
         const val EXTRA_INITIAL_PATH = "dev.laxerus.omnifiles.extra.INITIAL_PATH"
         private const val DEFAULT_PATH = "/sdcard/Android/data"
         private const val PREVIEW_MAX_AGE_MS = 24L * 60L * 60L * 1000L
+        private const val STATE_CURRENT_PATH = "adb_current_path"
+        private const val STATE_SORT_MODE = "adb_sort_mode"
+        private const val STATE_SHOW_HIDDEN = "adb_show_hidden"
+        private const val STATE_SEARCH_QUERY = "adb_search_query"
+        private const val STATE_PENDING_EXPORT = "adb_pending_export"
     }
 }
