@@ -8,6 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.util.ArrayDeque
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.io.path.createTempDirectory
 
 class FileOperationsTest {
@@ -108,6 +109,61 @@ class FileOperationsTest {
             assertArrayEquals(payload, copied.readBytes())
             assertEquals("payload.bin", copied.name)
             assertEquals(source.lastModified(), copied.lastModified())
+            assertNoTransferStaging(destination)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun reportsMonotonicByteProgressAndFinishesAtTotal() {
+        val root = createTempDirectory("omnifiles-copy-progress-").toFile()
+        try {
+            val payload = ByteArray(320 * 1024) { index -> (index * 13).toByte() }
+            val source = File(root, "progress.bin").apply { writeBytes(payload) }
+            val destination = File(root, "Backup").apply { mkdir() }
+            val updates = mutableListOf<Pair<Long, Long>>()
+
+            val copied = FileOperations.copy(
+                source,
+                destination,
+                root,
+                onProgress = { copiedBytes, totalBytes -> updates += copiedBytes to totalBytes }
+            )
+
+            assertArrayEquals(payload, copied.readBytes())
+            assertTrue(updates.isNotEmpty())
+            assertEquals(0L to payload.size.toLong(), updates.first())
+            assertEquals(payload.size.toLong() to payload.size.toLong(), updates.last())
+            assertTrue(updates.zipWithNext().all { (left, right) -> right.first >= left.first })
+            assertTrue(updates.all { (_, total) -> total == payload.size.toLong() })
+            assertNoTransferStaging(destination)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun cancellationRollsBackPartialStagingWithoutCommittingDestination() {
+        val root = createTempDirectory("omnifiles-copy-cancel-").toFile()
+        try {
+            val payload = ByteArray(768 * 1024) { index -> (index * 17).toByte() }
+            val source = File(root, "cancel.bin").apply { writeBytes(payload) }
+            val destination = File(root, "Backup").apply { mkdir() }
+            val copiedBytes = AtomicLong(0L)
+
+            assertThrows(TransferCancelledException::class.java) {
+                FileOperations.copy(
+                    source,
+                    destination,
+                    root,
+                    onProgress = { copied, _ -> copiedBytes.set(copied) },
+                    isCancelled = { copiedBytes.get() >= 128L * 1024L }
+                )
+            }
+
+            assertTrue(source.isFile)
+            assertArrayEquals(payload, source.readBytes())
+            assertFalse(File(destination, "cancel.bin").exists())
+            assertTrue(copiedBytes.get() >= 128L * 1024L)
             assertNoTransferStaging(destination)
         } finally {
             root.deleteRecursively()
