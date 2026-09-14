@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_hub_toolbar_subtitle">Sistem erişimi ve gelişmiş araçlar</string>
+    <string name="settings_section_phone">Telefon ayarları</string>
+    <string name="settings_section_tools">OmniFiles araçları</string>
+    <string name="settings_storage_access_title">Tüm dosyalara erişim</string>
+    <string name="settings_storage_access_summary">OmniFiles’ın ortak depolamayı normal bir dosya yöneticisi gibi okuyup yönetebilmesi için Android’in uygulamaya özel erişim ekranını aç.</string>
+    <string name="settings_storage_access_open">Erişimi yönet</string>
+    <string name="settings_developer_title">Geliştirici seçenekleri</string>
+    <string name="settings_developer_summary">Kablosuz hata ayıklama Android tarafından ayrı bir herkese açık derin bağlantı sunmadığı için en yakın resmi Geliştirici seçenekleri ekranını açar.</string>
+    <string name="settings_developer_open">Geliştirici seçeneklerini aç</string>
+    <string name="settings_wifi_title">Wi‑Fi ayarları</string>
+    <string name="settings_wifi_summary">Kablosuz ADB eşleştirmesinde ağ değiştirmek veya bağlantıyı kontrol etmek için doğrudan Wi‑Fi ayarlarına git.</string>
+    <string name="settings_wifi_open">Wi‑Fi ayarlarını aç</string>
+    <string name="settings_app_details_title">OmniFiles uygulama ayarları</string>
+    <string name="settings_app_details_summary">İzinlar, pil, depolama ve Android’in OmniFiles için sunduğu diğer uygulama seçeneklerini doğrudan aç.</string>
+    <string name="settings_app_details_open">Uygulama ayarlarını aç</string>
+    <string name="settings_status_ready">Hazır</string>
+    <string name="settings_status_attention">Ayarlanmalı</string>
+    <string name="settings_status_detected">Algılandı</string>
+    <string name="settings_status_unknown">Yok / bilinmiyor</string>
+    <string name="settings_quick_tools">Hızlı araçlar</string>
+    <string name="settings_storage_tools">Depolama ve dosyalar</string>
+    <string name="settings_adb_tools">Kablosuz ADB ve gelişmiş erişim</string>
+    <string name="settings_developer_tools">Geliştirici araçları</string>
+    <string name="settings_open_failed">İlgili Android ayar ekranı açılamadı.</string>
+    <string name="toolbar_storage_analyzer">Depolama analizi</string>
+    <string name="toolbar_trash">Çöp kutusu</string>
+    <string name="toolbar_checksum">SHA-256 doğrulama</string>
+    <string name="toolbar_wireless_adb">Kablosuz ADB</string>
+</resources>
