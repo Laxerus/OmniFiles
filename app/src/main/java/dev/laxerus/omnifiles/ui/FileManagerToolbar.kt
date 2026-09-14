@@ -9,7 +9,7 @@ import dev.laxerus.omnifiles.R
 class FileManagerToolbar @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
-    defStyleAttr: Int = com.google.android.material.R.attr.toolbarStyle
+    defStyleAttr: Int = androidx.appcompat.R.attr.toolbarStyle
 ) : MaterialToolbar(context, attrs, defStyleAttr) {
 
     init {
