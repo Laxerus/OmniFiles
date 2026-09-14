@@ -60,6 +60,7 @@ require(
     '@+id/actionWirelessAdb',
     '@drawable/ic_settings_24',
 )
+
 require(
     "app/src/main/java/dev/laxerus/omnifiles/access/SystemSettingsNavigator.kt",
     "Destination.ALL_FILES_ACCESS",
@@ -78,8 +79,6 @@ require(
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbPairingActivity.kt",
-    "binding.settingsButton.setOnClickListener",
-    "binding.wifiSettingsButton.setOnClickListener",
     "SystemSettingsNavigator.Destination.DEVELOPER_OPTIONS",
     "SystemSettingsNavigator.Destination.WIFI",
 )
@@ -87,16 +86,28 @@ require(
     "app/src/main/res/layout/activity_adb_pairing.xml",
     '@+id/settingsButton',
     '@+id/wifiSettingsButton',
-    '@string/settings_developer_open',
-    '@string/settings_wifi_open',
     'app:cardCornerRadius="24dp"',
 )
+
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/MainActivity.kt",
     "binding.toolbar.setNavigationOnClickListener { finish() }",
-    "binding.developerSettingsButton.setOnClickListener",
-    "binding.wifiSettingsButton.setOnClickListener",
-    "binding.appDetailsButton.setOnClickListener",
+    "binding.storageAccessCard.setOnClickListener",
+    "binding.developerSettingsCard.setOnClickListener",
+    "binding.wifiSettingsCard.setOnClickListener",
+    "binding.appDetailsCard.setOnClickListener",
+    "binding.storageAnalyzerCard.setOnClickListener",
+    "binding.trashCard.setOnClickListener",
+    "binding.checksumCard.setOnClickListener",
+    "binding.adbCard.setOnClickListener",
+    "binding.adbFilesCard.setOnClickListener",
+    "binding.saveScoutCard.setOnClickListener",
+    "binding.sqliteStudioCard.setOnClickListener",
+    "binding.storageStatusChip",
+    "binding.adbStatusChip",
+    "binding.rootStatusChip",
+    "openAdbTool(",
+    "openStorageAccessSettings()",
     "SystemSettingsNavigator.Destination.DEVELOPER_OPTIONS",
     "SystemSettingsNavigator.Destination.WIFI",
     "SystemSettingsNavigator.Destination.APP_DETAILS",
@@ -104,28 +115,52 @@ require(
 require(
     "app/src/main/res/layout/activity_main.xml",
     '@+id/toolbar',
-    '@+id/grantAccessButton',
-    '@+id/developerSettingsButton',
-    '@+id/wifiSettingsButton',
-    '@+id/appDetailsButton',
-    '@string/settings_section_phone',
-    '@string/settings_section_tools',
-    'app:cardCornerRadius="24dp"',
-)
-require(
-    "app/src/main/res/values/strings_navigation.xml",
-    "settings_hub_title",
-    "settings_hub_subtitle",
-    "grant_access_inline",
+    '@+id/storageStatusChip',
+    '@+id/adbStatusChip',
+    '@+id/rootStatusChip',
+    '@+id/storageAccessCard',
+    '@+id/developerSettingsCard',
+    '@+id/wifiSettingsCard',
+    '@+id/appDetailsCard',
+    '@+id/storageAnalyzerCard',
+    '@+id/trashCard',
+    '@+id/checksumCard',
+    '@+id/adbCard',
+    '@+id/adbFilesCard',
+    '@+id/saveScoutCard',
+    '@+id/sqliteStudioCard',
+    '@drawable/ic_chevron_right_24',
+    '@drawable/ic_security_24',
+    '@drawable/ic_search_24',
+    '@drawable/ic_database_24',
+    'android:foreground="?attr/selectableItemBackground"',
+    'app:cardCornerRadius="22dp"',
 )
 require(
     "app/src/main/res/values/strings_settings_hub.xml",
-    "settings_storage_access_title",
-    "settings_developer_title",
-    "settings_wifi_title",
-    "settings_app_details_title",
-    "settings_open_failed",
+    "settings_overview_title",
+    "settings_section_phone",
+    "settings_section_files",
+    "settings_section_adb",
+    "settings_section_developer",
+    "settings_storage_access_ready_summary",
+    "settings_analyzer_needs_access",
+    "settings_adb_browser_needs_setup",
+    "settings_save_scout_needs_setup",
+    "settings_status_storage_ready",
+    "settings_status_adb_connected",
+    "settings_status_root_detected",
+    "settings_requires_adb",
 )
+
+for drawable in (
+    "ic_chevron_right_24.xml",
+    "ic_security_24.xml",
+    "ic_search_24.xml",
+    "ic_database_24.xml",
+):
+    if not (root / "app/src/main/res/drawable" / drawable).is_file():
+        errors.append(f"missing modern settings drawable: {drawable}")
 
 if errors:
     print("OmniFiles file-manager shell sanity: FAILED")

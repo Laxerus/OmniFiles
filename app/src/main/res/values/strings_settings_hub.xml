@@ -1,28 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="settings_hub_toolbar_subtitle">Sistem erişimi ve gelişmiş araçlar</string>
-    <string name="settings_section_phone">Telefon ayarları</string>
-    <string name="settings_section_tools">OmniFiles araçları</string>
+    <string name="settings_hub_toolbar_subtitle">Telefon, erişim ve araçlar</string>
+    <string name="settings_overview_title">OmniFiles durumu</string>
+    <string name="settings_overview_summary">Depolama, ADB ve gelişmiş erişim durumunu tek bakışta gör.</string>
+    <string name="settings_section_phone">Telefon ve izinler</string>
+    <string name="settings_section_files">Dosya araçları</string>
+    <string name="settings_section_adb">Kablosuz ADB</string>
+    <string name="settings_section_developer">Geliştirici</string>
+
     <string name="settings_storage_access_title">Tüm dosyalara erişim</string>
-    <string name="settings_storage_access_summary">OmniFiles’ın ortak depolamayı normal bir dosya yöneticisi gibi okuyup yönetebilmesi için Android’in uygulamaya özel erişim ekranını aç.</string>
-    <string name="settings_storage_access_open">Erişimi yönet</string>
+    <string name="settings_storage_access_summary">Android’in OmniFiles’a özel dosya erişim sayfasını aç.</string>
+    <string name="settings_storage_access_ready_summary">Erişim hazır. İzni değiştirmek için Android ayarını aç.</string>
+    <string name="settings_storage_access_required_summary">Dosyaları yönetebilmek için Android’den erişim izni ver.</string>
     <string name="settings_developer_title">Geliştirici seçenekleri</string>
-    <string name="settings_developer_summary">Kablosuz hata ayıklama Android tarafından ayrı bir herkese açık derin bağlantı sunmadığı için en yakın resmi Geliştirici seçenekleri ekranını açar.</string>
-    <string name="settings_developer_open">Geliştirici seçeneklerini aç</string>
+    <string name="settings_developer_summary">Kablosuz hata ayıklama ve geliştirici ayarlarına git.</string>
     <string name="settings_wifi_title">Wi‑Fi ayarları</string>
-    <string name="settings_wifi_summary">Kablosuz ADB eşleştirmesinde ağ değiştirmek veya bağlantıyı kontrol etmek için doğrudan Wi‑Fi ayarlarına git.</string>
-    <string name="settings_wifi_open">Wi‑Fi ayarlarını aç</string>
+    <string name="settings_wifi_summary">Kablosuz ADB için bağlı olduğun ağı kontrol et veya değiştir.</string>
     <string name="settings_app_details_title">OmniFiles uygulama ayarları</string>
-    <string name="settings_app_details_summary">İzinler, pil, depolama ve Android’in OmniFiles için sunduğu diğer uygulama seçeneklerini doğrudan aç.</string>
-    <string name="settings_app_details_open">Uygulama ayarlarını aç</string>
+    <string name="settings_app_details_summary">İzinlar, pil ve Android’in OmniFiles için sunduğu seçenekleri aç.</string>
+
+    <string name="settings_analyzer_summary">Neyin ne kadar alan kapladığını bul ve büyük dosyaları incele.</string>
+    <string name="settings_analyzer_needs_access">Analiz için önce tüm dosyalara erişim gerekli.</string>
+    <string name="settings_trash_summary">Silinen öğeleri görüntüle, geri yükle veya kalıcı temizle.</string>
+    <string name="settings_trash_count_summary">%1$d öğe çöp kutusunda</string>
+    <string name="settings_checksum_summary">Dosyaların SHA‑256 değerini hesapla ve beklenen hash ile karşılaştır.</string>
+    <string name="settings_adb_setup_summary">Bu telefonla eşleştir, bağlantıyı kur ve ADB durumunu yönet.</string>
+    <string name="settings_adb_browser_summary">ADB üzerinden erişilebilir dosyaları güvenli biçimde görüntüle.</string>
+    <string name="settings_adb_browser_needs_setup">Önce Kablosuz ADB bağlantısını kur.</string>
+    <string name="settings_save_scout_summary">Oyun ve uygulama kayıtlarını erişilebilir konumlarda tara.</string>
+    <string name="settings_save_scout_needs_setup">Save Scout için önce Kablosuz ADB bağlantısını kur.</string>
+    <string name="settings_sqlite_summary">SQLite veritabanlarını çalışma kopyasında güvenli biçimde incele ve düzenle.</string>
+
     <string name="settings_status_ready">Hazır</string>
-    <string name="settings_status_attention">Ayarlanmalı</string>
+    <string name="settings_status_attention">İzin gerekli</string>
     <string name="settings_status_detected">Algılandı</string>
-    <string name="settings_status_unknown">Yok / bilinmiyor</string>
-    <string name="settings_storage_tools">Depolama ve dosyalar</string>
-    <string name="settings_adb_tools">Kablosuz ADB ve gelişmiş erişim</string>
-    <string name="settings_developer_tools">Geliştirici araçları</string>
+    <string name="settings_status_unknown">Yok</string>
+    <string name="settings_status_storage_ready">Depolama · Hazır</string>
+    <string name="settings_status_storage_required">Depolama · İzin gerekli</string>
+    <string name="settings_status_adb_checking">ADB · Kontrol ediliyor</string>
+    <string name="settings_status_adb_connected">ADB · Bağlı</string>
+    <string name="settings_status_adb_unreachable">ADB · Erişilemiyor</string>
+    <string name="settings_status_adb_not_configured">ADB · Ayarlanmadı</string>
+    <string name="settings_status_root_detected">Root · Algılandı</string>
+    <string name="settings_status_root_unknown">Root · Yok</string>
+    <string name="settings_requires_adb">Önce Kablosuz ADB bağlantısını kur.</string>
+    <string name="settings_requires_storage">Önce tüm dosyalara erişim izni gerekli.</string>
     <string name="settings_open_failed">İlgili Android ayar ekranı açılamadı.</string>
+
     <string name="toolbar_storage_analyzer">Depolama analizi</string>
     <string name="toolbar_trash">Çöp kutusu</string>
     <string name="toolbar_checksum">SHA-256 doğrulama</string>

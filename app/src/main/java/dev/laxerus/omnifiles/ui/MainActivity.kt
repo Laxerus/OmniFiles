@@ -32,42 +32,45 @@ class MainActivity : OmniActivity() {
 
         binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
         binding.toolbar.setNavigationOnClickListener { finish() }
-        binding.versionText.text = getString(R.string.version_label, BuildConfig.VERSION_NAME)
+        binding.versionText.text = BuildConfig.VERSION_NAME
 
-        binding.grantAccessButton.setOnClickListener {
-            if (!StorageAccessController.requestSharedStorageAccess(this)) {
-                Toast.makeText(this, R.string.settings_open_failed, Toast.LENGTH_LONG).show()
-            }
+        binding.storageAccessCard.setOnClickListener {
+            openStorageAccessSettings()
         }
-        binding.developerSettingsButton.setOnClickListener {
+        binding.developerSettingsCard.setOnClickListener {
             openSystemSettings(SystemSettingsNavigator.Destination.DEVELOPER_OPTIONS)
         }
-        binding.wifiSettingsButton.setOnClickListener {
+        binding.wifiSettingsCard.setOnClickListener {
             openSystemSettings(SystemSettingsNavigator.Destination.WIFI)
         }
-        binding.appDetailsButton.setOnClickListener {
+        binding.appDetailsCard.setOnClickListener {
             openSystemSettings(SystemSettingsNavigator.Destination.APP_DETAILS)
         }
 
-        binding.storageAnalyzerButton.setOnClickListener {
-            startActivity(Intent(this, StorageAnalyzerActivity::class.java))
+        binding.storageAnalyzerCard.setOnClickListener {
+            if (StorageAccessController.hasSharedStorageAccess(this)) {
+                startActivity(Intent(this, StorageAnalyzerActivity::class.java))
+            } else {
+                Toast.makeText(this, R.string.settings_requires_storage, Toast.LENGTH_SHORT).show()
+                openStorageAccessSettings()
+            }
         }
-        binding.trashButton.setOnClickListener {
+        binding.trashCard.setOnClickListener {
             startActivity(Intent(this, TrashActivity::class.java))
         }
-        binding.checksumButton.setOnClickListener {
+        binding.checksumCard.setOnClickListener {
             startActivity(Intent(this, ChecksumActivity::class.java))
         }
-        binding.adbButton.setOnClickListener {
+        binding.adbCard.setOnClickListener {
             startActivity(Intent(this, AdbPairingActivity::class.java))
         }
-        binding.adbFilesButton.setOnClickListener {
-            startActivity(Intent(this, AdbBrowserActivity::class.java))
+        binding.adbFilesCard.setOnClickListener {
+            openAdbTool(AdbBrowserActivity::class.java)
         }
-        binding.saveScoutButton.setOnClickListener {
-            startActivity(Intent(this, SaveScoutActivity::class.java))
+        binding.saveScoutCard.setOnClickListener {
+            openAdbTool(SaveScoutActivity::class.java)
         }
-        binding.sqliteStudioButton.setOnClickListener {
+        binding.sqliteStudioCard.setOnClickListener {
             startActivity(Intent(this, SqliteStudioActivity::class.java))
         }
     }
@@ -79,38 +82,70 @@ class MainActivity : OmniActivity() {
         renderTrashCount()
     }
 
+    private fun openStorageAccessSettings() {
+        if (!StorageAccessController.requestSharedStorageAccess(this)) {
+            Toast.makeText(this, R.string.settings_open_failed, Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun openSystemSettings(destination: SystemSettingsNavigator.Destination) {
         if (!SystemSettingsNavigator.open(this, destination)) {
             Toast.makeText(this, R.string.settings_open_failed, Toast.LENGTH_LONG).show()
         }
     }
 
+    private fun openAdbTool(target: Class<*>) {
+        if (AccessSnapshot.read(this).adbEndpointConfigured) {
+            startActivity(Intent(this, target))
+        } else {
+            Toast.makeText(this, R.string.settings_requires_adb, Toast.LENGTH_SHORT).show()
+            startActivity(Intent(this, AdbPairingActivity::class.java))
+        }
+    }
+
     private fun renderStatus() {
         val state = AccessSnapshot.read(this)
-        val storageState = getString(
-            if (state.sharedStorage) R.string.settings_status_ready else R.string.settings_status_attention
+
+        binding.storageStatusChip.setText(
+            if (state.sharedStorage) R.string.settings_status_storage_ready
+            else R.string.settings_status_storage_required
         )
-        val rootState = getString(
-            if (state.rootBinaryPresent) R.string.settings_status_detected else R.string.settings_status_unknown
+        binding.rootStatusChip.setText(
+            if (state.rootBinaryPresent) R.string.settings_status_root_detected
+            else R.string.settings_status_root_unknown
         )
-        binding.storageStatus.text = "${getString(R.string.direct_storage)}: $storageState"
-        binding.rootStatus.text = "${getString(R.string.root_status)}: $rootState"
-        binding.grantAccessButton.setText(R.string.settings_storage_access_open)
-        binding.grantAccessButton.contentDescription = if (state.sharedStorage) {
-            "${getString(R.string.settings_storage_access_open)} • ${getString(R.string.storage_access_ready)}"
-        } else {
-            "${getString(R.string.settings_storage_access_open)} • ${getString(R.string.settings_status_attention)}"
-        }
-        binding.storageAnalyzerButton.isEnabled = state.sharedStorage
-        binding.adbFilesButton.isEnabled = state.adbEndpointConfigured
-        binding.saveScoutButton.isEnabled = state.adbEndpointConfigured
+        binding.storageAccessSubtitle.setText(
+            if (state.sharedStorage) R.string.settings_storage_access_ready_summary
+            else R.string.settings_storage_access_required_summary
+        )
+        binding.storageAnalyzerSubtitle.setText(
+            if (state.sharedStorage) R.string.settings_analyzer_summary
+            else R.string.settings_analyzer_needs_access
+        )
+        binding.adbFilesSubtitle.setText(
+            if (state.adbEndpointConfigured) R.string.settings_adb_browser_summary
+            else R.string.settings_adb_browser_needs_setup
+        )
+        binding.saveScoutSubtitle.setText(
+            if (state.adbEndpointConfigured) R.string.settings_save_scout_summary
+            else R.string.settings_save_scout_needs_setup
+        )
+
+        binding.storageAccessCard.contentDescription =
+            "${getString(R.string.settings_storage_access_title)}. ${binding.storageAccessSubtitle.text}"
+        binding.storageAnalyzerCard.contentDescription =
+            "${getString(R.string.storage_analyzer)}. ${binding.storageAnalyzerSubtitle.text}"
+        binding.adbFilesCard.contentDescription =
+            "${getString(R.string.adb_browse)}. ${binding.adbFilesSubtitle.text}"
+        binding.saveScoutCard.contentDescription =
+            "${getString(R.string.save_scout)}. ${binding.saveScoutSubtitle.text}"
 
         if (state.adbEndpointConfigured) {
-            binding.adbStatus.text = "${getString(R.string.adb_shell)}: ${getString(R.string.adb_status_checking)}"
+            binding.adbStatusChip.setText(R.string.settings_status_adb_checking)
             verifyAdbHealth()
         } else {
             adbHealthGeneration++
-            binding.adbStatus.text = "${getString(R.string.adb_shell)}: ${getString(R.string.adb_status_not_configured)}"
+            binding.adbStatusChip.setText(R.string.settings_status_adb_not_configured)
         }
     }
 
@@ -119,9 +154,10 @@ class MainActivity : OmniActivity() {
         lifecycleScope.launch {
             val healthy = runCatching { AdbSessionManager.get(this@MainActivity).healthCheck() }.isSuccess
             if (generation != adbHealthGeneration) return@launch
-            binding.adbStatus.text = "${getString(R.string.adb_shell)}: ${getString(
-                if (healthy) R.string.adb_status_connected else R.string.adb_status_unreachable
-            )}"
+            binding.adbStatusChip.setText(
+                if (healthy) R.string.settings_status_adb_connected
+                else R.string.settings_status_adb_unreachable
+            )
         }
     }
 
@@ -149,6 +185,7 @@ class MainActivity : OmniActivity() {
             )
             binding.storageUsageProgress.isIndeterminate = false
             binding.storageUsageProgress.progress = usage.percent
+            binding.storageUsageProgress.contentDescription = "${usage.percent}%"
         }.onFailure {
             binding.storageUsageText.setText(R.string.storage_usage_unavailable)
             binding.storageUsageProgress.isIndeterminate = false
@@ -163,7 +200,9 @@ class MainActivity : OmniActivity() {
                 withContext(Dispatchers.IO) { TrashManager(this@MainActivity).count() }
             }.getOrNull() ?: return@launch
             if (generation != trashCountGeneration) return@launch
-            binding.trashButton.text = getString(R.string.trash_bin_count, count)
+            binding.trashSubtitle.text = getString(R.string.settings_trash_count_summary, count)
+            binding.trashCard.contentDescription =
+                "${getString(R.string.trash_bin)}. ${binding.trashSubtitle.text}"
         }
     }
 
