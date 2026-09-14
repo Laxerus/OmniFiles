@@ -19,10 +19,11 @@
     <string name="adb_not_ready">Önce Kablosuz ADB bağlantısını kur.</string>
     <string name="adb_loading">ADB üzerinden okunuyor…</string>
     <string name="adb_symlink_blocked">Güvenlik için sembolik bağlantı önizlemesi kapalı.</string>
-    <string name="adb_long_press_export">Dosyayı cihaza kaydetmek için uzun bas veya sağdaki düğmeyi kullan.</string>
+    <string name="adb_long_press_export">Dosyayı dışa aktarmak için uzun bas; ⋮ menüsünden ayrıntıları gör veya uzak yolu kopyala.</string>
     <string name="adb_export_ready">Kaydedilecek dosya hazır. Hedef konumu seç.</string>
     <string name="adb_export_done">Dosya kaydedildi.</string>
     <string name="adb_export_failed">Dosya kaydedilemedi.</string>
+    <string name="adb_mode">İzin modu: %1$s</string>
     <string name="adb_title">Kablosuz ADB</string>
     <string name="adb_help">Android 11+ Kablosuz hata ayıklama ekranındaki eşleştirme adresini, 6 haneli kodu ve normal bağlantı portunu gir. OmniFiles uygun uçları yerel ağda otomatik bulmayı da dener.</string>
     <string name="host_hint">IP adresi (ör. 192.168.1.20)</string>
@@ -95,7 +96,7 @@
     <string name="more_actions">Diğer işlemler</string>
     <string name="export_file">Dosyayı dışa aktar</string>
     <string name="copy_path">Yolu kopyala</string>
-    <string name="path_copied">Dosya yolu panoya kopyalandı.</string>
+    <string name="path_copied">Yol panoya kopyalandı.</string>
     <string name="folder_created">Klasör oluşturuldu.</string>
     <string name="renamed">Öğe yeniden adlandırıldı.</string>
     <string name="delete_title">Çöpe taşı?</string>
