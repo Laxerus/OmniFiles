@@ -92,6 +92,14 @@ class FilePathPolicyTest {
         }
     }
 
+    @Test fun rejectsControlCharactersInChildNames() {
+        listOf("line\nbreak.txt", "tab\tname.txt", "carriage\rreturn.txt", "del${127.toChar()}.txt").forEach { name ->
+            assertThrows(IllegalArgumentException::class.java) {
+                FilePathPolicy.sanitizeChildName(name)
+            }
+        }
+    }
+
     @Test fun protectsCriticalAndroidDirectoryItself() {
         val root = createTempDirectory("omnifiles-root-").toFile()
         try {
