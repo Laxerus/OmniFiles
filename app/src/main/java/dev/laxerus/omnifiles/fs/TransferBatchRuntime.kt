@@ -11,6 +11,7 @@ object TransferBatchRuntime {
         val operation: Operation,
         val itemCount: Int,
         val preparedItems: Int,
+        val preparedBytes: Long,
         val processedItems: Int,
         val succeededItems: Int,
         val failedItems: Int,
@@ -47,6 +48,7 @@ object TransferBatchRuntime {
             operation = operation,
             itemCount = itemCount,
             preparedItems = 0,
+            preparedBytes = 0L,
             processedItems = 0,
             succeededItems = 0,
             failedItems = 0,
@@ -66,12 +68,13 @@ object TransferBatchRuntime {
         return id
     }
 
-    fun reportPreparation(id: Long, preparedItems: Int) {
+    fun reportPreparation(id: Long, preparedItems: Int, preparedBytes: Long) {
         val snapshot = synchronized(lock) {
             val active = current ?: return
             if (active.id != id || active.phase != Phase.PREPARING) return
             active.copy(
                 preparedItems = preparedItems.coerceIn(active.preparedItems, active.itemCount),
+                preparedBytes = preparedBytes.coerceAtLeast(active.preparedBytes),
                 cancelRequested = cancelledId == id
             ).also { current = it }
         }
@@ -84,6 +87,7 @@ object TransferBatchRuntime {
             if (active.id != id || active.phase == Phase.FINISHED) return
             active.copy(
                 totalBytes = totalBytes.coerceAtLeast(0L),
+                preparedBytes = active.preparedBytes.coerceAtMost(totalBytes.coerceAtLeast(active.preparedBytes)),
                 cancelRequested = cancelledId == id
             ).also { current = it }
         }
