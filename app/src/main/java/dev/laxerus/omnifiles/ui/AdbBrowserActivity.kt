@@ -8,6 +8,7 @@ import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
+import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import dev.laxerus.omnifiles.R
@@ -19,9 +20,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
 import java.util.UUID
 
 class AdbBrowserActivity : OmniActivity() {
+    private enum class SortMode { NAME, DATE, SIZE }
+
     private lateinit var binding: ActivityFileBrowserBinding
     private lateinit var adapter: AdbFileListAdapter
     private val manager by lazy { AdbSessionManager.get(this) }
@@ -29,6 +33,9 @@ class AdbBrowserActivity : OmniActivity() {
     private var rootPath = DEFAULT_PATH
     private var loading = false
     private var pendingExport: File? = null
+    private var allEntries: List<AdbRemoteEntry> = emptyList()
+    private var sortMode = SortMode.NAME
+    private var showHidden = false
 
     private val createDocument = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
@@ -68,6 +75,21 @@ class AdbBrowserActivity : OmniActivity() {
         adapter = AdbFileListAdapter(::openEntry, ::exportEntry)
         binding.list.layoutManager = LinearLayoutManager(this)
         binding.list.adapter = adapter
+
+        binding.searchInput.doAfterTextChanged { renderEntries() }
+        binding.hiddenSwitch.setOnCheckedChangeListener { _, checked ->
+            showHidden = checked
+            renderEntries()
+        }
+        binding.sortGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            sortMode = when (checkedId) {
+                R.id.sortDateButton -> SortMode.DATE
+                R.id.sortSizeButton -> SortMode.SIZE
+                else -> SortMode.NAME
+            }
+            renderEntries()
+        }
 
         prunePreviewCache()
         if (manager.endpoint() == null) {
@@ -119,20 +141,49 @@ class AdbBrowserActivity : OmniActivity() {
             runCatching { manager.listDirectory(safePath) }
                 .onSuccess { entries ->
                     currentPath = safePath
-                    val visible = entries
-                        .filter { it.name != "." && it.name != ".." && it.errorCode in listOf(null, 0) }
-                        .sortedWith(compareBy<AdbRemoteEntry>({ !it.isDirectory }, { it.name.lowercase() }))
-                    adapter.submitList(visible)
-                    binding.emptyText.text = getString(R.string.empty_folder)
-                    binding.emptyText.visibility = if (visible.isEmpty()) View.VISIBLE else View.GONE
+                    allEntries = entries.filter {
+                        it.name != "." && it.name != ".." && it.errorCode in listOf(null, 0)
+                    }
+                    binding.searchInput.setText("")
+                    renderEntries()
                 }
                 .onFailure { error ->
+                    allEntries = emptyList()
                     adapter.submitList(emptyList())
                     binding.emptyText.text = error.message ?: "ADB klasörü okunamadı"
                     binding.emptyText.visibility = View.VISIBLE
                 }
             loading = false
         }
+    }
+
+    private fun renderEntries() {
+        val query = binding.searchInput.text?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
+        val visible = allEntries.asSequence()
+            .filter { showHidden || !it.name.startsWith('.') }
+            .filter { query.isEmpty() || it.name.lowercase(Locale.ROOT).contains(query) }
+            .sortedWith(Comparator(::compareEntries))
+            .toList()
+
+        adapter.submitList(visible)
+        if (visible.isEmpty()) {
+            val filtered = query.isNotEmpty() || (!showHidden && allEntries.any { it.name.startsWith('.') })
+            binding.emptyText.setText(if (filtered) R.string.empty_search else R.string.empty_folder)
+            binding.emptyText.visibility = View.VISIBLE
+        } else if (!loading) {
+            binding.emptyText.visibility = View.GONE
+        }
+    }
+
+    private fun compareEntries(left: AdbRemoteEntry, right: AdbRemoteEntry): Int {
+        if (left.isDirectory != right.isDirectory) return if (left.isDirectory) -1 else 1
+        val primary = when (sortMode) {
+            SortMode.NAME -> left.name.lowercase(Locale.ROOT).compareTo(right.name.lowercase(Locale.ROOT))
+            SortMode.DATE -> right.modifiedAtMillis.compareTo(left.modifiedAtMillis)
+            SortMode.SIZE -> if (left.isDirectory && right.isDirectory) 0 else right.size.compareTo(left.size)
+        }
+        return if (primary != 0) primary
+        else left.name.lowercase(Locale.ROOT).compareTo(right.name.lowercase(Locale.ROOT))
     }
 
     private fun openEntry(entry: AdbRemoteEntry) {
@@ -185,7 +236,7 @@ class AdbBrowserActivity : OmniActivity() {
 
     private fun openLocalPreview(file: File) {
         val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
-        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "application/octet-stream"
+        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase(Locale.ROOT)) ?: "application/octet-stream"
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mime)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
