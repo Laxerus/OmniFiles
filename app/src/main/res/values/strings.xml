@@ -10,6 +10,7 @@
     <string name="grant_all_files">Tüm dosyalara erişimi aç</string>
     <string name="wireless_debugging">Kablosuz ADB</string>
     <string name="adb_browse">ADB ile Android/data</string>
+    <string name="save_scout">Save Scout</string>
     <string name="adb_browse_title">ADB Dosyaları</string>
     <string name="adb_not_ready">Önce Kablosuz ADB bağlantısını kur.</string>
     <string name="adb_loading">ADB üzerinden okunuyor…</string>
@@ -32,4 +33,12 @@
     <string name="delete_message">Seçilen öğe doğrudan silinmek yerine OmniFiles çöp alanına taşınacak.</string>
     <string name="cancel">İptal</string>
     <string name="move_to_trash">Çöpe taşı</string>
+    <string name="save_scout_title">Save Scout</string>
+    <string name="save_scout_help">Bir uygulama seç veya paket adını yaz. OmniFiles standart oyun/save klasörlerini ADB üzerinden güvenli biçimde tarar.</string>
+    <string name="package_name_hint">Paket adı (ör. com.example.game)</string>
+    <string name="scan_saves">Save konumlarını tara</string>
+    <string name="refresh_apps">Uygulama listesini yenile</string>
+    <string name="save_scout_loading_apps">Yüklü uygulamalar ADB üzerinden okunuyor…</string>
+    <string name="save_scout_scanning">Muhtemel save klasörleri taranıyor…</string>
+    <string name="save_scout_none">Erişilebilir standart save klasörü bulunamadı.</string>
 </resources>

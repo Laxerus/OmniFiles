@@ -26,6 +26,7 @@ class AdbBrowserActivity : OmniActivity() {
     private lateinit var adapter: AdbFileListAdapter
     private val manager by lazy { AdbSessionManager.get(this) }
     private var currentPath = DEFAULT_PATH
+    private var rootPath = DEFAULT_PATH
     private var loading = false
     private var pendingExport: File? = null
 
@@ -56,6 +57,11 @@ class AdbBrowserActivity : OmniActivity() {
         setContentView(binding.root)
         applySystemBarInsets(binding.root)
 
+        rootPath = runCatching {
+            RemotePathPolicy.normalizeAbsolute(intent.getStringExtra(EXTRA_INITIAL_PATH) ?: DEFAULT_PATH)
+        }.getOrDefault(DEFAULT_PATH)
+        currentPath = rootPath
+
         binding.toolbar.title = getString(R.string.adb_browse_title)
         binding.toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
         binding.toolbar.setNavigationOnClickListener { navigateUpOrFinish() }
@@ -75,8 +81,8 @@ class AdbBrowserActivity : OmniActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (!loading && currentPath != DEFAULT_PATH) {
-            RemotePathPolicy.parent(currentPath)?.let(::load) ?: super.onBackPressed()
+        if (!loading && currentPath != rootPath) {
+            safeParentWithinRoot(currentPath)?.let(::load) ?: super.onBackPressed()
         } else {
             super.onBackPressed()
         }
@@ -84,13 +90,19 @@ class AdbBrowserActivity : OmniActivity() {
 
     private fun navigateUpOrFinish() {
         if (loading) return
-        if (currentPath == DEFAULT_PATH) finish()
-        else RemotePathPolicy.parent(currentPath)?.let(::load) ?: finish()
+        if (currentPath == rootPath) finish()
+        else safeParentWithinRoot(currentPath)?.let(::load) ?: finish()
+    }
+
+    private fun safeParentWithinRoot(path: String): String? {
+        val parent = RemotePathPolicy.parent(path) ?: return null
+        return if (parent == rootPath || parent.startsWith("$rootPath/")) parent else null
     }
 
     private fun load(path: String) {
         if (loading) return
         val safePath = RemotePathPolicy.normalizeAbsolute(path)
+        require(safePath == rootPath || safePath.startsWith("$rootPath/")) { "Tarayıcı kökünün dışına çıkılamaz" }
         loading = true
         binding.pathText.text = safePath
         binding.emptyText.visibility = View.VISIBLE
@@ -193,6 +205,7 @@ class AdbBrowserActivity : OmniActivity() {
         name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(96).ifBlank { "preview.bin" }
 
     companion object {
+        const val EXTRA_INITIAL_PATH = "dev.laxerus.omnifiles.extra.INITIAL_PATH"
         private const val DEFAULT_PATH = "/sdcard/Android/data"
         private const val PREVIEW_MAX_AGE_MS = 24L * 60L * 60L * 1000L
     }

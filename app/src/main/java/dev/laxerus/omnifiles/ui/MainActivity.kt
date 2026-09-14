@@ -28,6 +28,9 @@ class MainActivity : OmniActivity() {
         binding.adbFilesButton.setOnClickListener {
             startActivity(Intent(this, AdbBrowserActivity::class.java))
         }
+        binding.saveScoutButton.setOnClickListener {
+            startActivity(Intent(this, SaveScoutActivity::class.java))
+        }
     }
 
     override fun onResume() {
@@ -41,5 +44,6 @@ class MainActivity : OmniActivity() {
         binding.adbStatus.text = "${getString(R.string.adb_shell)}: ${if (state.adbEndpointConfigured) "Yapılandırıldı" else "Bağlı değil"}"
         binding.rootStatus.text = "${getString(R.string.root_status)}: ${if (state.rootBinaryPresent) "Algılandı" else "Yok / bilinmiyor"}"
         binding.adbFilesButton.isEnabled = state.adbEndpointConfigured
+        binding.saveScoutButton.isEnabled = state.adbEndpointConfigured
     }
 }
