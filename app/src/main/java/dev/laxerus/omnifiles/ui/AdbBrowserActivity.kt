@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.View
 import android.webkit.MimeTypeMap
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.core.widget.doAfterTextChanged
@@ -41,7 +42,10 @@ class AdbBrowserActivity : OmniActivity() {
         ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
         val source = pendingExport.also { pendingExport = null } ?: return@registerForActivityResult
-        if (uri == null) return@registerForActivityResult
+        if (uri == null) {
+            source.delete()
+            return@registerForActivityResult
+        }
         lifecycleScope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) {
@@ -50,6 +54,7 @@ class AdbBrowserActivity : OmniActivity() {
                     } ?: error("Hedef dosya açılamadı")
                 }
             }
+            source.delete()
             Toast.makeText(
                 this@AdbBrowserActivity,
                 if (result.isSuccess) R.string.adb_export_done else R.string.adb_export_failed,
@@ -72,6 +77,9 @@ class AdbBrowserActivity : OmniActivity() {
         binding.toolbar.title = getString(R.string.adb_browse_title)
         binding.toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24)
         binding.toolbar.setNavigationOnClickListener { navigateUpOrFinish() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = navigateUpOrFinish()
+        })
         adapter = AdbFileListAdapter(::openEntry, ::exportEntry)
         binding.list.layoutManager = LinearLayoutManager(this)
         binding.list.adapter = adapter
@@ -100,15 +108,6 @@ class AdbBrowserActivity : OmniActivity() {
         }
         Toast.makeText(this, R.string.adb_long_press_export, Toast.LENGTH_SHORT).show()
         load(currentPath)
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (!loading && currentPath != rootPath) {
-            safeParentWithinRoot(currentPath)?.let(::load) ?: super.onBackPressed()
-        } else {
-            super.onBackPressed()
-        }
     }
 
     private fun navigateUpOrFinish() {
@@ -204,6 +203,7 @@ class AdbBrowserActivity : OmniActivity() {
             val target = newPreviewFile(entry.name)
             runCatching { manager.pull(entry.path, target) }
                 .onSuccess { local ->
+                    pendingExport?.delete()
                     pendingExport = local
                     Toast.makeText(this@AdbBrowserActivity, R.string.adb_export_ready, Toast.LENGTH_SHORT).show()
                     createDocument.launch(entry.name.ifBlank { "export.bin" })
@@ -256,12 +256,18 @@ class AdbBrowserActivity : OmniActivity() {
 
     private fun prunePreviewCache() {
         previewRoot().listFiles()?.forEach { file ->
-            if (System.currentTimeMillis() - file.lastModified() > PREVIEW_MAX_AGE_MS) file.deleteRecursively()
+            if (file.isFile && System.currentTimeMillis() - file.lastModified() > PREVIEW_MAX_AGE_MS) file.delete()
         }
     }
 
     private fun sanitize(name: String): String =
         name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(96).ifBlank { "preview.bin" }
+
+    override fun onDestroy() {
+        pendingExport?.delete()
+        pendingExport = null
+        super.onDestroy()
+    }
 
     companion object {
         const val EXTRA_INITIAL_PATH = "dev.laxerus.omnifiles.extra.INITIAL_PATH"
