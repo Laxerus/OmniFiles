@@ -33,6 +33,7 @@ REQUIRED = [
     "app/src/main/res/layout/activity_checksum.xml",
     "app/src/main/res/layout/activity_storage_analyzer.xml",
     "app/src/main/res/layout/item_storage_analysis.xml",
+    "app/src/main/res/layout/item_storage_category.xml",
     "app/src/main/res/layout/activity_trash.xml",
     "app/src/test/java/dev/laxerus/omnifiles/fs/DigestUtilsTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileOperationsTest.kt",
@@ -143,6 +144,12 @@ if storage_analyzer.is_file():
         "truncated",
         "largestFiles",
         "largestDirectories",
+        "enum class FileCategory",
+        "data class CategoryUsage",
+        "IntArray(FileCategory.entries.size)",
+        "LongArray(FileCategory.entries.size)",
+        "classifyFileName",
+        "categories = categories",
     ):
         if token not in text:
             errors.append(f"bounded storage analyzer guard missing: {token}")
@@ -236,9 +243,32 @@ if checksum_activity.is_file():
 storage_analyzer_activity = ROOT / "app/src/main/java/dev/laxerus/omnifiles/ui/StorageAnalyzerActivity.kt"
 if storage_analyzer_activity.is_file():
     text = storage_analyzer_activity.read_text(encoding="utf-8")
-    for token in ("StorageAnalyzer.scan", "Dispatchers.IO", "AtomicBoolean", "cancelRequested", "largestDirectories"):
+    for token in (
+        "StorageAnalyzer.scan",
+        "Dispatchers.IO",
+        "AtomicBoolean",
+        "cancelRequested",
+        "largestDirectories",
+        "renderCategories",
+        "result.categories",
+        "categoryProgress",
+    ):
         if token not in text:
-            errors.append(f"storage analyzer UI/cancellation wiring missing: {token}")
+            errors.append(f"storage analyzer UI/cancellation/category wiring missing: {token}")
+
+storage_analyzer_layout = ROOT / "app/src/main/res/layout/activity_storage_analyzer.xml"
+if storage_analyzer_layout.is_file():
+    text = storage_analyzer_layout.read_text(encoding="utf-8")
+    for view_id in ("@+id/categoriesContainer", "@+id/filesContainer", "@+id/foldersContainer"):
+        if view_id not in text:
+            errors.append(f"storage analyzer result container missing: {view_id}")
+
+storage_category_layout = ROOT / "app/src/main/res/layout/item_storage_category.xml"
+if storage_category_layout.is_file():
+    text = storage_category_layout.read_text(encoding="utf-8")
+    for view_id in ("@+id/categoryName", "@+id/categoryMeta", "@+id/categoryProgress"):
+        if view_id not in text:
+            errors.append(f"storage category row control missing: {view_id}")
 
 trash_manager = ROOT / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt"
 if trash_manager.is_file():
