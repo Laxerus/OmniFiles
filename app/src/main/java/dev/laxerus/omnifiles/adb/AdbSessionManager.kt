@@ -44,6 +44,17 @@ class AdbSessionManager private constructor(context: Context) {
         return connect(endpoint.host, endpoint.port)
     }
 
+    suspend fun healthCheck(): Unit = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            withReconnectOnce { active ->
+                val response = active.shell("echo omnifiles-health")
+                check(response.exitCode == 0 && response.output.trim() == "omnifiles-health") {
+                    response.errorOutput.ifBlank { "ADB sağlık kontrolü başarısız" }
+                }
+            }
+        }
+    }
+
     suspend fun shell(command: String): String = mutex.withLock {
         require(command.isNotBlank()) { "Komut boş olamaz" }
         withContext(Dispatchers.IO) {
@@ -84,8 +95,20 @@ class AdbSessionManager private constructor(context: Context) {
         withContext(Dispatchers.IO) {
             try {
                 withReconnectOnce { active ->
+                    val before = snapshotRemote(active, safePath)
                     active.pull(destination, safePath)
                     check(destination.isFile) { "ADB indirme sonucu dosya oluşmadı" }
+
+                    if (before != null) {
+                        val after = snapshotRemote(active, safePath)
+                            ?: error("Uzak dosya indirme sırasında kayboldu")
+                        check(before == after) {
+                            "Uzak dosya indirme sırasında değişti; tutarsız kopya kullanılmadı"
+                        }
+                        check(after.size < 0L || destination.length() == after.size) {
+                            "ADB indirme boyut doğrulamasından geçmedi"
+                        }
+                    }
                     destination
                 }
             } catch (error: Throwable) {
@@ -101,6 +124,23 @@ class AdbSessionManager private constructor(context: Context) {
     }
 
     fun endpoint(): AdbEndpoint? = store.load()
+
+    private fun snapshotRemote(active: Kadb, safePath: String): RemoteSnapshot? {
+        if (safePath == "/") return null
+        val parent = RemotePathPolicy.parent(safePath) ?: return null
+        val name = safePath.substringAfterLast('/')
+        return active.openSync().use { sync ->
+            sync.list(parent)
+                .firstOrNull { entry -> entry.name == name && (entry.errorCode == null || entry.errorCode == 0) }
+                ?.let { entry ->
+                    RemoteSnapshot(
+                        size = entry.size,
+                        modifiedAtMillis = entry.mtimeSec * 1000L,
+                        mode = entry.mode
+                    )
+                }
+        }
+    }
 
     private fun <T> withReconnectOnce(operation: (Kadb) -> T): T {
         val first = ensureSessionBlocking()
@@ -148,6 +188,12 @@ class AdbSessionManager private constructor(context: Context) {
         require(value.isNotEmpty() && value.length <= 253) { "Geçersiz host" }
         require(!value.any { it.isWhitespace() || it == '/' || it == '\\' }) { "Geçersiz host" }
     }
+
+    private data class RemoteSnapshot(
+        val size: Long,
+        val modifiedAtMillis: Long,
+        val mode: Int
+    )
 
     companion object {
         private const val CONNECT_TIMEOUT_MS = 8_000
