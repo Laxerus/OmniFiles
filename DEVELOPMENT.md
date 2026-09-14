@@ -1,13 +1,25 @@
 # OmniFiles Development
 
-The current repository stores the Android project payload in `.source/xz00.b64` through `.source/xz06.b64`. The verified build workflow reconstructs that payload before running sanity checks, unit tests, Android Lint, and `assembleDebug`.
+The normal Android/Gradle tree in the repository root is the canonical editable source for OmniFiles. The historical `.source/` payload is retained only as a recovery snapshot and must not be used by the active APK build workflow.
 
 Current priorities:
 
 - keep OmniFiles usable as a single APK without requiring Shizuku, LADB, or a PC at runtime;
 - use Android Wireless Debugging only through explicit user pairing for shell-level access;
 - preserve Android sandbox boundaries and fail clearly when an operation needs privileges Android does not grant;
-- keep the Material 3 interface responsive, modern, and safe for destructive file operations;
-- gate releases on source sanity, tests, lint, APK archive validation, and checksums.
+- keep direct-storage and ADB browsers responsive, searchable, consistently sorted, and safe around protected paths;
+- keep ADB endpoint discovery bound to one host and allow reconnecting to already-paired devices without unnecessary re-pairing;
+- keep SQLite editing transactional and Save Scout conservative about paths it can actually reach;
+- gate builds on source sanity, unit tests, Android Lint, APK archive validation, and checksums.
 
-The `.source` payload remains the canonical source until the project tree is migrated to normal repository files.
+## Source policy
+
+`app/`, Gradle files, resources, tests, and `scripts/` are the source of truth. New development must be made there. `.source/` is archival only.
+
+## Version policy
+
+Development stays on `0.8.0-dev` until an intentional release decision is made. Feature work and bug fixes do not automatically bump the version.
+
+## CI policy
+
+`.github/workflows/build-apk.yml` must build the editable root project directly. `scripts/source_sanity.py` rejects regressions that attempt to reconstruct the archived `.source` snapshot and also verifies the core test/lint/build gates remain present.
