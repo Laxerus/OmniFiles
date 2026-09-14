@@ -21,6 +21,7 @@ import com.google.android.material.snackbar.Snackbar
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.StorageAccessController
 import dev.laxerus.omnifiles.databinding.ActivityFileBrowserBinding
+import dev.laxerus.omnifiles.fs.BrowserStartPathPolicy
 import dev.laxerus.omnifiles.fs.FavoriteStore
 import dev.laxerus.omnifiles.fs.FileInspector
 import dev.laxerus.omnifiles.fs.FileOperations
@@ -160,11 +161,8 @@ class FileBrowserActivity : OmniActivity() {
             ?: SortMode.NAME
 
         val restoredPath = savedInstanceState?.getString(STATE_CURRENT_PATH)
-        currentDir = restoredPath
-            ?.let(::File)
-            ?.let { candidate -> runCatching { FilePathPolicy.requireInside(candidate, sharedRoot) }.getOrNull() }
-            ?.takeIf { it.isDirectory }
-            ?: sharedRoot
+            ?: if (savedInstanceState == null) intent.getStringExtra(EXTRA_START_PATH) else null
+        currentDir = BrowserStartPathPolicy.resolve(restoredPath, sharedRoot)
 
         savedInstanceState?.getStringArrayList(STATE_SELECTED_PATHS)
             ?.mapNotNull { path ->
@@ -942,6 +940,7 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     companion object {
+        const val EXTRA_START_PATH = "dev.laxerus.omnifiles.extra.START_PATH"
         private const val STATE_CURRENT_PATH = "current_path"
         private const val STATE_SORT_MODE = "sort_mode"
         private const val STATE_SHOW_HIDDEN = "show_hidden"
