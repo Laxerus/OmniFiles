@@ -5,6 +5,7 @@ import sys
 root = Path(__file__).resolve().parents[1]
 errors: list[str] = []
 
+
 def require(path: str, *tokens: str) -> None:
     file = root / path
     if not file.is_file():
@@ -14,6 +15,7 @@ def require(path: str, *tokens: str) -> None:
     for token in tokens:
         if token not in text:
             errors.append(f"{path} missing: {token}")
+
 
 manifest = root / "app/src/main/AndroidManifest.xml"
 if manifest.is_file():
@@ -31,8 +33,11 @@ else:
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileManagerToolbar.kt",
     "inflateMenu(R.menu.menu_file_browser)",
-    "R.id.actionSettingsTools",
-    "Intent(context, MainActivity::class.java)",
+    "R.id.actionSettingsTools -> MainActivity::class.java",
+    "R.id.actionStorageAnalyzer -> StorageAnalyzerActivity::class.java",
+    "R.id.actionTrash -> TrashActivity::class.java",
+    "R.id.actionChecksum -> ChecksumActivity::class.java",
+    "R.id.actionWirelessAdb -> AdbPairingActivity::class.java",
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/StorageAccessButton.kt",
@@ -49,18 +54,66 @@ require(
 require(
     "app/src/main/res/menu/menu_file_browser.xml",
     '@+id/actionSettingsTools',
+    '@+id/actionStorageAnalyzer',
+    '@+id/actionTrash',
+    '@+id/actionChecksum',
+    '@+id/actionWirelessAdb',
     '@drawable/ic_settings_24',
-    '@string/settings_tools',
+)
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/access/SystemSettingsNavigator.kt",
+    "Destination.ALL_FILES_ACCESS",
+    "Destination.DEVELOPER_OPTIONS",
+    "Destination.WIFI",
+    "Destination.APP_DETAILS",
+    "Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION",
+    "Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS",
+    "Settings.ACTION_WIFI_SETTINGS",
+    "Settings.ACTION_APPLICATION_DETAILS_SETTINGS",
+    "Intent(Settings.ACTION_SETTINGS)",
+)
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/access/StorageAccessController.kt",
+    "SystemSettingsNavigator.Destination.ALL_FILES_ACCESS",
+)
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/AdbPairingActivity.kt",
+    "SystemSettingsNavigator.Destination.DEVELOPER_OPTIONS",
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/MainActivity.kt",
-    "binding.openFilesButton.setOnClickListener { finish() }",
+    "binding.toolbar.setNavigationOnClickListener { finish() }",
+    "binding.developerSettingsButton.setOnClickListener",
+    "binding.wifiSettingsButton.setOnClickListener",
+    "binding.appDetailsButton.setOnClickListener",
+    "SystemSettingsNavigator.Destination.DEVELOPER_OPTIONS",
+    "SystemSettingsNavigator.Destination.WIFI",
+    "SystemSettingsNavigator.Destination.APP_DETAILS",
+)
+require(
+    "app/src/main/res/layout/activity_main.xml",
+    '@+id/toolbar',
+    '@+id/grantAccessButton',
+    '@+id/developerSettingsButton',
+    '@+id/wifiSettingsButton',
+    '@+id/appDetailsButton',
+    '@string/settings_section_phone',
+    '@string/settings_section_tools',
+    'app:cardCornerRadius="24dp"',
 )
 require(
     "app/src/main/res/values/strings_navigation.xml",
     "settings_hub_title",
     "settings_hub_subtitle",
     "grant_access_inline",
+)
+require(
+    "app/src/main/res/values/strings_settings_hub.xml",
+    "settings_storage_access_title",
+    "settings_developer_title",
+    "settings_wifi_title",
+    "settings_app_details_title",
+    "settings_open_failed",
 )
 
 if errors:
