@@ -1,11 +1,14 @@
 package dev.laxerus.omnifiles.fs
 
 import java.io.File
+import java.security.MessageDigest
 import java.util.ArrayDeque
 
 object FileOperations {
     private const val MIN_FREE_SPACE_RESERVE_BYTES = 8L * 1024L * 1024L
     private const val MAX_FREE_SPACE_RESERVE_BYTES = 64L * 1024L * 1024L
+    private const val COPY_BUFFER_BYTES = 64 * 1024
+    private const val STAGING_PREFIX = ".omnifiles-transfer-"
 
     fun createDirectory(parent: File, rawName: String, sharedRoot: File): File {
         val destination = FilePathPolicy.resolveChild(parent, rawName, sharedRoot)
@@ -63,22 +66,23 @@ object FileOperations {
         val safeDestinationDirectory = requireDestinationDirectory(destinationDirectory, root)
         requireNotInsideSource(safeSource, safeDestinationDirectory)
         requireEnoughFreeSpace(safeSource, safeDestinationDirectory, root)
-        val destination = nextAvailableDestination(safeDestinationDirectory, safeSource)
+        val preferredDestination = nextAvailableDestination(safeDestinationDirectory, safeSource)
+        val staging = nextStagingDestination(safeDestinationDirectory)
         val created = mutableListOf<File>()
 
-        try {
+        return try {
             copyTree(
                 source = safeSource,
-                destination = destination,
+                destination = staging,
                 allowedRoot = root,
                 activeDirectories = mutableSetOf(),
                 created = created
             )
+            commitStagingCopy(staging, preferredDestination, safeDestinationDirectory, safeSource)
         } catch (error: Throwable) {
             rollbackCreated(created)
             throw error
         }
-        return destination.canonicalFile
     }
 
     fun move(source: File, destinationDirectory: File, sharedRoot: File): File {
@@ -98,22 +102,26 @@ object FileOperations {
         if (safeSource.renameTo(destination)) return destination.canonicalFile
 
         requireEnoughFreeSpace(safeSource, safeDestinationDirectory, root)
+        val staging = nextStagingDestination(safeDestinationDirectory)
         val created = mutableListOf<File>()
-        try {
+        val committed = try {
             copyTree(
                 source = safeSource,
-                destination = destination,
+                destination = staging,
                 allowedRoot = root,
                 activeDirectories = mutableSetOf(),
                 created = created
             )
+            require(!destination.exists()) { "Hedef klasörde aynı adda bir öğe işlem sırasında oluşturuldu" }
+            check(staging.renameTo(destination)) { "Doğrulanan geçici kopya hedefe taşınamadı" }
+            destination.canonicalFile
         } catch (error: Throwable) {
             rollbackCreated(created)
             throw error
         }
 
         removeVerifiedSource(safeSource, root)
-        return destination.canonicalFile
+        return committed
     }
 
     private fun requireDestinationDirectory(directory: File, root: File): File {
@@ -161,6 +169,29 @@ object FileOperations {
         error("Uygun kopya adı oluşturulamadı")
     }
 
+    private fun nextStagingDestination(parent: File): File {
+        val token = java.lang.Long.toUnsignedString(System.nanoTime(), 36)
+        for (index in 0..999) {
+            val suffix = if (index == 0) token else "$token-$index"
+            val candidate = File(parent, "$STAGING_PREFIX$suffix")
+            if (!candidate.exists()) return candidate
+        }
+        error("Güvenli geçici aktarım alanı oluşturulamadı")
+    }
+
+    private fun commitStagingCopy(
+        staging: File,
+        preferredDestination: File,
+        parent: File,
+        source: File
+    ): File {
+        var destination = preferredDestination
+        if (destination.exists()) destination = nextAvailableDestination(parent, source)
+        check(!destination.exists()) { "Kopya hedefi işlem sırasında kullanıma alındı" }
+        check(staging.renameTo(destination)) { "Doğrulanan geçici kopya hedefe taşınamadı" }
+        return destination.canonicalFile
+    }
+
     private fun copyTree(
         source: File,
         destination: File,
@@ -195,12 +226,47 @@ object FileOperations {
             return
         }
 
-        destination.outputStream().use { output ->
-            created += destination
-            safeSource.inputStream().use { input -> input.copyTo(output) }
-        }
-        check(destination.length() == safeSource.length()) { "Dosya kopyası doğrulanamadı: ${safeSource.name}" }
+        copyFileVerified(safeSource, destination, created)
         destination.setLastModified(safeSource.lastModified())
+    }
+
+    private fun copyFileVerified(source: File, destination: File, created: MutableList<File>) {
+        val sourceDigest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(COPY_BUFFER_BYTES)
+
+        destination.outputStream().buffered(COPY_BUFFER_BYTES).use { output ->
+            created += destination
+            source.inputStream().buffered(COPY_BUFFER_BYTES).use { input ->
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    if (read == 0) continue
+                    sourceDigest.update(buffer, 0, read)
+                    output.write(buffer, 0, read)
+                }
+            }
+            output.flush()
+        }
+
+        check(destination.length() == source.length()) { "Dosya kopyası boyut doğrulamasından geçmedi: ${source.name}" }
+        val copiedDigest = sha256(destination)
+        check(sourceDigest.digest().contentEquals(copiedDigest)) {
+            "Dosya kopyası SHA-256 doğrulamasından geçmedi: ${source.name}"
+        }
+    }
+
+    private fun sha256(file: File): ByteArray {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(COPY_BUFFER_BYTES)
+        file.inputStream().buffered(COPY_BUFFER_BYTES).use { input ->
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                if (read == 0) continue
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest()
     }
 
     private fun rollbackCreated(created: List<File>) {
