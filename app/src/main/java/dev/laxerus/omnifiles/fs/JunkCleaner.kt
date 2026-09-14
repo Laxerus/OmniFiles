@@ -1,6 +1,5 @@
 package dev.laxerus.omnifiles.fs
 
-import android.content.Context
 import java.io.File
 import java.util.ArrayDeque
 import java.util.Locale
@@ -28,7 +27,7 @@ data class JunkScanResult(
 )
 
 data class JunkCleanupResult(
-    val movedToTrash: Int,
+    val deleted: Int,
     val failed: Int,
     val reclaimedBytes: Long,
 )
@@ -103,20 +102,18 @@ object JunkCleaner {
     }
 
     fun clean(
-        context: Context,
         sharedRoot: File,
         candidates: List<JunkCandidate>,
         now: Long = System.currentTimeMillis(),
     ): JunkCleanupResult {
         val root = FilePathPolicy.canonical(sharedRoot)
-        val trash = TrashManager(context)
-        var moved = 0
+        var deleted = 0
         var failed = 0
         var reclaimed = 0L
 
-        candidates.distinctBy { it.path }.forEach { staleCandidate ->
+        candidates.distinctBy { it.path }.forEach { scannedCandidate ->
             val outcome = runCatching {
-                val safe = FilePathPolicy.requireDirectEntry(File(staleCandidate.path), root)
+                val safe = FilePathPolicy.requireDirectEntry(File(scannedCandidate.path), root)
                 require(!isInsideSkippedTopLevel(safe, root)) { "Korunan klasör" }
                 require(safe.exists()) { "Öğe artık mevcut değil" }
 
@@ -127,16 +124,22 @@ object JunkCleaner {
                 } else {
                     null
                 }
-                require(refreshed != null && refreshed.kind == staleCandidate.kind) {
+                require(refreshed != null && refreshed.kind == scannedCandidate.kind) {
                     "Öğe artık güvenli temizlik adayı değil"
                 }
+                require(
+                    refreshed.bytes == scannedCandidate.bytes &&
+                        refreshed.modifiedAt == scannedCandidate.modifiedAt
+                ) { "Öğe taramadan sonra değişti; silme atlandı" }
 
-                trash.moveToTrash(safe)
-                refreshed.bytes.coerceAtLeast(0L)
+                val bytes = refreshed.bytes.coerceAtLeast(0L)
+                val removed = safe.delete()
+                check(removed || !safe.exists()) { "Öğe silinemedi" }
+                bytes
             }
 
             outcome.onSuccess { bytes ->
-                moved++
+                deleted++
                 reclaimed += bytes
             }.onFailure {
                 failed++
@@ -144,7 +147,7 @@ object JunkCleaner {
         }
 
         return JunkCleanupResult(
-            movedToTrash = moved,
+            deleted = deleted,
             failed = failed,
             reclaimedBytes = reclaimed,
         )
