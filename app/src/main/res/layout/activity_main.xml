@@ -92,5 +92,13 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="@string/wireless_debugging" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/adbFilesButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/adb_browse" />
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

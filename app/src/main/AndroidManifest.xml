@@ -27,6 +27,9 @@
         </provider>
 
         <activity
+            android:name=".ui.AdbBrowserActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.AdbPairingActivity"
             android:exported="false" />
         <activity

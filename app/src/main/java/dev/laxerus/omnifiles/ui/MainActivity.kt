@@ -25,6 +25,9 @@ class MainActivity : OmniActivity() {
         binding.adbButton.setOnClickListener {
             startActivity(Intent(this, AdbPairingActivity::class.java))
         }
+        binding.adbFilesButton.setOnClickListener {
+            startActivity(Intent(this, AdbBrowserActivity::class.java))
+        }
     }
 
     override fun onResume() {
@@ -37,5 +40,6 @@ class MainActivity : OmniActivity() {
         binding.storageStatus.text = "${getString(R.string.direct_storage)}: ${if (state.sharedStorage) "Hazır" else "İzin gerekli"}"
         binding.adbStatus.text = "${getString(R.string.adb_shell)}: ${if (state.adbEndpointConfigured) "Yapılandırıldı" else "Bağlı değil"}"
         binding.rootStatus.text = "${getString(R.string.root_status)}: ${if (state.rootBinaryPresent) "Algılandı" else "Yok / bilinmiyor"}"
+        binding.adbFilesButton.isEnabled = state.adbEndpointConfigured
     }
 }

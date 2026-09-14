@@ -9,6 +9,11 @@
     <string name="open_files">Dosyalara göz at</string>
     <string name="grant_all_files">Tüm dosyalara erişimi aç</string>
     <string name="wireless_debugging">Kablosuz ADB</string>
+    <string name="adb_browse">ADB ile Android/data</string>
+    <string name="adb_browse_title">ADB Dosyaları</string>
+    <string name="adb_not_ready">Önce Kablosuz ADB bağlantısını kur.</string>
+    <string name="adb_loading">ADB üzerinden okunuyor…</string>
+    <string name="adb_symlink_blocked">Güvenlik için sembolik bağlantı önizlemesi kapalı.</string>
     <string name="adb_title">Kablosuz ADB</string>
     <string name="adb_help">Android 11+ Kablosuz hata ayıklama ekranındaki eşleştirme adresini, 6 haneli kodu ve normal bağlantı portunu gir.</string>
     <string name="host_hint">IP adresi (ör. 192.168.1.20)</string>

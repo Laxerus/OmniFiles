@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class AdbSessionManager private constructor(context: Context) {
     private val store = AdbEndpointStore(context)
@@ -46,20 +47,44 @@ class AdbSessionManager private constructor(context: Context) {
     suspend fun shell(command: String): String = mutex.withLock {
         require(command.isNotBlank()) { "Komut boş olamaz" }
         withContext(Dispatchers.IO) {
-            val active = session ?: run {
-                val endpoint = store.load() ?: error("ADB bağlı değil")
-                Kadb.create(endpoint.host, endpoint.port, connectTimeout = 8_000, socketTimeout = 15_000)
-                    .also { candidate ->
-                        val probe = candidate.shell("echo omnifiles-ready")
-                        check(probe.exitCode == 0 && probe.output.trim() == "omnifiles-ready") {
-                            "Kayıtlı ADB oturumu yeniden açılamadı"
-                        }
-                        session = candidate
-                    }
-            }
+            val active = ensureSessionBlocking()
             val response = active.shell(command)
             check(response.exitCode == 0) { response.errorOutput.ifBlank { "ADB komutu başarısız" } }
             response.output
+        }
+    }
+
+    suspend fun listDirectory(path: String): List<AdbRemoteEntry> = mutex.withLock {
+        val safePath = RemotePathPolicy.normalizeAbsolute(path)
+        withContext(Dispatchers.IO) {
+            ensureSessionBlocking().openSync().use { sync ->
+                sync.list(safePath).map { entry ->
+                    AdbRemoteEntry(
+                        parentPath = safePath,
+                        name = entry.name,
+                        mode = entry.mode,
+                        size = entry.size,
+                        modifiedAtMillis = entry.mtimeSec * 1000L,
+                        errorCode = entry.errorCode
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun pull(remotePath: String, destination: File): File = mutex.withLock {
+        val safePath = RemotePathPolicy.normalizeAbsolute(remotePath)
+        require(!destination.exists()) { "Yerel hedef zaten var" }
+        destination.parentFile?.let { parent -> check(parent.exists() || parent.mkdirs()) { "Önizleme klasörü oluşturulamadı" } }
+        withContext(Dispatchers.IO) {
+            try {
+                ensureSessionBlocking().pull(destination, safePath)
+                check(destination.isFile) { "ADB indirme sonucu dosya oluşmadı" }
+                destination
+            } catch (error: Throwable) {
+                destination.delete()
+                throw error
+            }
         }
     }
 
@@ -71,6 +96,23 @@ class AdbSessionManager private constructor(context: Context) {
     }
 
     fun endpoint(): AdbEndpoint? = store.load()
+
+    private fun ensureSessionBlocking(): Kadb {
+        session?.let { return it }
+        val endpoint = store.load() ?: error("ADB bağlı değil")
+        val candidate = Kadb.create(endpoint.host, endpoint.port, connectTimeout = 8_000, socketTimeout = 15_000)
+        try {
+            val probe = candidate.shell("echo omnifiles-ready")
+            check(probe.exitCode == 0 && probe.output.trim() == "omnifiles-ready") {
+                "Kayıtlı ADB oturumu yeniden açılamadı"
+            }
+            session = candidate
+            return candidate
+        } catch (error: Throwable) {
+            candidate.close()
+            throw error
+        }
+    }
 
     private fun requireValidHost(host: String) {
         val value = host.trim()
