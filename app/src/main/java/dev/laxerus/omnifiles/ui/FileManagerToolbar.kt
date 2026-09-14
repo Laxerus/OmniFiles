@@ -17,6 +17,7 @@ class FileManagerToolbar @JvmOverloads constructor(
         setOnMenuItemClickListener { item ->
             val target = when (item.itemId) {
                 R.id.actionSettingsTools -> MainActivity::class.java
+                R.id.actionJunkCleaner -> JunkCleanerActivity::class.java
                 R.id.actionStorageAnalyzer -> StorageAnalyzerActivity::class.java
                 R.id.actionTrash -> TrashActivity::class.java
                 R.id.actionChecksum -> ChecksumActivity::class.java
