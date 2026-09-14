@@ -42,6 +42,7 @@ REQUIRED = [
     "app/src/main/res/layout/activity_trash.xml",
     "app/src/main/res/layout/dialog_transfer_progress.xml",
     "app/src/main/res/values/transfer_strings.xml",
+    "app/src/main/res/values/strings_storage_analyzer.xml",
     "app/src/test/java/dev/laxerus/omnifiles/fs/BrowserStartPathPolicyTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/DigestUtilsTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileOperationsTest.kt",
@@ -226,9 +227,20 @@ require_tokens(
         "DEFAULT_MAX_ENTRIES = 40_000", "ArrayDeque<Frame>", "FilePathPolicy.requireDirectEntry",
         "isCancelled", "truncated", "largestFiles", "largestDirectories", "enum class FileCategory",
         "data class CategoryUsage", "IntArray(FileCategory.entries.size)", "LongArray(FileCategory.entries.size)",
+        "DEFAULT_CATEGORY_TOP_LIMIT = 8", "MAX_CATEGORY_TOP_LIMIT = 20", "categoryTopLimit",
+        "Array(FileCategory.entries.size)", "categoryLargestFiles[categoryIndex]",
+        "largestFiles = categoryLargestFiles[index].sortedWith(ranking)",
         "classifyFileName", "categories = categories",
     ),
     "bounded storage analyzer guard",
+)
+require_tokens(
+    "app/src/test/java/dev/laxerus/omnifiles/fs/StorageAnalyzerTest.kt",
+    (
+        "keepsLargestFilesPerCategoryBoundedAndSorted", "categoryTopLimit = 4",
+        "DEFAULT_CATEGORY_TOP_LIMIT", "listOf(30L, 29L, 28L, 27L)",
+    ),
+    "bounded analyzer category drill-down regression test",
 )
 require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt",
@@ -239,9 +251,18 @@ require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/ui/StorageAnalyzerActivity.kt",
     (
         "StorageAnalyzer.scan", "Dispatchers.IO", "AtomicBoolean", "cancelRequested", "largestDirectories",
-        "renderCategories", "result.categories", "categoryProgress", "FileBrowserActivity.EXTRA_START_PATH",
+        "renderCategories", "result.categories", "categoryProgress", "categoryHint", "showCategoryFiles",
+        "usage.largestFiles", "storage_analyzer_category_top_title", "FileBrowserActivity.EXTRA_START_PATH",
     ),
     "storage analyzer UI/cancellation/category/navigation wiring",
+)
+require_tokens(
+    "app/src/main/res/values/strings_storage_analyzer.xml",
+    (
+        "storage_analyzer_category_hint", "storage_analyzer_category_action_hint",
+        "storage_analyzer_category_top_title", "storage_analyzer_category_file_item",
+    ),
+    "storage analyzer category drill-down strings",
 )
 require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbBrowserActivity.kt",
@@ -299,7 +320,7 @@ layout_tokens = {
         "@+id/categoriesContainer", "@+id/filesContainer", "@+id/foldersContainer",
     ),
     "app/src/main/res/layout/item_storage_category.xml": (
-        "@+id/categoryName", "@+id/categoryMeta", "@+id/categoryProgress",
+        "@+id/categoryName", "@+id/categoryMeta", "@+id/categoryHint", "@+id/categoryProgress",
     ),
     "app/src/main/res/layout/activity_main.xml": (
         "@+id/trashButton", "@+id/checksumButton", "@+id/storageAnalyzerButton",
