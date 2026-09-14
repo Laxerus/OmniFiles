@@ -33,6 +33,24 @@ class StorageAnalyzerTest {
         }
     }
 
+    @Test fun topLimitKeepsOnlyLargestCandidates() {
+        val root = createTempDirectory("omnifiles-analyzer-top-").toFile()
+        try {
+            repeat(60) { index ->
+                File(root, "file-${index.toString().padStart(2, '0')}.bin")
+                    .writeBytes(ByteArray(index + 1))
+            }
+
+            val result = StorageAnalyzer.scan(root, maxEntries = 100, topLimit = 4)
+
+            assertEquals(60, result.fileCount)
+            assertEquals(4, result.largestFiles.size)
+            assertEquals(listOf(60L, 59L, 58L, 57L), result.largestFiles.map { it.sizeBytes })
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     @Test fun stopsAtConfiguredEntryLimit() {
         val root = createTempDirectory("omnifiles-analyzer-limit-").toFile()
         try {
