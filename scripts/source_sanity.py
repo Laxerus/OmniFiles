@@ -17,6 +17,9 @@ REQUIRED = [
     "app/src/main/java/dev/laxerus/omnifiles/ui/MainActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/OmniActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserActivity.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/ui/FileListAdapter.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/ui/LocalFileIntents.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/ui/BrowserLaunchExtras.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/TrashActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/TrashListAdapter.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbPairingActivity.kt",
@@ -25,8 +28,11 @@ REQUIRED = [
     "app/src/main/java/dev/laxerus/omnifiles/ui/ChecksumActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/ui/StorageAnalyzerActivity.kt",
     "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/adb/AdbDirectoryListing.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/BrowserStartPathPolicy.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/fs/BrowserHighlightPolicy.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/DigestUtils.kt",
+    "app/src/main/java/dev/laxerus/omnifiles/fs/Sha256Verifier.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileOperations.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt",
     "app/src/main/java/dev/laxerus/omnifiles/fs/FavoriteStore.kt",
@@ -43,8 +49,13 @@ REQUIRED = [
     "app/src/main/res/layout/dialog_transfer_progress.xml",
     "app/src/main/res/values/transfer_strings.xml",
     "app/src/main/res/values/strings_storage_analyzer.xml",
+    "app/src/main/res/values/strings_checksum_verify.xml",
+    "app/src/main/res/values/strings_adb_security.xml",
+    "app/src/main/res/values/strings_browser_highlight.xml",
     "app/src/test/java/dev/laxerus/omnifiles/fs/BrowserStartPathPolicyTest.kt",
+    "app/src/test/java/dev/laxerus/omnifiles/fs/BrowserHighlightPolicyTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/DigestUtilsTest.kt",
+    "app/src/test/java/dev/laxerus/omnifiles/fs/Sha256VerifierTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileOperationsTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/FileInspectorTest.kt",
     "app/src/test/java/dev/laxerus/omnifiles/fs/StorageAnalyzerTest.kt",
@@ -189,6 +200,17 @@ require_tokens(
 )
 
 require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/BrowserHighlightPolicy.kt",
+    ("fun findIndex(", "absolute.path == canonical.path", "canonical.exists()", "entries.indexOfFirst"),
+    "browser highlight safety policy",
+)
+require_tokens(
+    "app/src/test/java/dev/laxerus/omnifiles/fs/BrowserHighlightPolicyTest.kt",
+    ("findsExistingDirectEntryInVisibleList", "rejectsMissingAndUnlistedTargets", "rejectsSymlinkHighlightWhenSupported"),
+    "browser highlight regression test",
+)
+
+require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserActivity.kt",
     (
         "TransferMode.COPY", "TransferMode.MOVE", "sourcePaths: List<String>", "pastePendingTransfer",
@@ -207,6 +229,21 @@ if file_browser.is_file():
         errors.append("file browser must keep long-press selection separate from the more-actions menu")
 
 require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/FileListAdapter.kt",
+    (
+        "BrowserHighlightPolicy.findIndex", "BrowserLaunchExtras.EXTRA_HIGHLIGHT_PATH",
+        "BrowserLaunchExtras.EXTRA_HIGHLIGHT_CONSUMED", "scrollToPosition(index)", "strokeWidth",
+        "LocalFileIntents.checksumIntent",
+    ),
+    "file row launch highlight and checksum wiring",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/BrowserLaunchExtras.kt",
+    ("EXTRA_HIGHLIGHT_PATH", "EXTRA_HIGHLIGHT_CONSUMED"),
+    "browser launch highlight extras",
+)
+
+require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/fs/FilePathPolicy.kt",
     ("Character.isISOControl", "requireDirectEntry"),
     "local path policy",
@@ -215,6 +252,27 @@ require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/fs/DigestUtils.kt",
     ("SHA-256", "sha256Hex", "BUFFER_BYTES", "toHex"),
     "checksum primitive",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/Sha256Verifier.kt",
+    (
+        "enum class Status", "WAITING_FOR_HASH", "MATCH", "MISMATCH", "normalizeExpected",
+        'regionMatches(0, "sha256:"', "SHA256_HEX_LENGTH = 64", "fun verify(",
+    ),
+    "SHA-256 comparison policy",
+)
+require_tokens(
+    "app/src/test/java/dev/laxerus/omnifiles/fs/Sha256VerifierTest.kt",
+    ("normalizesUppercaseAndOptionalPrefix", "rejectsMalformedExpectedHashes", "distinguishesWaitingMatchAndMismatch"),
+    "SHA-256 comparison regression test",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/LocalFileIntents.kt",
+    (
+        "requireDirectFile", "FileProvider.getUriForFile", "fun viewIntent", "fun shareIntent",
+        "fun checksumIntent", "FLAG_GRANT_READ_URI_PERMISSION",
+    ),
+    "central safe local file intents",
 )
 require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/fs/FileInspector.kt",
@@ -253,6 +311,8 @@ require_tokens(
         "StorageAnalyzer.scan", "Dispatchers.IO", "AtomicBoolean", "cancelRequested", "largestDirectories",
         "renderCategories", "result.categories", "categoryProgress", "categoryHint", "showCategoryFiles",
         "usage.largestFiles", "storage_analyzer_category_top_title", "FileBrowserActivity.EXTRA_START_PATH",
+        "BrowserLaunchExtras.EXTRA_HIGHLIGHT_PATH", "LocalFileIntents.viewIntent", "LocalFileIntents.shareIntent",
+        "LocalFileIntents.checksumIntent",
     ),
     "storage analyzer UI/cancellation/category/navigation wiring",
 )
@@ -268,14 +328,24 @@ require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbBrowserActivity.kt",
     (
         "AdbFileListAdapter(::openEntry, ::handleLongPress, ::showEntryActions)", "showEntryDetails",
-        "copyRemotePath", "RemotePathPolicy.normalizeAbsolute(entry.path)", "ClipData.newUri", "R.string.adb_mode",
+        "copyRemotePath", "RemotePathPolicy.normalizeAbsolute(entry.path)", "R.string.adb_mode",
+        "manager.listDirectoryDetailed(safePath)", "adb_unsafe_entries_skipped",
+        "LocalFileIntents.shareIntent", "LocalFileIntents.viewIntent",
     ),
-    "ADB browser action/detail safety wiring",
+    "ADB browser action/detail/filter safety wiring",
 )
 require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/adb/AdbSessionManager.kt",
-    ("suspend fun healthCheck", "snapshotRemote", "before == after", "destination.length() == after.size"),
-    "ADB health/pull verification",
+    (
+        "suspend fun healthCheck", "snapshotRemote", "before == after", "destination.length() == after.size",
+        "listDirectoryDetailed", "skippedUnsafeEntries", "AdbDirectoryListing",
+    ),
+    "ADB health/pull/list verification",
+)
+require_tokens(
+    "app/src/main/java/dev/laxerus/omnifiles/adb/AdbDirectoryListing.kt",
+    ("data class AdbDirectoryListing", "entries: List<AdbRemoteEntry>", "skippedUnsafeEntries"),
+    "ADB directory listing metadata",
 )
 require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbFileListAdapter.kt",
@@ -284,8 +354,16 @@ require_tokens(
 )
 require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/ui/ChecksumActivity.kt",
-    ("ActivityResultContracts.OpenDocument", "DigestUtils::sha256Hex", "ClipboardManager", "STATE_HASH"),
-    "checksum tool wiring",
+    (
+        "ActivityResultContracts.OpenDocument", "DigestUtils::sha256Hex", "ClipboardManager", "STATE_HASH",
+        "STATE_EXPECTED", "pasteExpectedHash", "Sha256Verifier.verify", "expectedHashInput", "verificationText",
+    ),
+    "checksum verification tool wiring",
+)
+require_tokens(
+    "app/src/main/res/values/strings_checksum_verify.xml",
+    ("checksum_expected_label", "checksum_verify_invalid", "checksum_verify_match", "checksum_verify_mismatch"),
+    "checksum verification strings",
 )
 require_tokens(
     "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt",
@@ -315,6 +393,9 @@ layout_tokens = {
         "@+id/favoriteToggleButton", "@+id/favoritesButton", "@+id/selectionBar", "@+id/selectAllButton",
         "@+id/selectionShareButton", "@+id/selectionCopyButton", "@+id/selectionMoveButton",
         "@+id/selectionTrashButton", "@+id/pasteButton", "@+id/cancelTransferButton", "@+id/operationProgress",
+    ),
+    "app/src/main/res/layout/activity_checksum.xml": (
+        "@+id/expectedHashLayout", "@+id/expectedHashInput", "@+id/pasteExpectedHashButton", "@+id/verificationText",
     ),
     "app/src/main/res/layout/activity_storage_analyzer.xml": (
         "@+id/categoriesContainer", "@+id/filesContainer", "@+id/foldersContainer",
