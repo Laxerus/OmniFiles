@@ -11,7 +11,8 @@ import java.text.DateFormat
 import java.util.Date
 
 class AdbFileListAdapter(
-    private val onClick: (AdbRemoteEntry) -> Unit
+    private val onClick: (AdbRemoteEntry) -> Unit,
+    private val onLongClick: (AdbRemoteEntry) -> Unit
 ) : ListAdapter<AdbRemoteEntry, AdbFileListAdapter.Holder>(Diff) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder =
@@ -36,7 +37,10 @@ class AdbFileListAdapter(
                 .format(Date(entry.modifiedAtMillis))
             binding.meta.text = "$type • $date"
             binding.root.setOnClickListener { onClick(entry) }
-            binding.root.setOnLongClickListener(null)
+            binding.root.setOnLongClickListener {
+                onLongClick(entry)
+                true
+            }
         }
     }
 

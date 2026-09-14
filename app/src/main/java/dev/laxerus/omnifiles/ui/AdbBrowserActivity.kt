@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.View
 import android.webkit.MimeTypeMap
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -14,7 +15,9 @@ import dev.laxerus.omnifiles.adb.AdbRemoteEntry
 import dev.laxerus.omnifiles.adb.AdbSessionManager
 import dev.laxerus.omnifiles.adb.RemotePathPolicy
 import dev.laxerus.omnifiles.databinding.ActivityFileBrowserBinding
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 
@@ -24,6 +27,28 @@ class AdbBrowserActivity : OmniActivity() {
     private val manager by lazy { AdbSessionManager.get(this) }
     private var currentPath = DEFAULT_PATH
     private var loading = false
+    private var pendingExport: File? = null
+
+    private val createDocument = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        val source = pendingExport.also { pendingExport = null } ?: return@registerForActivityResult
+        if (uri == null) return@registerForActivityResult
+        lifecycleScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    contentResolver.openOutputStream(uri, "w")?.use { output ->
+                        source.inputStream().use { input -> input.copyTo(output) }
+                    } ?: error("Hedef dosya açılamadı")
+                }
+            }
+            Toast.makeText(
+                this@AdbBrowserActivity,
+                if (result.isSuccess) R.string.adb_export_done else R.string.adb_export_failed,
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,7 +59,7 @@ class AdbBrowserActivity : OmniActivity() {
         binding.toolbar.title = getString(R.string.adb_browse_title)
         binding.toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
         binding.toolbar.setNavigationOnClickListener { navigateUpOrFinish() }
-        adapter = AdbFileListAdapter(::openEntry)
+        adapter = AdbFileListAdapter(::openEntry, ::exportEntry)
         binding.list.layoutManager = LinearLayoutManager(this)
         binding.list.adapter = adapter
 
@@ -44,6 +69,7 @@ class AdbBrowserActivity : OmniActivity() {
             finish()
             return
         }
+        Toast.makeText(this, R.string.adb_long_press_export, Toast.LENGTH_SHORT).show()
         load(currentPath)
     }
 
@@ -98,16 +124,41 @@ class AdbBrowserActivity : OmniActivity() {
         }
     }
 
+    private fun exportEntry(entry: AdbRemoteEntry) {
+        if (entry.isDirectory || entry.isSymlink || loading) return
+        loading = true
+        binding.emptyText.visibility = View.VISIBLE
+        binding.emptyText.text = "Dosya dışa aktarım için hazırlanıyor…"
+        lifecycleScope.launch {
+            val target = newPreviewFile(entry.name)
+            runCatching { manager.pull(entry.path, target) }
+                .onSuccess { local ->
+                    pendingExport = local
+                    Toast.makeText(this@AdbBrowserActivity, R.string.adb_export_ready, Toast.LENGTH_SHORT).show()
+                    createDocument.launch(entry.name.ifBlank { "export.bin" })
+                }
+                .onFailure {
+                    target.delete()
+                    Toast.makeText(this@AdbBrowserActivity, it.message ?: "Dosya alınamadı", Toast.LENGTH_LONG).show()
+                }
+            binding.emptyText.visibility = if (adapter.currentList.isEmpty()) View.VISIBLE else View.GONE
+            loading = false
+        }
+    }
+
     private fun preview(entry: AdbRemoteEntry) {
         if (loading) return
         loading = true
         binding.emptyText.visibility = View.VISIBLE
         binding.emptyText.text = "Dosya geçici alana alınıyor…"
         lifecycleScope.launch {
-            val target = File(previewRoot(), "${UUID.randomUUID()}-${sanitize(entry.name)}")
+            val target = newPreviewFile(entry.name)
             runCatching { manager.pull(entry.path, target) }
                 .onSuccess { openLocalPreview(it) }
-                .onFailure { Toast.makeText(this@AdbBrowserActivity, it.message ?: "Dosya alınamadı", Toast.LENGTH_LONG).show() }
+                .onFailure {
+                    target.delete()
+                    Toast.makeText(this@AdbBrowserActivity, it.message ?: "Dosya alınamadı", Toast.LENGTH_LONG).show()
+                }
             binding.emptyText.visibility = if (adapter.currentList.isEmpty()) View.VISIBLE else View.GONE
             loading = false
         }
@@ -127,6 +178,9 @@ class AdbBrowserActivity : OmniActivity() {
         }
     }
 
+    private fun newPreviewFile(name: String): File =
+        File(previewRoot(), "${UUID.randomUUID()}-${sanitize(name)}")
+
     private fun previewRoot(): File = File(cacheDir, "adb-preview").apply { mkdirs() }
 
     private fun prunePreviewCache() {
@@ -135,7 +189,8 @@ class AdbBrowserActivity : OmniActivity() {
         }
     }
 
-    private fun sanitize(name: String): String = name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(96).ifBlank { "preview.bin" }
+    private fun sanitize(name: String): String =
+        name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(96).ifBlank { "preview.bin" }
 
     companion object {
         private const val DEFAULT_PATH = "/sdcard/Android/data"

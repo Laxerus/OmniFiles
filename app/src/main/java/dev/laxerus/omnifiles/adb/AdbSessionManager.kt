@@ -24,16 +24,16 @@ class AdbSessionManager private constructor(context: Context) {
         requireValidHost(host)
         require(port in 1..65535) { "Geçersiz bağlantı portu" }
         withContext(Dispatchers.IO) {
-            val next = Kadb.create(host.trim(), port, connectTimeout = 8_000, socketTimeout = 15_000)
+            closeSessionBlocking()
+            val next = newSession(host.trim(), port)
             try {
                 val response = next.shell("id")
                 check(response.exitCode == 0) { response.errorOutput.ifBlank { "ADB shell bağlantısı doğrulanamadı" } }
-                session?.close()
                 session = next
                 store.save(AdbEndpoint(host.trim(), port))
                 response.output.trim()
             } catch (error: Throwable) {
-                next.close()
+                runCatching { next.close() }
                 throw error
             }
         }
@@ -47,26 +47,29 @@ class AdbSessionManager private constructor(context: Context) {
     suspend fun shell(command: String): String = mutex.withLock {
         require(command.isNotBlank()) { "Komut boş olamaz" }
         withContext(Dispatchers.IO) {
-            val active = ensureSessionBlocking()
-            val response = active.shell(command)
-            check(response.exitCode == 0) { response.errorOutput.ifBlank { "ADB komutu başarısız" } }
-            response.output
+            withReconnectOnce { active ->
+                val response = active.shell(command)
+                check(response.exitCode == 0) { response.errorOutput.ifBlank { "ADB komutu başarısız" } }
+                response.output
+            }
         }
     }
 
     suspend fun listDirectory(path: String): List<AdbRemoteEntry> = mutex.withLock {
         val safePath = RemotePathPolicy.normalizeAbsolute(path)
         withContext(Dispatchers.IO) {
-            ensureSessionBlocking().openSync().use { sync ->
-                sync.list(safePath).map { entry ->
-                    AdbRemoteEntry(
-                        parentPath = safePath,
-                        name = entry.name,
-                        mode = entry.mode,
-                        size = entry.size,
-                        modifiedAtMillis = entry.mtimeSec * 1000L,
-                        errorCode = entry.errorCode
-                    )
+            withReconnectOnce { active ->
+                active.openSync().use { sync ->
+                    sync.list(safePath).map { entry ->
+                        AdbRemoteEntry(
+                            parentPath = safePath,
+                            name = entry.name,
+                            mode = entry.mode,
+                            size = entry.size,
+                            modifiedAtMillis = entry.mtimeSec * 1000L,
+                            errorCode = entry.errorCode
+                        )
+                    }
                 }
             }
         }
@@ -75,12 +78,16 @@ class AdbSessionManager private constructor(context: Context) {
     suspend fun pull(remotePath: String, destination: File): File = mutex.withLock {
         val safePath = RemotePathPolicy.normalizeAbsolute(remotePath)
         require(!destination.exists()) { "Yerel hedef zaten var" }
-        destination.parentFile?.let { parent -> check(parent.exists() || parent.mkdirs()) { "Önizleme klasörü oluşturulamadı" } }
+        destination.parentFile?.let { parent ->
+            check(parent.exists() || parent.mkdirs()) { "Önizleme klasörü oluşturulamadı" }
+        }
         withContext(Dispatchers.IO) {
             try {
-                ensureSessionBlocking().pull(destination, safePath)
-                check(destination.isFile) { "ADB indirme sonucu dosya oluşmadı" }
-                destination
+                withReconnectOnce { active ->
+                    active.pull(destination, safePath)
+                    check(destination.isFile) { "ADB indirme sonucu dosya oluşmadı" }
+                    destination
+                }
             } catch (error: Throwable) {
                 destination.delete()
                 throw error
@@ -88,19 +95,32 @@ class AdbSessionManager private constructor(context: Context) {
         }
     }
 
-    suspend fun disconnect() = mutex.withLock {
-        withContext(Dispatchers.IO) {
-            session?.close()
-            session = null
-        }
+    suspend fun disconnect(forgetEndpoint: Boolean = false) = mutex.withLock {
+        withContext(Dispatchers.IO) { closeSessionBlocking() }
+        if (forgetEndpoint) store.clear()
     }
 
     fun endpoint(): AdbEndpoint? = store.load()
 
+    private fun <T> withReconnectOnce(operation: (Kadb) -> T): T {
+        val first = ensureSessionBlocking()
+        return try {
+            operation(first)
+        } catch (error: Throwable) {
+            if (first.connectionCheck()) throw error
+            closeSessionBlocking()
+            val retry = ensureSessionBlocking()
+            operation(retry)
+        }
+    }
+
     private fun ensureSessionBlocking(): Kadb {
-        session?.let { return it }
+        session?.let { active ->
+            if (active.connectionCheck()) return active
+            closeSessionBlocking()
+        }
         val endpoint = store.load() ?: error("ADB bağlı değil")
-        val candidate = Kadb.create(endpoint.host, endpoint.port, connectTimeout = 8_000, socketTimeout = 15_000)
+        val candidate = newSession(endpoint.host, endpoint.port)
         try {
             val probe = candidate.shell("echo omnifiles-ready")
             check(probe.exitCode == 0 && probe.output.trim() == "omnifiles-ready") {
@@ -109,9 +129,18 @@ class AdbSessionManager private constructor(context: Context) {
             session = candidate
             return candidate
         } catch (error: Throwable) {
-            candidate.close()
+            runCatching { candidate.close() }
             throw error
         }
+    }
+
+    private fun newSession(host: String, port: Int): Kadb =
+        Kadb.create(host, port, connectTimeout = CONNECT_TIMEOUT_MS, socketTimeout = SOCKET_TIMEOUT_MS)
+
+    private fun closeSessionBlocking() {
+        val old = session
+        session = null
+        runCatching { old?.close() }
     }
 
     private fun requireValidHost(host: String) {
@@ -121,6 +150,8 @@ class AdbSessionManager private constructor(context: Context) {
     }
 
     companion object {
+        private const val CONNECT_TIMEOUT_MS = 8_000
+        private const val SOCKET_TIMEOUT_MS = 15_000
         @Volatile private var instance: AdbSessionManager? = null
 
         fun get(context: Context): AdbSessionManager = instance ?: synchronized(this) {
