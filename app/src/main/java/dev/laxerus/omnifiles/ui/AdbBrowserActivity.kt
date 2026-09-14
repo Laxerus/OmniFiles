@@ -75,6 +75,7 @@ class AdbBrowserActivity : OmniActivity() {
         adapter = AdbFileListAdapter(::openEntry, ::exportEntry)
         binding.list.layoutManager = LinearLayoutManager(this)
         binding.list.adapter = adapter
+        binding.newFolderButton.visibility = View.GONE
 
         binding.searchInput.doAfterTextChanged { renderEntries() }
         binding.hiddenSwitch.setOnCheckedChangeListener { _, checked ->
