@@ -27,6 +27,8 @@ if manifest.is_file():
         errors.append("FileBrowserActivity must remain the exported MAIN/LAUNCHER and MainActivity must remain internal")
     if text.count('android.intent.category.LAUNCHER') != 1:
         errors.append("manifest must expose exactly one launcher entry")
+    if 'android:name=".ui.JunkCleanerActivity" android:exported="false"' not in text:
+        errors.append("JunkCleanerActivity must remain internal")
 else:
     errors.append("missing AndroidManifest.xml")
 
@@ -34,6 +36,7 @@ require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileManagerToolbar.kt",
     "inflateMenu(R.menu.menu_file_browser)",
     "R.id.actionSettingsTools -> MainActivity::class.java",
+    "R.id.actionJunkCleaner -> JunkCleanerActivity::class.java",
     "R.id.actionStorageAnalyzer -> StorageAnalyzerActivity::class.java",
     "R.id.actionTrash -> TrashActivity::class.java",
     "R.id.actionChecksum -> ChecksumActivity::class.java",
@@ -54,6 +57,7 @@ require(
 require(
     "app/src/main/res/menu/menu_file_browser.xml",
     '@+id/actionSettingsTools',
+    '@+id/actionJunkCleaner',
     '@+id/actionStorageAnalyzer',
     '@+id/actionTrash',
     '@+id/actionChecksum',
@@ -114,6 +118,7 @@ require(
     "binding.developerSettingsCard.setOnClickListener",
     "binding.wifiSettingsCard.setOnClickListener",
     "binding.appDetailsCard.setOnClickListener",
+    "binding.junkCleanerButton.setOnClickListener",
     "binding.storageAnalyzerButton.setOnClickListener",
     "binding.trashButton.setOnClickListener",
     "binding.checksumButton.setOnClickListener",
@@ -124,6 +129,7 @@ require(
     "binding.storageStatusChip",
     "binding.adbStatusChip",
     "binding.rootStatusChip",
+    "openStorageTool(",
     "openAdbTool(",
     "openStorageAccessSettings()",
     "SystemSettingsNavigator.Destination.DEVELOPER_OPTIONS",
@@ -140,6 +146,7 @@ require(
     '@+id/developerSettingsCard',
     '@+id/wifiSettingsCard',
     '@+id/appDetailsCard',
+    '@+id/junkCleanerButton',
     '@+id/storageAnalyzerButton',
     '@+id/trashButton',
     '@+id/checksumButton',
@@ -148,6 +155,31 @@ require(
     '@+id/saveScoutCard',
     '@+id/sqliteStudioCard',
     "dev.laxerus.omnifiles.ui.SettingsActionCard",
+)
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/JunkCleaner.kt",
+    "object JunkCleaner",
+    "DEFAULT_MAX_ENTRIES",
+    "skippedTopLevelDirectories",
+    "FilePathPolicy.requireDirectEntry",
+    "trash.moveToTrash",
+    "classifyFile",
+    "classifyDirectory",
+)
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/JunkCleanerActivity.kt",
+    "JunkCleaner.scan",
+    "JunkCleaner.clean",
+    "MaterialAlertDialogBuilder",
+    "TrashActivity::class.java",
+)
+require(
+    "app/src/main/res/layout/activity_junk_cleaner.xml",
+    '@+id/scanButton',
+    '@+id/cleanButton',
+    '@+id/openTrashButton',
+    '@+id/summaryText',
+    '@+id/detailsText',
 )
 require(
     "app/src/main/res/values/strings_settings_hub.xml",
@@ -164,6 +196,14 @@ require(
     "settings_status_adb_connected",
     "settings_status_root_detected",
     "settings_requires_adb",
+)
+require(
+    "app/src/main/res/values/strings_junk_cleaner.xml",
+    "junk_cleaner_title",
+    "junk_cleaner_clean_now",
+    "junk_cleaner_safety_note",
+    "settings_junk_cleaner_summary",
+    "toolbar_junk_cleaner",
 )
 
 for drawable in (
