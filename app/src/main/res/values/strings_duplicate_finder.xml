@@ -20,6 +20,12 @@
     <string name="duplicate_finder_group_title">%1$d aynı dosya • %2$s</string>
     <string name="duplicate_finder_group_meta">%1$s kazanılabilir • SHA-256 %2$s…</string>
     <string name="duplicate_finder_group_dialog">%1$d doğrulanmış kopya</string>
+    <string name="duplicate_finder_clean_group">En yeniyi koru, diğerlerini çöpe taşı</string>
+    <string name="duplicate_finder_clean_group_title">Gereksiz kopyalar Çöp Kutusu’na taşınsın mı?</string>
+    <string name="duplicate_finder_clean_group_message">%1$d kopya OmniFiles Çöp Kutusu’na taşınacak.\n\nKorunacak dosya: %2$s\nYaklaşık kazanılabilir alan: %3$s\n\nKalıcı silme yapılmaz. Taramadan sonra değişmiş dosyalara dokunulmaz.</string>
+    <string name="duplicate_finder_clean_group_confirm">Kopyaları çöpe taşı</string>
+    <string name="duplicate_finder_group_cleaning">Kopyalar güvenli biçimde OmniFiles Çöp Kutusu’na taşınıyor…</string>
+    <string name="duplicate_finder_clean_group_result">%1$d kopya taşındı • %2$d öğe atlandı veya taşınamadı</string>
     <string name="duplicate_finder_file_actions_title">Kopya işlemleri</string>
     <string name="duplicate_finder_action_open">Konumuna git</string>
     <string name="duplicate_finder_action_copy_path">Yolu kopyala</string>
