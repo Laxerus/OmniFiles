@@ -64,8 +64,8 @@ require(
 )
 require(
     "app/src/test/java/dev/laxerus/omnifiles/fs/QuickFolderPolicyTest.kt",
-    "usesFirstAvailableAliasForScreenshotsAndRecordings",
-    "fallsBackWhenFirstAliasEscapesSharedRoot",
+    "prefersFirstAvailableAliasAndFallsBackWhenMissing",
+    "unsafePrimaryAliasDoesNotBlockSafeFallbackAlias",
     "rejectsSymlinkedQuickFolderThatEscapesSharedRoot",
 )
 require(
@@ -86,14 +86,15 @@ require(
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/DuplicateFinderActivity.kt",
     "DuplicateFinder.verifyDuplicate",
-    "duplicate_finder_keeper_changed",
-    "duplicate_finder_target_changed",
-    "duplicate_finder_scan_pipeline",
+    "duplicate_finder_keeper_stale",
+    "duplicate_finder_keeper_changed_during_cleanup",
+    "duplicate_finder_pipeline_summary",
+    "!verifyDuplicate(duplicate, group.sha256)",
 )
 require(
     "app/src/test/java/dev/laxerus/omnifiles/fs/DuplicateFinderTest.kt",
     "verifyDuplicateAcceptsUnchangedVerifiedFile",
-    "verifyDuplicateRejectsChangedContentEvenWhenSizeAndTimestampMatch",
+    "verifyDuplicateRejectsContentChangedWithSameSizeAndTimestamp",
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserPreferences.kt",
@@ -102,7 +103,8 @@ require(
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserSorter.kt",
-    "sortDescending",
+    "descending: Boolean",
+    "if (descending) -primary else primary",
     "NaturalNameComparator",
 )
 
