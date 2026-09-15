@@ -42,7 +42,52 @@ class DuplicateFinderTest {
 
             assertTrue(result.groups.isEmpty())
             assertEquals(0, result.candidateFiles)
+            assertEquals(0, result.fingerprintedFiles)
             assertEquals(0, result.hashedFiles)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun sampledFingerprintFiltersDifferentContentBeforeFullHash() {
+        val root = Files.createTempDirectory("omnifiles-duplicates-sample").toFile()
+        try {
+            val length = 256 * 1024
+            root.resolve("a.bin").writeBytes(ByteArray(length) { 1 })
+            root.resolve("b.bin").writeBytes(ByteArray(length) { 2 })
+            root.resolve("c.bin").writeBytes(ByteArray(length) { 3 })
+
+            val result = DuplicateFinder.scan(root, minFileSizeBytes = 1L)
+
+            assertEquals(3, result.candidateFiles)
+            assertEquals(3, result.fingerprintedFiles)
+            assertEquals(0, result.hashedFiles)
+            assertEquals(0L, result.hashedBytes)
+            assertTrue(result.groups.isEmpty())
+            assertFalse(result.truncated)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun respectsFingerprintLimitAndMarksResultTruncated() {
+        val root = Files.createTempDirectory("omnifiles-duplicates-fingerprint-limit").toFile()
+        try {
+            val payload = "candidate".repeat(2_000)
+            repeat(4) { index -> root.resolve("$index.bin").writeText(payload) }
+
+            val result = DuplicateFinder.scan(
+                root = root,
+                minFileSizeBytes = 1L,
+                maxFingerprintedFiles = 2,
+            )
+
+            assertTrue(result.truncated)
+            assertEquals(2, result.fingerprintedFiles)
+            assertEquals(2, result.hashedFiles)
+            assertEquals(1, result.groups.size)
         } finally {
             root.deleteRecursively()
         }
@@ -62,9 +107,35 @@ class DuplicateFinderTest {
             )
 
             assertTrue(result.truncated)
+            assertEquals(4, result.fingerprintedFiles)
             assertEquals(2, result.hashedFiles)
             assertEquals(1, result.groups.size)
             assertEquals(2, result.groups.single().files.size)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun respectsTotalHashedByteBudget() {
+        val root = Files.createTempDirectory("omnifiles-duplicates-byte-limit").toFile()
+        try {
+            val payload = "duplicate-budget".repeat(1_000)
+            root.resolve("a.bin").writeText(payload)
+            root.resolve("b.bin").writeText(payload)
+            val fileBytes = root.resolve("a.bin").length()
+
+            val result = DuplicateFinder.scan(
+                root = root,
+                minFileSizeBytes = 1L,
+                maxHashedBytes = fileBytes,
+            )
+
+            assertTrue(result.truncated)
+            assertEquals(2, result.fingerprintedFiles)
+            assertEquals(1, result.hashedFiles)
+            assertEquals(fileBytes, result.hashedBytes)
+            assertTrue(result.groups.isEmpty())
         } finally {
             root.deleteRecursively()
         }
