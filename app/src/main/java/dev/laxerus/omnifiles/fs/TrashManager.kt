@@ -16,7 +16,8 @@ data class TrashEntry(
     val originalFile: File?,
     val displayName: String,
     val trashedAt: Long,
-    val legacy: Boolean
+    val legacy: Boolean,
+    val restoreAvailability: TrashRestoreAvailability,
 )
 
 data class TrashCleanupResult(
@@ -89,6 +90,9 @@ class TrashManager(private val context: Context) {
     fun restore(entry: TrashEntry): File {
         val original = entry.originalFile
             ?: error("Bu eski çöp kaydının orijinal konumu bilinmiyor; otomatik geri yükleme yapılamaz")
+        require(entry.restoreAvailability == TrashRestoreAvailability.AVAILABLE) {
+            "Eski konumda aynı adda başka bir öğe var; geri alma iptal edildi"
+        }
         return restore(TrashTicket(entry.trashedFile, original))
     }
 
@@ -187,7 +191,8 @@ class TrashManager(private val context: Context) {
                 originalFile = null,
                 displayName = fallbackName,
                 trashedAt = fallbackTime,
-                legacy = true
+                legacy = true,
+                restoreAvailability = TrashRestoreAvailability.ORIGINAL_UNKNOWN,
             )
         }
 
@@ -197,13 +202,15 @@ class TrashManager(private val context: Context) {
         val originalFile = originalPath
             ?.let(::File)
             ?.let { path -> runCatching { FilePathPolicy.requireMutableTarget(path, StorageAccessController.sharedRoot()) }.getOrNull() }
+        val restoreAvailability = TrashRestorePolicy.availability(originalFile)
 
         return TrashEntry(
             trashedFile = source,
             originalFile = originalFile,
             displayName = displayName,
             trashedAt = trashedAt,
-            legacy = originalFile == null
+            legacy = originalFile == null,
+            restoreAvailability = restoreAvailability,
         )
     }
 
