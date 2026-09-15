@@ -30,8 +30,21 @@ require(
     "absolute.path != canonical.path",
 )
 require(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/DurableFileWriter.kt",
+    "object DurableFileWriter",
+    "fun writeNewUtf8(temp: File, destination: File, content: String)",
+    "output.fd.sync()",
+    "check(temp.readBytes().contentEquals(bytes))",
+    "check(temp.renameTo(destination))",
+    "val persistedMatches = runCatching",
+    "destination.delete()",
+)
+require(
     "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt",
     "!CopyIntegrityVerifier.matches(source, destination)",
+    "DurableFileWriter.writeNewUtf8(temp, destination, json.toString())",
+    "Çöp metadata kaydı JSON doğrulamasından geçmedi",
+    "Çöp metadata kaydı alan doğrulamasından geçmedi",
     "Klasör güvenli biçimde kopyalanıp doğrulanamadı; kaynak korunuyor",
     "Dosya içerik doğrulamasından geçmedi; kaynak korunuyor",
     "Klasör eski konumuna içerik doğrulamasıyla geri yüklenemedi; çöp kopyası korundu",
@@ -44,6 +57,11 @@ require(
     "acceptsIdenticalDirectoryTrees",
     "rejectsDirectoryTreeWithSameSizeMutation",
     "rejectsSymlinkedTreeEntry",
+)
+require(
+    "app/src/test/java/dev/laxerus/omnifiles/fs/DurableFileWriterTest.kt",
+    "writesVerifiedUtf8AndRemovesTemp",
+    "refusesToOverwriteExistingDestination",
 )
 
 trash_text = (root / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt").read_text(encoding="utf-8")
