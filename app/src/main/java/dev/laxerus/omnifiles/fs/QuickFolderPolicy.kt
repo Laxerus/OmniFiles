@@ -3,14 +3,23 @@ package dev.laxerus.omnifiles.fs
 import java.io.File
 
 object QuickFolderPolicy {
-    enum class Kind(val relativePath: String) {
-        DOWNLOADS("Download"),
-        DOCUMENTS("Documents"),
-        PICTURES("Pictures"),
-        CAMERA("DCIM"),
-        VIDEOS("Movies"),
-        MUSIC("Music"),
-        ANDROID_MEDIA("Android/media"),
+    enum class Kind(val relativePaths: List<String>) {
+        DOWNLOADS(listOf("Download")),
+        DOCUMENTS(listOf("Documents")),
+        PICTURES(listOf("Pictures")),
+        CAMERA(listOf("DCIM")),
+        SCREENSHOTS(listOf("DCIM/Screenshots", "Pictures/Screenshots")),
+        VIDEOS(listOf("Movies")),
+        RECORDINGS(
+            listOf(
+                "DCIM/Screen recordings",
+                "Movies/Screen recordings",
+                "Recordings",
+                "Music/Recordings",
+            )
+        ),
+        MUSIC(listOf("Music")),
+        ANDROID_MEDIA(listOf("Android/media")),
     }
 
     data class Entry(
@@ -22,9 +31,13 @@ object QuickFolderPolicy {
         val root = FilePathPolicy.canonical(sharedRoot)
         val seen = linkedSetOf<String>()
         return Kind.entries.mapNotNull { kind ->
-            val candidate = File(root, kind.relativePath)
-            val safe = runCatching { FilePathPolicy.requireDirectEntry(candidate, root) }.getOrNull()
-                ?.takeIf { it.exists() && it.isDirectory && it.canRead() }
+            val safe = kind.relativePaths.asSequence()
+                .mapNotNull { relativePath ->
+                    val candidate = File(root, relativePath)
+                    runCatching { FilePathPolicy.requireDirectEntry(candidate, root) }.getOrNull()
+                        ?.takeIf { it.exists() && it.isDirectory && it.canRead() }
+                }
+                .firstOrNull()
                 ?: return@mapNotNull null
             if (!seen.add(safe.canonicalPath)) return@mapNotNull null
             Entry(kind, safe)
