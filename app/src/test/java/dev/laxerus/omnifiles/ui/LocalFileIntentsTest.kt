@@ -34,6 +34,21 @@ class LocalFileIntentsTest {
     }
 
     @Test
+    fun requireDirectFileRejectsMissingFile() {
+        val root = createTempDirectory("omnifiles-local-intent-missing-").toFile()
+        try {
+            val file = root.resolve("gone.txt").apply { writeText("temporary") }
+            check(file.delete())
+
+            assertThrows(IllegalArgumentException::class.java) {
+                LocalFileIntents.requireDirectFile(file)
+            }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun requireDirectFileRejectsSymlink() {
         val root = createTempDirectory("omnifiles-local-intent-link-").toFile()
         try {
