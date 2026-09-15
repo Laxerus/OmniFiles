@@ -3,6 +3,7 @@ package dev.laxerus.omnifiles.maintenance
 import android.content.Context
 import dev.laxerus.omnifiles.access.StorageAccessController
 import dev.laxerus.omnifiles.fs.JunkCleaner
+import dev.laxerus.omnifiles.fs.JunkKind
 
 data class AutoCleanupState(
     val enabled: Boolean,
@@ -31,6 +32,12 @@ object AutoCleanupManager {
     private const val KEY_LAST_FAILED = "last_failed"
     private const val KEY_LAST_RECLAIMED = "last_reclaimed_bytes"
     private const val KEY_LAST_TRUNCATED = "last_scan_truncated"
+
+    private val automaticKinds = setOf(
+        JunkKind.METADATA,
+        JunkKind.EMPTY_CACHE_DIRECTORY,
+        JunkKind.EMPTY_LOG,
+    )
 
     fun state(context: Context): AutoCleanupState {
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -80,9 +87,10 @@ object AutoCleanupManager {
         prefs.edit().putLong(KEY_LAST_ATTEMPT, now).commit()
 
         val scan = JunkCleaner.scan(StorageAccessController.sharedRoot(), now = now)
+        val automaticCandidates = scan.candidates.filter { it.kind in automaticKinds }
         val cleanup = JunkCleaner.clean(
             sharedRoot = StorageAccessController.sharedRoot(),
-            candidates = scan.candidates,
+            candidates = automaticCandidates,
             now = now,
         )
         val completedAt = System.currentTimeMillis().coerceAtLeast(now)
