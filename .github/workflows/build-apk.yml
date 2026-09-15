@@ -41,7 +41,17 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android 17 platform
-        run: sdkmanager --channel=3 "platform-tools" "platforms;android-37" "build-tools;36.0.0"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v android >/dev/null 2>&1; then
+            yes | android sdk install --canary \
+              "platforms/android-37" \
+              "build-tools/36.0.0" \
+              "platform-tools"
+          else
+            sdkmanager --channel=3 "platform-tools" "platforms;android-37" "build-tools;36.0.0"
+          fi
 
       - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
