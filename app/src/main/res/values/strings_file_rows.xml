@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="file_kind_directory">Klasör</string>
+    <string name="file_kind_image">Görsel</string>
+    <string name="file_kind_video">Video</string>
+    <string name="file_kind_audio">Ses</string>
+    <string name="file_kind_archive">Arşiv</string>
+    <string name="file_kind_android_package">Android paketi</string>
+    <string name="file_kind_database">Veritabanı</string>
+    <string name="file_kind_config">Ayar dosyası</string>
+    <string name="file_kind_code">Kod</string>
+    <string name="file_kind_pdf">PDF</string>
+    <string name="file_kind_document">Belge</string>
+    <string name="file_kind_spreadsheet">Tablo</string>
+    <string name="file_kind_presentation">Sunum</string>
+    <string name="file_kind_ebook">E-kitap</string>
+    <string name="file_kind_font">Yazı tipi</string>
+    <string name="file_kind_text">Metin</string>
+    <string name="file_kind_other">Dosya</string>
+    <string name="file_modified_unknown">tarih bilinmiyor</string>
+    <string name="file_row_accessibility">%1$s • %2$s</string>
+</resources>
