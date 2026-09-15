@@ -28,6 +28,12 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 class DuplicateFinderActivity : OmniActivity() {
+    private data class CleanupOutcome(
+        val moved: Int,
+        val failed: Int,
+        val keeperInvalidated: Boolean,
+    )
+
     private lateinit var binding: ActivityDuplicateFinderBinding
     private val sharedRoot: File by lazy { StorageAccessController.sharedRoot().canonicalFile }
     private val trashManager: TrashManager by lazy { TrashManager(this) }
@@ -120,9 +126,16 @@ class DuplicateFinderActivity : OmniActivity() {
             getString(
                 R.string.duplicate_finder_summary,
                 result.fileCount,
-                result.hashedFiles,
                 result.groups.size,
                 formatBytes(result.reclaimableBytes),
+            ),
+            getString(
+                R.string.duplicate_finder_pipeline_summary,
+                result.scannedEntries,
+                result.candidateFiles,
+                result.fingerprintedFiles,
+                result.hashedFiles,
+                formatBytes(result.hashedBytes),
             )
         )
         if (result.skippedEntries > 0) {
@@ -190,6 +203,10 @@ class DuplicateFinderActivity : OmniActivity() {
     private fun confirmCleanGroup(group: DuplicateFinder.DuplicateGroup) {
         if (group.files.size < 2) return
         val keeper = chooseKeeper(group)
+        if (!verifyDuplicate(keeper, group.sha256)) {
+            Toast.makeText(this, R.string.duplicate_finder_keeper_stale, Toast.LENGTH_LONG).show()
+            return
+        }
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.duplicate_finder_clean_group_title)
             .setMessage(
@@ -212,6 +229,10 @@ class DuplicateFinderActivity : OmniActivity() {
         if (scanJob?.isActive == true) return
         val targets = group.files.filterNot { it.path == keeper.path }
         if (targets.isEmpty()) return
+        if (!verifyDuplicate(keeper, group.sha256)) {
+            Toast.makeText(this, R.string.duplicate_finder_keeper_stale, Toast.LENGTH_LONG).show()
+            return
+        }
 
         binding.startButton.isEnabled = false
         binding.cancelButton.isEnabled = false
@@ -220,30 +241,48 @@ class DuplicateFinderActivity : OmniActivity() {
         binding.summaryText.setText(R.string.duplicate_finder_group_cleaning)
 
         lifecycleScope.launch {
-            val counts = withContext(Dispatchers.IO) {
+            val outcome = withContext(Dispatchers.IO) {
                 var moved = 0
                 var failed = 0
-                targets.forEach { duplicate ->
-                    val safe = resolveFileSilently(duplicate)
-                    if (safe == null) {
-                        failed++
-                    } else {
-                        runCatching { trashManager.moveToTrash(safe) }
-                            .onSuccess { moved++ }
-                            .onFailure { failed++ }
+                var keeperInvalidated = false
+
+                for (index in targets.indices) {
+                    if (!verifyDuplicate(keeper, group.sha256)) {
+                        keeperInvalidated = true
+                        failed += targets.size - index
+                        break
                     }
+
+                    val duplicate = targets[index]
+                    val safe = resolveFileSilently(duplicate)
+                    if (safe == null || !verifyDuplicate(duplicate, group.sha256)) {
+                        failed++
+                        continue
+                    }
+
+                    runCatching { trashManager.moveToTrash(safe) }
+                        .onSuccess { moved++ }
+                        .onFailure { failed++ }
                 }
-                moved to failed
+                CleanupOutcome(moved, failed, keeperInvalidated)
             }
             if (!isActive) return@launch
 
             binding.progress.visibility = View.GONE
             binding.groupsContainer.alpha = 1f
-            Toast.makeText(
-                this@DuplicateFinderActivity,
-                getString(R.string.duplicate_finder_clean_group_result, counts.first, counts.second),
-                if (counts.second == 0) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
-            ).show()
+            if (outcome.keeperInvalidated) {
+                Toast.makeText(
+                    this@DuplicateFinderActivity,
+                    R.string.duplicate_finder_keeper_changed_during_cleanup,
+                    Toast.LENGTH_LONG,
+                ).show()
+            } else {
+                Toast.makeText(
+                    this@DuplicateFinderActivity,
+                    getString(R.string.duplicate_finder_clean_group_result, outcome.moved, outcome.failed),
+                    if (outcome.failed == 0) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
+                ).show()
+            }
             hasResult = false
             startScan()
         }
@@ -331,6 +370,15 @@ class DuplicateFinderActivity : OmniActivity() {
             safe.lastModified().coerceAtLeast(0L) == duplicate.modifiedAt
         return safe.takeIf { unchanged }
     }
+
+    private fun verifyDuplicate(duplicate: DuplicateFinder.DuplicateFile, expectedSha256: String): Boolean =
+        DuplicateFinder.verifyDuplicate(
+            file = File(duplicate.path),
+            root = sharedRoot,
+            expectedSizeBytes = duplicate.sizeBytes,
+            expectedModifiedAt = duplicate.modifiedAt,
+            expectedSha256 = expectedSha256,
+        )
 
     private fun copyPath(path: String) {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
