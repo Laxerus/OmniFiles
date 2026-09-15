@@ -15,6 +15,7 @@ import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.StorageAccessController
 import dev.laxerus.omnifiles.databinding.RowFileBinding
 import dev.laxerus.omnifiles.fs.BrowserHighlightPolicy
+import dev.laxerus.omnifiles.fs.RecentFileStore
 import dev.laxerus.omnifiles.fs.RecentFolderStore
 import java.io.File
 import java.text.DateFormat
@@ -129,7 +130,12 @@ class FileListAdapter(
             }
             binding.root.setOnClickListener {
                 if (highlighted) clearHighlight()
-                if (!selectionMode && file.isDirectory) recordRecentDirectory(binding.root.context, file)
+                if (!selectionMode) {
+                    when {
+                        file.isDirectory -> recordRecentDirectory(binding.root.context, file)
+                        file.isFile -> recordRecentFile(binding.root.context, file)
+                    }
+                }
                 onClick(file)
             }
             binding.root.setOnLongClickListener {
@@ -160,6 +166,15 @@ class FileListAdapter(
             runCatching {
                 RecentFolderStore(context.applicationContext).record(
                     directory = directory,
+                    sharedRoot = StorageAccessController.sharedRoot()
+                )
+            }
+        }
+
+        private fun recordRecentFile(context: Context, file: File) {
+            runCatching {
+                RecentFileStore(context.applicationContext).record(
+                    file = file,
                     sharedRoot = StorageAccessController.sharedRoot()
                 )
             }
