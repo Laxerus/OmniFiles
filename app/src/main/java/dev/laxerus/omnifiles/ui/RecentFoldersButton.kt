@@ -161,7 +161,9 @@ class RecentFoldersButton @JvmOverloads constructor(
             QuickFolderPolicy.Kind.DOCUMENTS -> R.string.quick_folder_documents
             QuickFolderPolicy.Kind.PICTURES -> R.string.quick_folder_pictures
             QuickFolderPolicy.Kind.CAMERA -> R.string.quick_folder_camera
+            QuickFolderPolicy.Kind.SCREENSHOTS -> R.string.quick_folder_screenshots
             QuickFolderPolicy.Kind.VIDEOS -> R.string.quick_folder_videos
+            QuickFolderPolicy.Kind.RECORDINGS -> R.string.quick_folder_recordings
             QuickFolderPolicy.Kind.MUSIC -> R.string.quick_folder_music
             QuickFolderPolicy.Kind.ANDROID_MEDIA -> R.string.quick_folder_android_media
         }
