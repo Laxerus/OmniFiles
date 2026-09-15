@@ -150,6 +150,14 @@
                             android:text="@string/sort_size" />
                     </com.google.android.material.button.MaterialButtonToggleGroup>
 
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/sortDirectionButton"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/sort_direction_name_ascending" />
+
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/hiddenSwitch"
                         android:layout_width="wrap_content"
