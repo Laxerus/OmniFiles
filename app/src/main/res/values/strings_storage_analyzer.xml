@@ -1,7 +1,7 @@
 <resources>
     <string name="storage_analyzer">Depolama Analizi</string>
     <string name="storage_analyzer_title">Depolama Analizi</string>
-    <string name="storage_analyzer_help">Ortak depolamayı salt okunur tarar; dosya türlerinin kapladığı alanı, kategori başına en büyük dosyaları ve en büyük klasörleri gösterir. Tarama 40.000 öğeyle sınırlandırılır, sembolik bağlantılar izlenmez ve istediğin zaman iptal edebilirsin.</string>
+    <string name="storage_analyzer_help">Ortak depolamayı salt okunur tarar; dosya türlerinin kapladığı alanı, kategori başına en büyük dosyaları ve en büyük klasörleri gösterir. İstersen doğrulanan dosyaları onay vererek OmniFiles Çöp Kutusu’na taşıyabilirsin. Tarama 40.000 öğeyle sınırlandırılır, sembolik bağlantılar izlenmez ve istediğin zaman iptal edebilirsin.</string>
     <string name="storage_analyzer_start">Depolamayı tara</string>
     <string name="storage_analyzer_rescan">Yeniden tara</string>
     <string name="storage_analyzer_cancel">Taramayı iptal et</string>
@@ -37,6 +37,12 @@
     <string name="storage_analyzer_open_folder">Klasörü dosya yöneticisinde aç</string>
     <string name="storage_analyzer_show_in_folder">Bulunduğu klasörü aç</string>
     <string name="storage_analyzer_sha256">SHA-256 hesapla</string>
+    <string name="storage_analyzer_move_to_trash">Çöp Kutusu’na taşı</string>
+    <string name="storage_analyzer_trash_confirm_title">Dosya Çöp Kutusu’na taşınsın mı?</string>
+    <string name="storage_analyzer_trash_confirm">%1$s • %2$s\n\nDosya kalıcı olarak silinmez; OmniFiles Çöp Kutusu’ndan geri yüklenebilir.</string>
+    <string name="storage_analyzer_trash_moving">Dosya güvenli biçimde Çöp Kutusu’na taşınıyor…</string>
+    <string name="storage_analyzer_trashed">Dosya Çöp Kutusu’na taşındı.</string>
+    <string name="storage_analyzer_trash_failed">Dosya Çöp Kutusu’na taşınamadı; kaynak korunuyor.</string>
     <string name="storage_analyzer_type_folder">Klasör</string>
     <string name="storage_analyzer_entry_stale">Bu öğe taramadan sonra değişmiş, taşınmış veya artık güvenli biçimde erişilebilir değil. Yeniden tara.</string>
     <string name="storage_analyzer_no_viewer">Bu dosya türünü açabilecek uygulama bulunamadı.</string>
