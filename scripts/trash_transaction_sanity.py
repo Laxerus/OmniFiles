@@ -5,8 +5,10 @@ import sys
 root = Path(__file__).resolve().parents[1]
 errors: list[str] = []
 trash_path = root / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt"
-policy_path = root / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashMetadataPolicy.kt"
-test_path = root / "app/src/test/java/dev/laxerus/omnifiles/fs/TrashMetadataPolicyTest.kt"
+metadata_policy_path = root / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashMetadataPolicy.kt"
+recovery_policy_path = root / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashRecoveryPolicy.kt"
+metadata_test_path = root / "app/src/test/java/dev/laxerus/omnifiles/fs/TrashMetadataPolicyTest.kt"
+recovery_test_path = root / "app/src/test/java/dev/laxerus/omnifiles/fs/TrashRecoveryPolicyTest.kt"
 
 if not trash_path.is_file():
     errors.append("missing TrashManager.kt")
@@ -19,8 +21,11 @@ else:
         "catch (retained: VerifiedTrashCopyRetainedException)",
         "catch (failure: Throwable)",
         "removeMetadata(ticket.trashedFile)",
-        "cleanupOrphanMetadata()",
-        "TrashMetadataPolicy.shouldDeleteOrphan(",
+        "recoverInterruptedTransactions()",
+        "cleanupStaleTempMetadata()",
+        "TrashRecoveryPolicy.decide(",
+        "TrashRecoveryAction.DELETE_METADATA",
+        "TrashMetadataPolicy.shouldDeleteStaleTemp(",
         "requireTrashSlot(destination, mustExist = false)",
     )
     for token in required:
@@ -44,31 +49,72 @@ else:
         if generic_end < 0 or "removeMetadata(ticket.trashedFile)" not in text[generic_catch:generic_end]:
             errors.append("failed pre-commit trash move must clean prewritten metadata")
 
-if not policy_path.is_file():
+    list_start = text.find("fun listEntries(): List<TrashEntry>")
+    recover_call = text.find("recoverInterruptedTransactions()", list_start)
+    temp_cleanup_call = text.find("cleanupStaleTempMetadata()", list_start)
+    listing = text.find("return trashRoot.listFiles()", list_start)
+    if min(list_start, recover_call, temp_cleanup_call, listing) < 0 or not (
+        list_start < recover_call < temp_cleanup_call < listing
+    ):
+        errors.append("trash listing must recover interrupted transactions before temp cleanup and listing")
+
+if not metadata_policy_path.is_file():
     errors.append("missing TrashMetadataPolicy.kt")
 else:
-    policy = policy_path.read_text(encoding="utf-8")
+    policy = metadata_policy_path.read_text(encoding="utf-8")
     for token in (
         "ORPHAN_GRACE_MS: Long = 10 * 60 * 1000L",
-        "if (name in liveMetadataNames) return false",
-        "return now - modifiedAt >= ORPHAN_GRACE_MS",
+        "fun isPastGrace(",
+        "fun shouldDeleteStaleTemp(",
+        "if (!name.endsWith(\".tmp\")) return false",
     ):
         if token not in policy:
             errors.append(f"TrashMetadataPolicy.kt missing: {token}")
+    if "endsWith(\".json\")" in policy:
+        errors.append("TrashMetadataPolicy must not blindly delete stale JSON recovery metadata")
 
-if not test_path.is_file():
+if not recovery_policy_path.is_file():
+    errors.append("missing TrashRecoveryPolicy.kt")
+else:
+    policy = recovery_policy_path.read_text(encoding="utf-8")
+    for token in (
+        "enum class TrashRecoveryAction",
+        "KEEP",
+        "DELETE_METADATA",
+        "if (!TrashMetadataPolicy.isPastGrace(metadataModifiedAt, now)) return TrashRecoveryAction.KEEP",
+        "if (trashExists) return TrashRecoveryAction.KEEP",
+        "if (!originalExists) return TrashRecoveryAction.KEEP",
+        "return TrashRecoveryAction.DELETE_METADATA",
+    ):
+        if token not in policy:
+            errors.append(f"TrashRecoveryPolicy.kt missing: {token}")
+
+if not metadata_test_path.is_file():
     errors.append("missing TrashMetadataPolicyTest.kt")
 else:
-    tests = test_path.read_text(encoding="utf-8")
+    tests = metadata_test_path.read_text(encoding="utf-8")
     for name in (
-        "keepsLiveMetadataEvenWhenOld",
-        "keepsFreshOrphanMetadata",
-        "deletesStaleOrphanJson",
-        "deletesStaleTempFile",
-        "ignoresUnknownMetadataFilesConservatively",
+        "freshMetadataIsInsideGrace",
+        "staleMetadataIsPastGrace",
+        "futureTimestampIsKeptConservatively",
+        "deletesOnlyStaleTempFiles",
+        "ignoresUnknownFilesConservatively",
     ):
         if name not in tests:
             errors.append(f"TrashMetadataPolicyTest.kt missing: {name}")
+
+if not recovery_test_path.is_file():
+    errors.append("missing TrashRecoveryPolicyTest.kt")
+else:
+    tests = recovery_test_path.read_text(encoding="utf-8")
+    for name in (
+        "keepsFreshPendingTransaction",
+        "deletesStaleMetadataWhenMoveNeverCommitted",
+        "keepsMetadataWhenTrashEntryExists",
+        "keepsMetadataWhenOriginalIsMissing",
+    ):
+        if name not in tests:
+            errors.append(f"TrashRecoveryPolicyTest.kt missing: {name}")
 
 if errors:
     print("OmniFiles trash transaction sanity: FAILED")
