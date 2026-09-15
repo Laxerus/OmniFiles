@@ -17,6 +17,22 @@ def require(path: str, *tokens: str) -> None:
             errors.append(f"{path} missing: {token}")
 
 
+def require_order(path: str, start_token: str, before_token: str, after_token: str) -> None:
+    file = root / path
+    if not file.is_file():
+        errors.append(f"missing required file: {path}")
+        return
+    text = file.read_text(encoding="utf-8")
+    start = text.find(start_token)
+    if start < 0:
+        errors.append(f"{path} missing ordered section: {start_token}")
+        return
+    before = text.find(before_token, start)
+    after = text.find(after_token, start)
+    if before < 0 or after < 0 or before >= after:
+        errors.append(f"{path} must keep {before_token} before {after_token}")
+
+
 require(
     "app/src/main/res/layout/activity_file_browser.xml",
     "dev.laxerus.omnifiles.ui.RecentFoldersButton",
@@ -58,9 +74,27 @@ require(
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileListAdapter.kt",
+    "ActivityNotFoundException",
+    "private fun launchFile(file: File)",
+    "LocalFileIntents.viewIntent(context, file)",
+    "context.startActivity(intent)",
     "recordRecentDirectory",
-    "recordRecentFile",
-    "if (!selectionMode)",
+    "recordRecentFile(context, file)",
+    "file_open_no_viewer",
+    "file_open_failed",
+    "if (selectionMode)",
+)
+require_order(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/FileListAdapter.kt",
+    "private fun launchFile(file: File)",
+    "context.startActivity(intent)",
+    "recordRecentFile(context, file)",
+)
+require(
+    "app/src/main/res/values/strings_file_open.xml",
+    "file_open_invalid",
+    "file_open_no_viewer",
+    "file_open_failed",
 )
 require(
     "app/src/test/java/dev/laxerus/omnifiles/fs/QuickFolderPolicyTest.kt",
