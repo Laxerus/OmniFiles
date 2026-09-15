@@ -4,6 +4,7 @@ import sys
 
 root = Path(__file__).resolve().parents[1]
 activity_path = root / "app/src/main/java/dev/laxerus/omnifiles/ui/DuplicateFinderActivity.kt"
+test_path = root / "app/src/test/java/dev/laxerus/omnifiles/fs/DuplicateFinderTest.kt"
 errors: list[str] = []
 
 if not activity_path.is_file():
@@ -34,6 +35,22 @@ else:
         trash_at = text.find("trashManager.moveToTrash(safe)", move_start)
         if verify_at < 0 or trash_at < 0 or verify_at >= trash_at:
             errors.append("moveToTrash must reverify SHA-256 before TrashManager receives the file")
+
+if not test_path.is_file():
+    errors.append(f"missing required file: {test_path.relative_to(root)}")
+else:
+    tests = test_path.read_text(encoding="utf-8")
+    required_tests = (
+        "verifyDuplicateAcceptsUnchangedVerifiedFile",
+        "verifyDuplicateRejectsContentChangedWithSameSizeAndTimestamp",
+        "verifyDuplicateRejectsInvalidDigestFormat",
+        "verifyDuplicateRejectsDeletedFile",
+        "verifyDuplicateRejectsChangedSize",
+        "verifyDuplicateRejectsSymlinkEscapingRoot",
+    )
+    for test_name in required_tests:
+        if test_name not in tests:
+            errors.append(f"DuplicateFinderTest.kt missing: {test_name}")
 
 if errors:
     print("OmniFiles individual duplicate trash sanity: FAILED")
