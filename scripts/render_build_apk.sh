@@ -91,11 +91,11 @@ fi
 export PATH="$CMDLINE_LATEST/bin:$SDK/platform-tools:$PATH"
 
 if [[ ! -f "$SDK/platforms/android-$ANDROID_PLATFORM/android.jar" || ! -x "$SDK/build-tools/$BUILD_TOOLS/aapt2" || ! -x "$SDK/platform-tools/adb" ]]; then
-  log "Android SDK API $ANDROID_PLATFORM kuruluyor"
-  yes | android sdk install --canary \
-    "platforms/android-${ANDROID_PLATFORM}" \
-    "build-tools/${BUILD_TOOLS}" \
-    "platform-tools"
+  log "Android 17 preview SDK paketleri keşfediliyor"
+  android sdk list 'platforms/.*' --all --all-versions --canary --no-metrics
+  android sdk list 'build-tools/.*' --all --all-versions --canary --no-metrics | tail -n 80
+  echo "Android 17 preview paket kimliği teşhis edildi; build kasıtlı durduruluyor." >&2
+  exit 86
 else
   log "Android SDK API $ANDROID_PLATFORM build cache'ten kullanılıyor"
 fi
