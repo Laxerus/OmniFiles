@@ -39,7 +39,6 @@ import java.util.Date
 import java.util.Locale
 
 class FileBrowserActivity : OmniActivity() {
-    private enum class SortMode { NAME, DATE, SIZE }
     private enum class TransferMode { COPY, MOVE }
     private data class PendingTransfer(val sourcePaths: List<String>, val mode: TransferMode)
 
@@ -50,7 +49,8 @@ class FileBrowserActivity : OmniActivity() {
     private val browserPreferences: FileBrowserPreferences by lazy { FileBrowserPreferences(this) }
     private var currentDir: File = StorageAccessController.sharedRoot()
     private var allEntries: List<File> = emptyList()
-    private var sortMode = SortMode.NAME
+    private var sortMode = BrowserSortMode.NAME
+    private var sortDescending = false
     private var showHidden = false
     private var loadGeneration = 0
     private var pendingTransfer: PendingTransfer? = null
@@ -87,6 +87,16 @@ class FileBrowserActivity : OmniActivity() {
         binding.cancelSelectionButton.setOnClickListener { clearSelection() }
 
         binding.searchInput.doAfterTextChanged { renderEntries() }
+        binding.hiddenSwitch.isChecked = showHidden
+        binding.sortGroup.check(
+            when (sortMode) {
+                BrowserSortMode.NAME -> R.id.sortNameButton
+                BrowserSortMode.DATE -> R.id.sortDateButton
+                BrowserSortMode.SIZE -> R.id.sortSizeButton
+            }
+        )
+        updateSortDirectionUi()
+
         binding.hiddenSwitch.setOnCheckedChangeListener { _, checked ->
             showHidden = checked
             browserPreferences.saveShowHidden(checked)
@@ -95,22 +105,23 @@ class FileBrowserActivity : OmniActivity() {
         binding.sortGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
             sortMode = when (checkedId) {
-                R.id.sortDateButton -> SortMode.DATE
-                R.id.sortSizeButton -> SortMode.SIZE
-                else -> SortMode.NAME
+                R.id.sortDateButton -> BrowserSortMode.DATE
+                R.id.sortSizeButton -> BrowserSortMode.SIZE
+                else -> BrowserSortMode.NAME
             }
             browserPreferences.saveSortMode(sortMode.name)
+            sortDescending = browserPreferences.load().descendingFor(sortMode.name)
+            updateSortDirectionUi()
+            renderEntries()
+        }
+        binding.sortDirectionButton.setOnClickListener {
+            if (operationBusy) return@setOnClickListener
+            sortDescending = !sortDescending
+            browserPreferences.saveSortDescending(sortMode.name, sortDescending)
+            updateSortDirectionUi()
             renderEntries()
         }
 
-        binding.hiddenSwitch.isChecked = showHidden
-        binding.sortGroup.check(
-            when (sortMode) {
-                SortMode.NAME -> R.id.sortNameButton
-                SortMode.DATE -> R.id.sortDateButton
-                SortMode.SIZE -> R.id.sortSizeButton
-            }
-        )
         savedInstanceState?.getString(STATE_SEARCH_QUERY)?.takeIf { it.isNotEmpty() }?.let(binding.searchInput::setText)
         updateSelectionUi()
         updateTransferUi()
@@ -120,6 +131,7 @@ class FileBrowserActivity : OmniActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString(STATE_CURRENT_PATH, runCatching { currentDir.canonicalPath }.getOrElse { currentDir.path })
         outState.putString(STATE_SORT_MODE, sortMode.name)
+        outState.putBoolean(STATE_SORT_DESCENDING, sortDescending)
         outState.putBoolean(STATE_SHOW_HIDDEN, showHidden)
         outState.putString(STATE_SEARCH_QUERY, binding.searchInput.text?.toString().orEmpty())
         outState.putStringArrayList(STATE_SELECTED_PATHS, ArrayList(selectedPaths))
@@ -163,9 +175,14 @@ class FileBrowserActivity : OmniActivity() {
         val persisted = browserPreferences.load()
         showHidden = savedInstanceState?.getBoolean(STATE_SHOW_HIDDEN) ?: persisted.showHidden
         sortMode = savedInstanceState?.getString(STATE_SORT_MODE)
-            ?.let { runCatching { SortMode.valueOf(it) }.getOrNull() }
-            ?: runCatching { SortMode.valueOf(persisted.sortModeName) }.getOrNull()
-            ?: SortMode.NAME
+            ?.let { runCatching { BrowserSortMode.valueOf(it) }.getOrNull() }
+            ?: runCatching { BrowserSortMode.valueOf(persisted.sortModeName) }.getOrNull()
+            ?: BrowserSortMode.NAME
+        sortDescending = if (savedInstanceState?.containsKey(STATE_SORT_DESCENDING) == true) {
+            savedInstanceState.getBoolean(STATE_SORT_DESCENDING)
+        } else {
+            persisted.descendingFor(sortMode.name)
+        }
 
         val restoredPath = savedInstanceState?.getString(STATE_CURRENT_PATH)
             ?: if (savedInstanceState == null) intent.getStringExtra(EXTRA_START_PATH) else null
@@ -267,19 +284,32 @@ class FileBrowserActivity : OmniActivity() {
         updateSelectionUi()
     }
 
-    private fun compareEntries(left: File, right: File): Int {
-        if (left.isDirectory != right.isDirectory) return if (left.isDirectory) -1 else 1
+    private fun compareEntries(left: File, right: File): Int =
+        FileBrowserSorter.compare(left, right, sortMode, sortDescending)
 
-        val primary = when (sortMode) {
-            SortMode.NAME -> NaturalNameComparator.compare(left.name, right.name)
-            SortMode.DATE -> right.lastModified().compareTo(left.lastModified())
-            SortMode.SIZE -> {
-                if (left.isDirectory && right.isDirectory) 0
-                else right.length().compareTo(left.length())
+    private fun updateSortDirectionUi() {
+        if (!::binding.isInitialized) return
+        val labelRes = when (sortMode) {
+            BrowserSortMode.NAME -> if (sortDescending) {
+                R.string.sort_direction_name_descending
+            } else {
+                R.string.sort_direction_name_ascending
+            }
+            BrowserSortMode.DATE -> if (sortDescending) {
+                R.string.sort_direction_date_descending
+            } else {
+                R.string.sort_direction_date_ascending
+            }
+            BrowserSortMode.SIZE -> if (sortDescending) {
+                R.string.sort_direction_size_descending
+            } else {
+                R.string.sort_direction_size_ascending
             }
         }
-        return if (primary != 0) primary
-        else NaturalNameComparator.compare(left.name, right.name)
+        val label = getString(labelRes)
+        binding.sortDirectionButton.text = label
+        binding.sortDirectionButton.contentDescription = getString(R.string.sort_direction_accessibility, label)
+        binding.sortDirectionButton.isEnabled = !operationBusy
     }
 
     private fun isHidden(file: File): Boolean = file.name.startsWith('.') || file.isHidden
@@ -716,6 +746,7 @@ class FileBrowserActivity : OmniActivity() {
         binding.operationProgress.visibility = if (value) View.VISIBLE else View.GONE
         binding.searchInput.isEnabled = !value
         binding.hiddenSwitch.isEnabled = !value
+        binding.sortDirectionButton.isEnabled = !value
         for (index in 0 until binding.sortGroup.childCount) {
             binding.sortGroup.getChildAt(index).isEnabled = !value
         }
@@ -983,6 +1014,7 @@ class FileBrowserActivity : OmniActivity() {
         const val EXTRA_START_PATH = "dev.laxerus.omnifiles.extra.START_PATH"
         private const val STATE_CURRENT_PATH = "current_path"
         private const val STATE_SORT_MODE = "sort_mode"
+        private const val STATE_SORT_DESCENDING = "sort_descending"
         private const val STATE_SHOW_HIDDEN = "show_hidden"
         private const val STATE_SEARCH_QUERY = "search_query"
         private const val STATE_SELECTED_PATHS = "selected_paths"
