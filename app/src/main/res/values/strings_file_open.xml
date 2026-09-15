@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="file_open_invalid">Dosya değişmiş, taşınmış veya güvenli biçimde açılamıyor.</string>
+    <string name="file_open_no_viewer">Bu dosya türünü açabilecek uygulama bulunamadı.</string>
+    <string name="file_open_failed">Dosya güvenli biçimde açılamadı.</string>
+</resources>
