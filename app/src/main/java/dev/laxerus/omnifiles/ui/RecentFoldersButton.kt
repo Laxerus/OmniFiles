@@ -9,6 +9,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.StorageAccessController
 import dev.laxerus.omnifiles.fs.QuickFolderPolicy
+import dev.laxerus.omnifiles.fs.RecentFileStore
 import dev.laxerus.omnifiles.fs.RecentFolderStore
 import java.io.File
 
@@ -18,12 +19,16 @@ class RecentFoldersButton @JvmOverloads constructor(
     defStyleAttr: Int = com.google.android.material.R.attr.materialButtonOutlinedStyle
 ) : MaterialButton(context, attrs, defStyleAttr) {
 
+    private enum class EntryType { FOLDER, FILE }
+
     private data class MenuEntry(
         val label: String,
-        val folder: File,
+        val target: File,
+        val type: EntryType,
     )
 
-    private val recentStore by lazy { RecentFolderStore(context.applicationContext) }
+    private val recentFolderStore by lazy { RecentFolderStore(context.applicationContext) }
+    private val recentFileStore by lazy { RecentFileStore(context.applicationContext) }
 
     init {
         setOnClickListener { showQuickAccess() }
@@ -45,9 +50,14 @@ class RecentFoldersButton @JvmOverloads constructor(
                 Toast.makeText(context, R.string.recent_folders_unavailable, Toast.LENGTH_SHORT).show()
                 return
             }
-        val recents = runCatching { recentStore.list(sharedRoot) }
+        val recentFolders = runCatching { recentFolderStore.list(sharedRoot) }
             .getOrElse {
                 Toast.makeText(context, R.string.recent_folders_unavailable, Toast.LENGTH_SHORT).show()
+                return
+            }
+        val recentFiles = runCatching { recentFileStore.list(sharedRoot) }
+            .getOrElse {
+                Toast.makeText(context, R.string.recent_files_unavailable, Toast.LENGTH_SHORT).show()
                 return
             }
 
@@ -56,21 +66,32 @@ class RecentFoldersButton @JvmOverloads constructor(
             quickFolders.forEach { entry ->
                 add(
                     MenuEntry(
-                        context.getString(R.string.quick_access_item, quickLabel(entry.kind)),
-                        entry.directory,
+                        label = context.getString(R.string.quick_access_item, quickLabel(entry.kind)),
+                        target = entry.directory,
+                        type = EntryType.FOLDER,
                     )
                 )
             }
-            recents.asSequence()
+            recentFolders.asSequence()
                 .filterNot { it.canonicalPath in quickPaths }
                 .forEach { folder ->
                     add(
                         MenuEntry(
-                            context.getString(R.string.quick_access_recent_item, displayPath(folder, sharedRoot)),
-                            folder,
+                            label = context.getString(R.string.quick_access_recent_item, displayPath(folder, sharedRoot)),
+                            target = folder,
+                            type = EntryType.FOLDER,
                         )
                     )
                 }
+            recentFiles.forEach { file ->
+                add(
+                    MenuEntry(
+                        label = context.getString(R.string.quick_access_recent_file_item, displayPath(file, sharedRoot)),
+                        target = file,
+                        type = EntryType.FILE,
+                    )
+                )
+            }
         }
         if (menuEntries.isEmpty()) {
             Toast.makeText(context, R.string.quick_access_empty, Toast.LENGTH_SHORT).show()
@@ -80,14 +101,18 @@ class RecentFoldersButton @JvmOverloads constructor(
         val builder = MaterialAlertDialogBuilder(context)
             .setTitle(R.string.quick_access_title)
             .setItems(menuEntries.map { it.label }.toTypedArray()) { _, index ->
-                openFolder(menuEntries[index].folder, sharedRoot)
+                when (menuEntries[index].type) {
+                    EntryType.FOLDER -> openFolder(menuEntries[index].target, sharedRoot)
+                    EntryType.FILE -> openFile(menuEntries[index].target, sharedRoot)
+                }
             }
             .setNegativeButton(R.string.cancel, null)
 
-        if (recents.isNotEmpty()) {
+        if (recentFolders.isNotEmpty() || recentFiles.isNotEmpty()) {
             builder.setNeutralButton(R.string.recent_folders_clear) { _, _ ->
-                recentStore.clear()
-                Toast.makeText(context, R.string.recent_folders_cleared, Toast.LENGTH_SHORT).show()
+                recentFolderStore.clear()
+                recentFileStore.clear()
+                Toast.makeText(context, R.string.quick_access_history_cleared, Toast.LENGTH_SHORT).show()
             }
         }
         builder.show()
@@ -95,7 +120,7 @@ class RecentFoldersButton @JvmOverloads constructor(
 
     private fun openFolder(folder: File, sharedRoot: File) {
         val safeFolder = runCatching {
-            recentStore.record(folder, sharedRoot).firstOrNull()
+            recentFolderStore.record(folder, sharedRoot).firstOrNull()
         }.getOrNull()
         if (safeFolder == null) {
             Toast.makeText(context, R.string.recent_folder_stale, Toast.LENGTH_SHORT).show()
@@ -107,6 +132,26 @@ class RecentFoldersButton @JvmOverloads constructor(
         runCatching { context.startActivity(intent) }
             .onFailure {
                 Toast.makeText(context, R.string.recent_folders_unavailable, Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun openFile(file: File, sharedRoot: File) {
+        val safeFile = runCatching {
+            recentFileStore.record(file, sharedRoot).firstOrNull()
+        }.getOrNull()
+        if (safeFile == null) {
+            Toast.makeText(context, R.string.recent_file_stale, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val intent = runCatching { LocalFileIntents.viewIntent(context, safeFile) }
+            .getOrElse {
+                Toast.makeText(context, R.string.recent_file_stale, Toast.LENGTH_SHORT).show()
+                return
+            }
+        runCatching { context.startActivity(intent) }
+            .onFailure {
+                Toast.makeText(context, R.string.recent_file_open_failed, Toast.LENGTH_SHORT).show()
             }
     }
 
@@ -122,10 +167,10 @@ class RecentFoldersButton @JvmOverloads constructor(
         }
     )
 
-    private fun displayPath(folder: File, sharedRoot: File): String {
-        val relative = folder.canonicalPath
+    private fun displayPath(file: File, sharedRoot: File): String {
+        val relative = file.canonicalPath
             .removePrefix(sharedRoot.canonicalPath)
             .trimStart(File.separatorChar)
-        return relative.ifBlank { folder.name.ifBlank { folder.path } }
+        return relative.ifBlank { file.name.ifBlank { file.path } }
     }
 }
