@@ -42,6 +42,7 @@
     <string name="storage_analyzer_trash_confirm">%1$s • %2$s\n\nDosya kalıcı olarak silinmez; OmniFiles Çöp Kutusu’ndan geri yüklenebilir.</string>
     <string name="storage_analyzer_trash_moving">Dosya güvenli biçimde Çöp Kutusu’na taşınıyor…</string>
     <string name="storage_analyzer_trashed">Dosya Çöp Kutusu’na taşındı.</string>
+    <string name="storage_analyzer_restoring">Dosya eski konumuna güvenli biçimde geri yükleniyor…</string>
     <string name="storage_analyzer_trash_failed">Dosya Çöp Kutusu’na taşınamadı; kaynak korunuyor.</string>
     <string name="storage_analyzer_type_folder">Klasör</string>
     <string name="storage_analyzer_entry_stale">Bu öğe taramadan sonra değişmiş, taşınmış veya artık güvenli biçimde erişilebilir değil. Yeniden tara.</string>
