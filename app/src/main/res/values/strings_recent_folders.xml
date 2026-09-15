@@ -1,11 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="recent_folders">Son klasörler</string>
+    <string name="recent_folders">Hızlı erişim</string>
     <string name="recent_folders_count">Son klasörler • %1$d</string>
     <string name="recent_folders_empty">Henüz son klasör kaydı yok.</string>
     <string name="recent_folders_clear">Geçmişi temizle</string>
     <string name="recent_folders_cleared">Son klasör geçmişi temizlendi.</string>
-    <string name="recent_folders_need_access">Son klasörlere gitmek için depolama erişimi gerekli.</string>
-    <string name="recent_folders_unavailable">Son klasörler şu anda açılamıyor.</string>
+    <string name="recent_folders_need_access">Hızlı erişimi kullanmak için depolama erişimi gerekli.</string>
+    <string name="recent_folders_unavailable">Hızlı erişim şu anda açılamıyor.</string>
     <string name="recent_folder_stale">Bu klasör artık mevcut değil veya güvenli depolama alanının dışında.</string>
+    <string name="quick_access_title">Hızlı erişim</string>
+    <string name="quick_access_empty">Açılabilecek hızlı veya son kullanılan klasör bulunamadı.</string>
+    <string name="quick_access_item">⚡ %1$s</string>
+    <string name="quick_access_recent_item">🕘 %1$s</string>
+    <string name="quick_folder_downloads">İndirilenler</string>
+    <string name="quick_folder_documents">Belgeler</string>
+    <string name="quick_folder_pictures">Resimler</string>
+    <string name="quick_folder_camera">Kamera / DCIM</string>
+    <string name="quick_folder_videos">Videolar</string>
+    <string name="quick_folder_music">Müzik</string>
+    <string name="quick_folder_android_media">Android medya</string>
 </resources>
