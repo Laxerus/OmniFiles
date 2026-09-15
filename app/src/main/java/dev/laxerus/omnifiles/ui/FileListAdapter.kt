@@ -92,25 +92,36 @@ class FileListAdapter(
             val selectionMode = selectedPaths.isNotEmpty()
             val checksumEligible = !selectionMode && file.isFile &&
                 runCatching { file.absolutePath == file.canonicalPath }.getOrDefault(false)
+            val presentation = FileRowPresenter.describe(file)
+            val kindLabel = kindLabel(binding.root.context, presentation.kind)
+            val modifiedLabel = formatModified(binding.root.context, file.lastModified())
+            val typeLabel = presentation.extensionLabel
+                ?.takeUnless { it.equals(kindLabel, ignoreCase = true) }
+                ?.let { "$it • $kindLabel" }
+                ?: kindLabel
 
-            binding.icon.text = iconFor(file)
+            binding.icon.text = presentation.icon
+            binding.icon.contentDescription = kindLabel
             binding.name.text = file.name.ifEmpty { file.path }
             binding.meta.text = if (file.isDirectory) {
-                "Klasör • ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(file.lastModified())}"
+                "$typeLabel • $modifiedLabel"
             } else {
-                "${formatBytes(file.length())} • ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(file.lastModified())}"
+                "$typeLabel • ${formatBytes(file.length())} • $modifiedLabel"
             }
             binding.selectionMark.visibility = if (selected) View.VISIBLE else View.GONE
             binding.checksumButton.visibility = if (checksumEligible) View.VISIBLE else View.GONE
             binding.moreButton.visibility = if (selectionMode) View.GONE else View.VISIBLE
-            binding.root.strokeWidth = if (highlighted) dp(binding.root.context, 2) else 0
-            if (highlighted) {
-                binding.root.setStrokeColor(
-                    MaterialColors.getColor(binding.root, androidx.appcompat.R.attr.colorPrimary)
+
+            binding.root.strokeWidth = dp(binding.root.context, if (highlighted) 2 else 1)
+            binding.root.setStrokeColor(
+                MaterialColors.getColor(
+                    binding.root,
+                    if (highlighted) com.google.android.material.R.attr.colorPrimary
+                    else com.google.android.material.R.attr.colorOutlineVariant,
                 )
-            }
+            )
             binding.root.contentDescription = buildString {
-                append(binding.name.text)
+                append(binding.root.context.getString(R.string.file_row_accessibility, binding.name.text, binding.meta.text))
                 if (selected) append(" • seçili")
                 if (highlighted) append(" • ${binding.root.context.getString(R.string.browser_highlighted_entry)}")
             }
@@ -157,21 +168,31 @@ class FileListAdapter(
     private fun dp(context: Context, value: Int): Int =
         (value * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
 
-    private fun iconFor(file: File): String {
-        if (file.isDirectory) return "📁"
-        return when (file.extension.lowercase(Locale.ROOT)) {
-            "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif" -> "🖼️"
-            "mp4", "mkv", "webm", "avi", "mov", "m4v" -> "🎞️"
-            "mp3", "wav", "ogg", "m4a", "flac", "aac" -> "🎵"
-            "zip", "rar", "7z", "tar", "gz", "xz" -> "🗜️"
-            "apk", "apks", "xapk" -> "📦"
-            "db", "sqlite", "sqlite3" -> "🗃️"
-            "json", "xml", "yaml", "yml", "toml", "ini", "properties" -> "⚙️"
-            "kt", "java", "js", "ts", "py", "sh", "html", "css", "c", "cpp", "h" -> "💻"
-            "pdf" -> "📕"
-            "txt", "md", "log", "csv" -> "📝"
-            else -> "📄"
+    private fun kindLabel(context: Context, kind: FileVisualKind): String = context.getString(
+        when (kind) {
+            FileVisualKind.DIRECTORY -> R.string.file_kind_directory
+            FileVisualKind.IMAGE -> R.string.file_kind_image
+            FileVisualKind.VIDEO -> R.string.file_kind_video
+            FileVisualKind.AUDIO -> R.string.file_kind_audio
+            FileVisualKind.ARCHIVE -> R.string.file_kind_archive
+            FileVisualKind.ANDROID_PACKAGE -> R.string.file_kind_android_package
+            FileVisualKind.DATABASE -> R.string.file_kind_database
+            FileVisualKind.CONFIG -> R.string.file_kind_config
+            FileVisualKind.CODE -> R.string.file_kind_code
+            FileVisualKind.PDF -> R.string.file_kind_pdf
+            FileVisualKind.DOCUMENT -> R.string.file_kind_document
+            FileVisualKind.SPREADSHEET -> R.string.file_kind_spreadsheet
+            FileVisualKind.PRESENTATION -> R.string.file_kind_presentation
+            FileVisualKind.EBOOK -> R.string.file_kind_ebook
+            FileVisualKind.FONT -> R.string.file_kind_font
+            FileVisualKind.TEXT -> R.string.file_kind_text
+            FileVisualKind.OTHER -> R.string.file_kind_other
         }
+    )
+
+    private fun formatModified(context: Context, timestamp: Long): String {
+        if (timestamp <= 0L) return context.getString(R.string.file_modified_unknown)
+        return DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(timestamp)
     }
 
     private fun formatBytes(bytes: Long): String {
