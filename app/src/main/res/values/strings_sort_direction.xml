@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sort_direction_name_ascending">A → Z</string>
+    <string name="sort_direction_name_descending">Z → A</string>
+    <string name="sort_direction_date_ascending">Eski → Yeni</string>
+    <string name="sort_direction_date_descending">Yeni → Eski</string>
+    <string name="sort_direction_size_ascending">Küçük → Büyük</string>
+    <string name="sort_direction_size_descending">Büyük → Küçük</string>
+    <string name="sort_direction_accessibility">Sıralama yönü: %1$s. Değiştirmek için dokun.</string>
+</resources>
