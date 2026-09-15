@@ -10,9 +10,11 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.progressindicator.LinearProgressIndicator
+import com.google.android.material.snackbar.Snackbar
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.AccessSnapshot
 import dev.laxerus.omnifiles.access.StorageAccessController
@@ -20,6 +22,7 @@ import dev.laxerus.omnifiles.databinding.ActivityStorageAnalyzerBinding
 import dev.laxerus.omnifiles.fs.FilePathPolicy
 import dev.laxerus.omnifiles.fs.StorageAnalyzer
 import dev.laxerus.omnifiles.fs.TrashManager
+import dev.laxerus.omnifiles.fs.TrashTicket
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,6 +39,7 @@ class StorageAnalyzerActivity : OmniActivity() {
     private data class TrashOutcome(
         val moved: Boolean,
         val stale: Boolean,
+        val ticket: TrashTicket? = null,
     )
 
     private lateinit var binding: ActivityStorageAnalyzerBinding
@@ -331,7 +335,7 @@ class StorageAnalyzerActivity : OmniActivity() {
                     ?: return@withContext TrashOutcome(moved = false, stale = true)
                 runCatching { trashManager.moveToTrash(safe) }
                     .fold(
-                        onSuccess = { TrashOutcome(moved = true, stale = false) },
+                        onSuccess = { ticket -> TrashOutcome(moved = true, stale = false, ticket = ticket) },
                         onFailure = { TrashOutcome(moved = false, stale = false) },
                     )
             }
@@ -339,15 +343,7 @@ class StorageAnalyzerActivity : OmniActivity() {
 
             binding.progress.visibility = View.GONE
             when {
-                outcome.moved -> {
-                    Toast.makeText(
-                        this@StorageAnalyzerActivity,
-                        R.string.storage_analyzer_trashed,
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                    hasResult = false
-                    startScan()
-                }
+                outcome.moved && outcome.ticket != null -> showTrashUndo(outcome.ticket)
 
                 outcome.stale -> {
                     Toast.makeText(
@@ -355,8 +351,7 @@ class StorageAnalyzerActivity : OmniActivity() {
                         R.string.storage_analyzer_entry_stale,
                         Toast.LENGTH_LONG,
                     ).show()
-                    hasResult = false
-                    startScan()
+                    refreshAfterTrashChange()
                 }
 
                 else -> {
@@ -370,6 +365,59 @@ class StorageAnalyzerActivity : OmniActivity() {
                     renderAccessState()
                 }
             }
+        }
+    }
+
+    private fun showTrashUndo(ticket: TrashTicket) {
+        binding.startButton.isEnabled = false
+        binding.cancelButton.isEnabled = false
+        binding.summaryText.setText(R.string.storage_analyzer_trashed)
+
+        Snackbar.make(binding.root, R.string.storage_analyzer_trashed, Snackbar.LENGTH_LONG)
+            .setAction(R.string.undo) { restoreTrash(ticket) }
+            .addCallback(object : Snackbar.Callback() {
+                override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                    if (event != Snackbar.Callback.DISMISS_EVENT_ACTION) {
+                        refreshAfterTrashChange()
+                    }
+                }
+            })
+            .show()
+    }
+
+    private fun restoreTrash(ticket: TrashTicket) {
+        binding.startButton.isEnabled = false
+        binding.cancelButton.isEnabled = false
+        binding.progress.visibility = View.VISIBLE
+        binding.summaryText.setText(R.string.storage_analyzer_restoring)
+
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { trashManager.restore(ticket) }
+            }
+            if (!isActive) return@launch
+
+            binding.progress.visibility = View.GONE
+            result.onSuccess {
+                Snackbar.make(binding.root, R.string.trash_restored, Snackbar.LENGTH_SHORT).show()
+                refreshAfterTrashChange()
+            }.onFailure { error ->
+                Toast.makeText(
+                    this@StorageAnalyzerActivity,
+                    error.message ?: getString(R.string.trash_restore_failed),
+                    Toast.LENGTH_LONG,
+                ).show()
+                refreshAfterTrashChange()
+            }
+        }
+    }
+
+    private fun refreshAfterTrashChange() {
+        hasResult = false
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            startScan()
+        } else {
+            renderAccessState()
         }
     }
 
