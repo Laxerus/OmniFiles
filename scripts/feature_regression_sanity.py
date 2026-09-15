@@ -146,6 +146,14 @@ require(
     "file_open_failed",
 )
 require(
+    "app/src/test/java/dev/laxerus/omnifiles/ui/LocalFileIntentsTest.kt",
+    "requireDirectFileAcceptsRegularFile",
+    "requireDirectFileRejectsDirectory",
+    "requireDirectFileRejectsSymlink",
+    "LocalFileIntents.requireDirectFile",
+    "Files.createSymbolicLink",
+)
+require(
     "app/src/test/java/dev/laxerus/omnifiles/fs/QuickFolderPolicyTest.kt",
     "prefersFirstAvailableAliasAndFallsBackWhenMissing",
     "unsafePrimaryAliasDoesNotBlockSafeFallbackAlias",
