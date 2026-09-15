@@ -161,4 +161,59 @@ class DuplicateFinderTest {
             root.deleteRecursively()
         }
     }
+
+    @Test
+    fun verifyDuplicateAcceptsUnchangedVerifiedFile() {
+        val root = Files.createTempDirectory("omnifiles-duplicates-verify").toFile()
+        try {
+            val payload = ByteArray(128 * 1024) { index -> (index % 251).toByte() }
+            root.resolve("a.bin").writeBytes(payload)
+            root.resolve("b.bin").writeBytes(payload)
+
+            val group = DuplicateFinder.scan(root, minFileSizeBytes = 1L).groups.single()
+            val duplicate = group.files.first()
+
+            assertTrue(
+                DuplicateFinder.verifyDuplicate(
+                    file = java.io.File(duplicate.path),
+                    root = root,
+                    expectedSizeBytes = duplicate.sizeBytes,
+                    expectedModifiedAt = duplicate.modifiedAt,
+                    expectedSha256 = group.sha256,
+                )
+            )
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun verifyDuplicateRejectsContentChangedWithSameSizeAndTimestamp() {
+        val root = Files.createTempDirectory("omnifiles-duplicates-verify-change").toFile()
+        try {
+            val payload = ByteArray(128 * 1024) { 7 }
+            val first = root.resolve("a.bin").apply { writeBytes(payload) }
+            root.resolve("b.bin").writeBytes(payload)
+
+            val group = DuplicateFinder.scan(root, minFileSizeBytes = 1L).groups.single()
+            val duplicate = group.files.first { it.path == first.canonicalPath }
+
+            first.writeBytes(ByteArray(payload.size) { 9 })
+            assertTrue(first.setLastModified(duplicate.modifiedAt))
+            assertEquals(duplicate.sizeBytes, first.length())
+            assertEquals(duplicate.modifiedAt, first.lastModified().coerceAtLeast(0L))
+
+            assertFalse(
+                DuplicateFinder.verifyDuplicate(
+                    file = first,
+                    root = root,
+                    expectedSizeBytes = duplicate.sizeBytes,
+                    expectedModifiedAt = duplicate.modifiedAt,
+                    expectedSha256 = group.sha256,
+                )
+            )
+        } finally {
+            root.deleteRecursively()
+        }
+    }
 }
