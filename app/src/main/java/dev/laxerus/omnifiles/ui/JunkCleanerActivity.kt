@@ -13,16 +13,20 @@ import dev.laxerus.omnifiles.fs.JunkCandidate
 import dev.laxerus.omnifiles.fs.JunkCleaner
 import dev.laxerus.omnifiles.fs.JunkKind
 import dev.laxerus.omnifiles.fs.JunkScanResult
+import dev.laxerus.omnifiles.maintenance.AutoCleanupManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.DateFormat
+import java.util.Date
 import java.util.Locale
 
 class JunkCleanerActivity : OmniActivity() {
     private lateinit var binding: ActivityJunkCleanerBinding
     private var currentScan: JunkScanResult? = null
     private var busy = false
+    private var suppressAutoToggle = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,7 +41,11 @@ class JunkCleanerActivity : OmniActivity() {
         binding.openTrashButton.setOnClickListener {
             startActivity(Intent(this, TrashActivity::class.java))
         }
+        binding.autoCleanupSwitch.setOnCheckedChangeListener { _, checked ->
+            if (!suppressAutoToggle) handleAutoCleanupToggle(checked)
+        }
         renderIdle()
+        renderAutoCleanupStatus()
     }
 
     override fun onResume() {
@@ -46,6 +54,94 @@ class JunkCleanerActivity : OmniActivity() {
             currentScan = null
             renderIdle()
         }
+        renderAutoCleanupStatus()
+    }
+
+    private fun handleAutoCleanupToggle(enabled: Boolean) {
+        if (enabled && !StorageAccessController.hasSharedStorageAccess(this)) {
+            AutoCleanupManager.setEnabled(this, false)
+            setAutoSwitchChecked(false)
+            renderAutoCleanupStatus()
+            Toast.makeText(this, R.string.junk_cleaner_auto_access_required, Toast.LENGTH_LONG).show()
+            StorageAccessController.requestSharedStorageAccess(this)
+            return
+        }
+
+        AutoCleanupManager.setEnabled(this, enabled)
+        if (!enabled) {
+            Toast.makeText(this, R.string.junk_cleaner_auto_disabled_toast, Toast.LENGTH_SHORT).show()
+            renderAutoCleanupStatus()
+            return
+        }
+
+        Toast.makeText(this, R.string.junk_cleaner_auto_enabled, Toast.LENGTH_SHORT).show()
+        runAutomaticCleanupNow()
+    }
+
+    private fun runAutomaticCleanupNow() {
+        if (busy) {
+            renderAutoCleanupStatus()
+            return
+        }
+        setBusy(true, R.string.junk_cleaner_auto_running)
+        binding.autoCleanupSwitch.isEnabled = false
+        lifecycleScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    AutoCleanupManager.runIfDue(
+                        context = this@JunkCleanerActivity,
+                        force = true,
+                    )
+                }
+            }
+            if (!isFinishing && !isDestroyed) {
+                setBusy(false)
+                binding.autoCleanupSwitch.isEnabled = true
+                currentScan = null
+                renderIdle()
+                renderAutoCleanupStatus()
+                result.onFailure {
+                    Toast.makeText(
+                        this@JunkCleanerActivity,
+                        R.string.junk_cleaner_auto_failed,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun renderAutoCleanupStatus() {
+        val state = AutoCleanupManager.state(this)
+        setAutoSwitchChecked(state.enabled)
+        binding.autoCleanupSwitch.isEnabled = !busy
+        binding.autoCleanupStatus.text = when {
+            !state.enabled -> getString(R.string.junk_cleaner_auto_disabled)
+            !StorageAccessController.hasSharedStorageAccess(this) ->
+                getString(R.string.junk_cleaner_auto_access_required)
+            state.lastSuccessAt <= 0L -> getString(R.string.junk_cleaner_auto_waiting)
+            else -> buildString {
+                append(
+                    getString(
+                        R.string.junk_cleaner_auto_last_run,
+                        formatTimestamp(state.lastSuccessAt),
+                        state.lastDeleted,
+                        state.lastFailed,
+                        formatBytes(state.lastReclaimedBytes),
+                    )
+                )
+                if (state.lastScanTruncated) {
+                    append("\n")
+                    append(getString(R.string.junk_cleaner_auto_partial))
+                }
+            }
+        }
+    }
+
+    private fun setAutoSwitchChecked(checked: Boolean) {
+        suppressAutoToggle = true
+        binding.autoCleanupSwitch.isChecked = checked
+        suppressAutoToggle = false
     }
 
     private fun scan() {
@@ -64,6 +160,7 @@ class JunkCleanerActivity : OmniActivity() {
                 }
             }
             setBusy(false)
+            renderAutoCleanupStatus()
             result.onSuccess {
                 currentScan = it
                 renderScan(it)
@@ -107,6 +204,7 @@ class JunkCleanerActivity : OmniActivity() {
                 }
             }
             setBusy(false)
+            renderAutoCleanupStatus()
             result.onSuccess { cleanup ->
                 Toast.makeText(
                     this@JunkCleanerActivity,
@@ -190,6 +288,7 @@ class JunkCleanerActivity : OmniActivity() {
         binding.progress.visibility = if (value) View.VISIBLE else View.GONE
         binding.scanButton.isEnabled = !value
         binding.openTrashButton.isEnabled = !value
+        binding.autoCleanupSwitch.isEnabled = !value
         binding.cleanButton.isEnabled = !value && currentScan?.candidates?.isNotEmpty() == true
         if (statusRes != null) binding.summaryText.setText(statusRes)
     }
@@ -207,6 +306,10 @@ class JunkCleanerActivity : OmniActivity() {
     private fun relativePath(path: String, root: File): String {
         return path.removePrefix(root.path).trimStart(File.separatorChar).ifBlank { root.path }
     }
+
+    private fun formatTimestamp(timestamp: Long): String =
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault())
+            .format(Date(timestamp))
 
     private fun formatBytes(bytes: Long): String {
         if (bytes < 1024L) return "$bytes B"
