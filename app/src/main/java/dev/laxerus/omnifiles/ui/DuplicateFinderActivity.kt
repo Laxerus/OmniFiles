@@ -187,7 +187,7 @@ class DuplicateFinderActivity : OmniActivity() {
         val labels = group.files.map { duplicate -> relativePath(duplicate.path) }.toTypedArray()
         MaterialAlertDialogBuilder(this)
             .setTitle(getString(R.string.duplicate_finder_group_dialog, group.files.size))
-            .setItems(labels) { _, which -> showFileActions(group.files[which]) }
+            .setItems(labels) { _, which -> showFileActions(group, group.files[which]) }
             .setNeutralButton(R.string.duplicate_finder_clean_group) { _, _ -> confirmCleanGroup(group) }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -288,7 +288,10 @@ class DuplicateFinderActivity : OmniActivity() {
         }
     }
 
-    private fun showFileActions(duplicate: DuplicateFinder.DuplicateFile) {
+    private fun showFileActions(
+        group: DuplicateFinder.DuplicateGroup,
+        duplicate: DuplicateFinder.DuplicateFile,
+    ) {
         val safe = resolveFile(duplicate) ?: return
         val actions = arrayOf(
             getString(R.string.duplicate_finder_action_open),
@@ -302,30 +305,43 @@ class DuplicateFinderActivity : OmniActivity() {
                 when (which) {
                     0 -> openLocation(duplicate)
                     1 -> copyPath(safe.canonicalPath)
-                    2 -> confirmMoveToTrash(duplicate)
+                    2 -> confirmMoveToTrash(group, duplicate)
                 }
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
-    private fun confirmMoveToTrash(duplicate: DuplicateFinder.DuplicateFile) {
+    private fun confirmMoveToTrash(
+        group: DuplicateFinder.DuplicateGroup,
+        duplicate: DuplicateFinder.DuplicateFile,
+    ) {
         val safe = resolveFile(duplicate) ?: return
+        if (!verifyDuplicate(duplicate, group.sha256)) {
+            Toast.makeText(this, R.string.duplicate_finder_entry_stale, Toast.LENGTH_LONG).show()
+            return
+        }
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.duplicate_finder_trash_confirm_title)
             .setMessage(getString(R.string.duplicate_finder_trash_confirm, relativePath(safe.canonicalPath)))
             .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.duplicate_finder_action_trash) { _, _ -> moveToTrash(duplicate) }
+            .setPositiveButton(R.string.duplicate_finder_action_trash) { _, _ -> moveToTrash(group, duplicate) }
             .show()
     }
 
-    private fun moveToTrash(duplicate: DuplicateFinder.DuplicateFile) {
+    private fun moveToTrash(
+        group: DuplicateFinder.DuplicateGroup,
+        duplicate: DuplicateFinder.DuplicateFile,
+    ) {
         binding.startButton.isEnabled = false
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val safe = resolveFileSilently(duplicate)
                         ?: error("Dosya taramadan sonra değişmiş veya kaldırılmış")
+                    if (!verifyDuplicate(duplicate, group.sha256)) {
+                        error("Dosya taramadan sonra içerik olarak değişmiş")
+                    }
                     trashManager.moveToTrash(safe)
                 }
             }
