@@ -21,13 +21,21 @@ require(
     "app/src/main/java/dev/laxerus/omnifiles/fs/CopyIntegrityVerifier.kt",
     "object CopyIntegrityVerifier",
     "fun matches(source: File, destination: File): Boolean",
-    "MessageDigest.getInstance(\"SHA-256\")",
+    "private fun directCanonical(file: File): File?",
+    "if (absolute.path != canonical.path) null else canonical",
+    "private fun stableSha256(file: File): ByteArray?",
+    "val sourceDigestBefore = stableSha256(source)",
+    "val destinationDigestBefore = stableSha256(destination)",
+    "val sourceDigestAfter = stableSha256(source)",
+    "val destinationDigestAfter = stableSha256(destination)",
     "private fun matchingDirectories",
     "val sourceDigestBefore = treeDigest(source)",
     "val destinationDigestBefore = treeDigest(destination)",
     "val sourceDigestAfter = treeDigest(source)",
     "val destinationDigestAfter = treeDigest(destination)",
-    "absolute.path != canonical.path",
+    "val canonicalRoot = directCanonical(root)",
+    "val canonical = directCanonical(entry.file)",
+    "MessageDigest.getInstance(\"SHA-256\")",
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/fs/DurableFileWriter.kt",
@@ -57,12 +65,18 @@ require(
     "acceptsIdenticalDirectoryTrees",
     "rejectsDirectoryTreeWithSameSizeMutation",
     "rejectsSymlinkedTreeEntry",
+    "rejectsSymlinkedRootFile",
+    "rejectsSymlinkedRootDirectory",
 )
 require(
     "app/src/test/java/dev/laxerus/omnifiles/fs/DurableFileWriterTest.kt",
     "writesVerifiedUtf8AndRemovesTemp",
     "refusesToOverwriteExistingDestination",
 )
+
+verifier_text = (root / "app/src/main/java/dev/laxerus/omnifiles/fs/CopyIntegrityVerifier.kt").read_text(encoding="utf-8")
+if verifier_text.count("stableSha256(") < 7:
+    errors.append("CopyIntegrityVerifier must use stable SHA-256 in both file and tree verification paths")
 
 trash_text = (root / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt").read_text(encoding="utf-8")
 if trash_text.count("!CopyIntegrityVerifier.matches(source, destination)") < 4:
