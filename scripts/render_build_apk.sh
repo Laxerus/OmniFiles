@@ -10,7 +10,7 @@ SDK="$CACHE_ROOT/android-sdk"
 GRADLE_USER_HOME="$CACHE_ROOT/gradle-user-home"
 PUBLIC="$ROOT/public"
 GRADLE_VERSION="9.3.1"
-ANDROID_PLATFORM="37.0"
+ANDROID_PLATFORM="37"
 BUILD_TOOLS="36.0.0"
 CMDLINE_TOOLS_REV="11076708"
 
@@ -91,10 +91,10 @@ log "Android SDK lisansları kabul ediliyor"
 yes | sdkmanager --licenses >/dev/null 2>&1 || true
 
 if [[ ! -f "$SDK/platforms/android-$ANDROID_PLATFORM/android.jar" || ! -x "$SDK/build-tools/$BUILD_TOOLS/aapt2" || ! -x "$SDK/platform-tools/adb" ]]; then
-  log "Android SDK $ANDROID_PLATFORM kuruluyor"
+  log "Android SDK API $ANDROID_PLATFORM kuruluyor"
   sdkmanager "platform-tools" "platforms;android-${ANDROID_PLATFORM}" "build-tools;${BUILD_TOOLS}"
 else
-  log "Android SDK $ANDROID_PLATFORM build cache'ten kullanılıyor"
+  log "Android SDK API $ANDROID_PLATFORM build cache'ten kullanılıyor"
 fi
 
 log "Kaynak sanity kontrolü"
