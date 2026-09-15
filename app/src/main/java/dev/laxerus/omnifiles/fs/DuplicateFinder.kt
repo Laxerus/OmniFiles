@@ -3,6 +3,7 @@ package dev.laxerus.omnifiles.fs
 import java.io.File
 import java.security.MessageDigest
 import java.util.ArrayDeque
+import java.util.Locale
 
 object DuplicateFinder {
     const val DEFAULT_MAX_ENTRIES = 30_000
@@ -165,15 +166,15 @@ object DuplicateFinder {
                     continue
                 }
 
-                val digest = runCatching { sha256(safe, isCancelled) }
-                    .getOrElse {
-                        if (it is ScanCancelledException) {
-                            cancelled = true
-                            break@hashLoop
-                        }
-                        skippedEntries++
-                        continue
-                    }
+                val digest = try {
+                    sha256(safe, isCancelled)
+                } catch (_: ScanCancelledException) {
+                    cancelled = true
+                    break@hashLoop
+                } catch (_: Throwable) {
+                    skippedEntries++
+                    continue
+                }
 
                 if (safe.length() != snapshot.sizeBytes || safe.lastModified().coerceAtLeast(0L) != snapshot.modifiedAt) {
                     skippedEntries++
@@ -196,7 +197,7 @@ object DuplicateFinder {
                 DuplicateGroup(
                     sha256 = key.second,
                     sizeBytes = key.first,
-                    files = files.sortedBy { it.path.lowercase() },
+                    files = files.sortedBy { it.path.lowercase(Locale.ROOT) },
                 )
             }
             .sortedWith(
