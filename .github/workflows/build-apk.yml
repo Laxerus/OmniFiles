@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   build-debug:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 40
 
     steps:
