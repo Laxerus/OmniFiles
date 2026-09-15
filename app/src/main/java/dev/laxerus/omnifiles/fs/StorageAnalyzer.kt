@@ -234,6 +234,18 @@ object StorageAnalyzer {
         )
     }
 
+    fun verifyUnchangedFile(entry: Entry, root: File): File? {
+        if (entry.isDirectory) return null
+        val safeRoot = runCatching { FilePathPolicy.canonical(root) }.getOrNull() ?: return null
+        val safe = runCatching {
+            FilePathPolicy.requireDirectEntry(File(entry.path), safeRoot)
+        }.getOrNull() ?: return null
+        if (!safe.exists() || !safe.isFile) return null
+        if (safe.length().coerceAtLeast(0L) != entry.sizeBytes) return null
+        if (safe.lastModified().coerceAtLeast(0L) != entry.modifiedAt) return null
+        return safe
+    }
+
     internal fun classifyFileName(name: String): FileCategory {
         val extension = name.substringAfterLast('.', missingDelimiterValue = "")
             .lowercase(java.util.Locale.ROOT)
