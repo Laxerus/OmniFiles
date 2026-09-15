@@ -15,6 +15,7 @@ object DuplicateFinder {
     const val DEFAULT_MAX_HASHED_BYTES = 16L * 1024L * 1024L * 1024L
     private const val BUFFER_BYTES = 64 * 1024
     private const val SAMPLE_BYTES = 64 * 1024
+    private val SHA256_HEX = Regex("^[0-9a-f]{64}$")
 
     data class DuplicateFile(
         val path: String,
@@ -279,6 +280,28 @@ object DuplicateFinder {
             truncated = truncated,
             cancelled = cancelled,
         )
+    }
+
+    fun verifyDuplicate(
+        file: File,
+        root: File,
+        expectedSizeBytes: Long,
+        expectedModifiedAt: Long,
+        expectedSha256: String,
+    ): Boolean {
+        if (expectedSizeBytes < 0L || expectedModifiedAt < 0L) return false
+        val normalizedDigest = expectedSha256.lowercase(Locale.ROOT)
+        if (!SHA256_HEX.matches(normalizedDigest)) return false
+
+        val safeRoot = runCatching { FilePathPolicy.canonical(root) }.getOrNull() ?: return false
+        if (!safeRoot.exists() || !safeRoot.isDirectory) return false
+        val safe = runCatching { FilePathPolicy.requireDirectEntry(file, safeRoot) }.getOrNull() ?: return false
+        if (!safe.exists() || !safe.isFile) return false
+        if (safe.length() != expectedSizeBytes || safe.lastModified().coerceAtLeast(0L) != expectedModifiedAt) return false
+
+        val digest = runCatching { sha256(safe) { false } }.getOrNull() ?: return false
+        if (safe.length() != expectedSizeBytes || safe.lastModified().coerceAtLeast(0L) != expectedModifiedAt) return false
+        return digest == normalizedDigest
     }
 
     private fun revalidate(snapshot: Snapshot, safeRoot: File): File? {
