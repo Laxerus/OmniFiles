@@ -1,46 +1,35 @@
 # OmniFiles
 
-OmniFiles, Android için geliştirilen modern bir dosya yöneticisi ve yardımcı araç setidir. Amaç; ortak depolama işlemlerini, güvenli dosya araçlarını ve gerektiğinde Kablosuz ADB desteğini tek APK içinde toplamaktır.
+OmniFiles, Android için modern bir dosya yöneticisi ve yardımcı araç setidir. Ortak depolama işlemlerini, güvenli bakım araçlarını ve gerektiğinde Kablosuz ADB erişimini tek APK içinde toplar.
 
-**Shizuku, LADB veya sürekli bağlı bir PC gerekmez.** Android'in güvenlik modeli geçerlidir; dahili ADB normalde `shell` yetkileriyle çalışır.
+**Shizuku, LADB veya sürekli bağlı bir PC gerekmez.** Android'in normal güvenlik modeli geçerlidir; dahili ADB bağlantısı `shell` yetkileriyle çalışır.
 
 ## Güncel sürüm
 
-Geliştirme sürümü yayınlanana kadar **`0.8.0-dev`** olarak sabit tutulur.
+Geliştirme sürümü yayınlanana kadar **`0.8.0-dev`** olarak sabittir.
 
 - [APK indir](https://omnifiles-apk.onrender.com/OmniFiles-0.8.0-dev-debug.apk)
 - [SHA-256](https://omnifiles-apk.onrender.com/OmniFiles-0.8.0-dev-debug.apk.sha256)
 
-## Neler yapabiliyor?
+## Özellikler
 
 - Arama, sıralama, favoriler, gizli dosyalar ve toplu seçim içeren dosya yöneticisi.
 - Güvenli kopyalama/taşıma, yeniden adlandırma, paylaşma ve klasör oluşturma.
-- Geri yüklenebilir **OmniFiles Çöp Kutusu**.
-- **Gereksiz Dosya Temizliği:** eski geçici dosyaları, yarım indirmeleri, metadata artıklarını ve boş cache/temp klasörlerini tarar; değişmediği tekrar doğrulanan düşük riskli adayları tek dokunuşla siler.
-- **Depolama Analizi:** en büyük dosyaları, klasörleri ve dosya kategorilerini gösterir.
+- Geri yüklenebilir **OmniFiles Çöp Kutusu** ve muhafazakâr **Gereksiz Dosya Temizliği**.
+- **Depolama Analizi** ile en büyük dosya, klasör ve dosya türlerini görme.
+- **Yinelenen Dosyalar** ile aynı boyuttaki adayları SHA-256 üzerinden doğrulayıp kazanılabilecek alanı görme.
 - SHA-256 hesaplama ve beklenen hash ile doğrulama.
-- Dahili Kablosuz ADB istemcisi ile erişilebilir Android dosyalarını inceleme ve dışa aktarma.
-- Save Scout ile erişilebilir oyun/save konumlarını tarama.
-- SQLite Studio ile çalışma kopyası üzerinden güvenli veritabanı inceleme/düzenleme.
+- Dahili Kablosuz ADB, Save Scout ve SQLite Studio araçları.
 - Material 3 ve Android 15/16 edge-to-edge uyumlu arayüz.
 
-## Güvenlik yaklaşımı
+## Güvenlik
 
-OmniFiles dosya işlemlerinde canonical yol kontrolleri kullanır, sembolik/dolaylı yolları sınırlar ve kritik Android klasörlerinin kendisini değiştirmeyi engeller.
+Dosya işlemleri canonical yol kontrolleriyle sınırlandırılır; sembolik/dolaylı yollar ve kritik Android klasörlerinin kendisi korunur. Temizlik araçları kullanıcı medyasını yalnız adına bakarak gereksiz kabul etmez. Yinelenen dosya bulucu sonuçları otomatik silmez.
 
-Gereksiz Dosya Temizliği özellikle muhafazakârdır: `Android/` ve `LOST.DIR` tarama dışında tutulur; fotoğraf, video veya belge klasörleri yalnız adına bakılarak gereksiz kabul edilmez. Silme anında adayın türü, boyutu ve değiştirilme zamanı yeniden doğrulanır. Klasörlerde recursive silme yapılmaz; yalnız gerçekten boş cache/temp klasörleri silinebilir.
+OmniFiles ayrıca önceki oturumlardan kalmış kendi geçici ADB önizleme, checksum ve SQLite çalışma dosyalarını uygulama başlangıcında sınırlandırılmış bir bakım işlemiyle temizler.
 
 ## Geliştirme
 
-Kaynak kodun güncel hali repository kökündeki Android/Gradle projesidir. `.source/` yalnız eski kurtarma arşividir ve aktif geliştirme kaynağı değildir.
+Güncel kaynak repository kökündeki Android/Gradle projesidir. `.source/` yalnız eski kurtarma arşividir.
 
-Her APK yayını şu kontrollerden geçer:
-
-```text
-source sanity
-unit tests
-Android Lint
-assembleDebug
-```
-
-Build hattı başarılı olduğunda güncel APK üstteki bağlantıda yayınlanır.
+APK hattı: `source sanity → unit tests → Android Lint → assembleDebug`.
