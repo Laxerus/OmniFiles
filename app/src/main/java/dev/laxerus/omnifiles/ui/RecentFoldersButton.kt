@@ -148,18 +148,21 @@ class RecentFoldersButton @JvmOverloads constructor(
             return
         }
 
-        val intent = runCatching { LocalFileIntents.viewIntent(context, safeFile) }
-            .getOrElse {
-                Toast.makeText(context, R.string.recent_file_stale, Toast.LENGTH_SHORT).show()
-                return
-            }
-        runCatching { context.startActivity(intent) }
-            .onSuccess {
+        when (LocalFileLauncher.open(context, safeFile)) {
+            LocalFileLauncher.Result.OPENED -> {
                 runCatching { recentFileStore.record(safeFile, sharedRoot) }
             }
-            .onFailure {
+            LocalFileLauncher.Result.INVALID -> {
+                Toast.makeText(context, R.string.recent_file_stale, Toast.LENGTH_SHORT).show()
+            }
+            LocalFileLauncher.Result.NO_VIEWER -> {
+                Toast.makeText(context, R.string.file_open_no_viewer, Toast.LENGTH_SHORT).show()
+            }
+            LocalFileLauncher.Result.DENIED,
+            LocalFileLauncher.Result.FAILED -> {
                 Toast.makeText(context, R.string.recent_file_open_failed, Toast.LENGTH_SHORT).show()
             }
+        }
     }
 
     private fun quickLabel(kind: QuickFolderPolicy.Kind): String = context.getString(
