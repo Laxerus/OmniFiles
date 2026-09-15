@@ -6,65 +6,66 @@ import org.junit.Test
 
 class TrashMetadataPolicyTest {
     @Test
-    fun keepsLiveMetadataEvenWhenOld() {
+    fun freshMetadataIsInsideGrace() {
         val now = 1_000_000L
         assertFalse(
-            TrashMetadataPolicy.shouldDeleteOrphan(
+            TrashMetadataPolicy.isPastGrace(
+                modifiedAt = now - TrashMetadataPolicy.ORPHAN_GRACE_MS + 1,
+                now = now,
+            )
+        )
+    }
+
+    @Test
+    fun staleMetadataIsPastGrace() {
+        val now = 1_000_000L
+        assertTrue(
+            TrashMetadataPolicy.isPastGrace(
+                modifiedAt = now - TrashMetadataPolicy.ORPHAN_GRACE_MS,
+                now = now,
+            )
+        )
+    }
+
+    @Test
+    fun futureTimestampIsKeptConservatively() {
+        val now = 1_000_000L
+        assertFalse(TrashMetadataPolicy.isPastGrace(modifiedAt = now + 1, now = now))
+    }
+
+    @Test
+    fun deletesOnlyStaleTempFiles() {
+        val now = 1_000_000L
+        assertTrue(
+            TrashMetadataPolicy.shouldDeleteStaleTemp(
+                name = "entry.json.random.tmp",
+                modifiedAt = now - TrashMetadataPolicy.ORPHAN_GRACE_MS,
+                now = now,
+            )
+        )
+        assertFalse(
+            TrashMetadataPolicy.shouldDeleteStaleTemp(
                 name = "entry.json",
                 modifiedAt = now - TrashMetadataPolicy.ORPHAN_GRACE_MS * 2,
-                liveMetadataNames = setOf("entry.json"),
                 now = now,
             )
         )
-    }
-
-    @Test
-    fun keepsFreshOrphanMetadata() {
-        val now = 1_000_000L
         assertFalse(
-            TrashMetadataPolicy.shouldDeleteOrphan(
-                name = "entry.json",
-                modifiedAt = now - TrashMetadataPolicy.ORPHAN_GRACE_MS + 1,
-                liveMetadataNames = emptySet(),
-                now = now,
-            )
-        )
-    }
-
-    @Test
-    fun deletesStaleOrphanJson() {
-        val now = 1_000_000L
-        assertTrue(
-            TrashMetadataPolicy.shouldDeleteOrphan(
-                name = "entry.json",
-                modifiedAt = now - TrashMetadataPolicy.ORPHAN_GRACE_MS,
-                liveMetadataNames = emptySet(),
-                now = now,
-            )
-        )
-    }
-
-    @Test
-    fun deletesStaleTempFile() {
-        val now = 1_000_000L
-        assertTrue(
-            TrashMetadataPolicy.shouldDeleteOrphan(
+            TrashMetadataPolicy.shouldDeleteStaleTemp(
                 name = "entry.json.random.tmp",
-                modifiedAt = now - TrashMetadataPolicy.ORPHAN_GRACE_MS - 1,
-                liveMetadataNames = emptySet(),
+                modifiedAt = now - TrashMetadataPolicy.ORPHAN_GRACE_MS + 1,
                 now = now,
             )
         )
     }
 
     @Test
-    fun ignoresUnknownMetadataFilesConservatively() {
+    fun ignoresUnknownFilesConservatively() {
         val now = 1_000_000L
         assertFalse(
-            TrashMetadataPolicy.shouldDeleteOrphan(
+            TrashMetadataPolicy.shouldDeleteStaleTemp(
                 name = "notes.txt",
                 modifiedAt = 1L,
-                liveMetadataNames = emptySet(),
                 now = now,
             )
         )
