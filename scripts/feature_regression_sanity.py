@@ -97,6 +97,35 @@ require(
     "verifyDuplicateRejectsContentChangedWithSameSizeAndTimestamp",
 )
 require(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/StorageAnalyzer.kt",
+    "fun verifyUnchangedFile(",
+    "FilePathPolicy.requireDirectEntry(File(entry.path), safeRoot)",
+    "safe.length().coerceAtLeast(0L) != entry.sizeBytes",
+    "safe.lastModified().coerceAtLeast(0L) != entry.modifiedAt",
+)
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/StorageAnalyzerActivity.kt",
+    "TrashManager",
+    "StorageAnalyzer.verifyUnchangedFile",
+    "storage_analyzer_move_to_trash",
+    "storage_analyzer_trash_moving",
+    "trashManager.moveToTrash(safe)",
+)
+require(
+    "app/src/test/java/dev/laxerus/omnifiles/fs/StorageAnalyzerTest.kt",
+    "verifyUnchangedFileAcceptsScannedFileAndRejectsDirectories",
+    "verifyUnchangedFileRejectsChangedSizeAndTimestamp",
+    "verifyUnchangedFileRejectsSymlinkThatEscapesRoot",
+)
+require(
+    "app/src/main/res/values/strings_storage_analyzer.xml",
+    "storage_analyzer_move_to_trash",
+    "storage_analyzer_trash_confirm",
+    "storage_analyzer_trash_moving",
+    "storage_analyzer_trashed",
+    "storage_analyzer_trash_failed",
+)
+require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileBrowserPreferences.kt",
     "saveSortDescending",
     "descendingFor",
