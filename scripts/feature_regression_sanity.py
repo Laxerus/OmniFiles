@@ -17,6 +17,17 @@ def require(path: str, *tokens: str) -> None:
             errors.append(f"{path} missing: {token}")
 
 
+def forbid(path: str, *tokens: str) -> None:
+    file = root / path
+    if not file.is_file():
+        errors.append(f"missing required file: {path}")
+        return
+    text = file.read_text(encoding="utf-8")
+    for token in tokens:
+        if token in text:
+            errors.append(f"{path} must not contain: {token}")
+
+
 def require_order(path: str, start_token: str, before_token: str, after_token: str) -> None:
     file = root / path
     if not file.is_file():
@@ -50,6 +61,20 @@ require(
     "firstOrNull()",
 )
 require(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/LocalFileLauncher.kt",
+    "enum class Result",
+    "OPENED",
+    "INVALID",
+    "NO_VIEWER",
+    "DENIED",
+    "FAILED",
+    "LocalFileIntents.viewIntent(context, file)",
+    "context.startActivity(intent)",
+    "ActivityNotFoundException",
+    "SecurityException",
+    "RuntimeException",
+)
+require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/RecentFoldersButton.kt",
     "QuickFolderPolicy.available(sharedRoot)",
     "RecentFolderStore",
@@ -57,12 +82,16 @@ require(
     "recentFolderStore.clear()",
     "recentFileStore.clear()",
     "FilePathPolicy.requireDirectEntry",
-    "LocalFileIntents.viewIntent",
-    "context.startActivity(intent)",
+    "LocalFileLauncher.open(context, safeFile)",
+    "LocalFileLauncher.Result.OPENED",
     "recentFolderStore.record(safeFolder, sharedRoot)",
     "recentFileStore.record(safeFile, sharedRoot)",
     "QuickFolderPolicy.Kind.SCREENSHOTS",
     "QuickFolderPolicy.Kind.RECORDINGS",
+)
+forbid(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/RecentFoldersButton.kt",
+    "LocalFileIntents.viewIntent",
 )
 require_order(
     "app/src/main/java/dev/laxerus/omnifiles/ui/RecentFoldersButton.kt",
@@ -73,7 +102,7 @@ require_order(
 require_order(
     "app/src/main/java/dev/laxerus/omnifiles/ui/RecentFoldersButton.kt",
     "private fun openFile(file: File, sharedRoot: File)",
-    "context.startActivity(intent)",
+    "LocalFileLauncher.Result.OPENED",
     "recentFileStore.record(safeFile, sharedRoot)",
 )
 require(
@@ -90,20 +119,24 @@ require(
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileListAdapter.kt",
-    "ActivityNotFoundException",
     "private fun launchFile(file: File)",
-    "LocalFileIntents.viewIntent(context, file)",
-    "context.startActivity(intent)",
+    "LocalFileLauncher.open(context, file)",
+    "LocalFileLauncher.Result.OPENED",
     "recordRecentDirectory",
     "recordRecentFile(context, file)",
     "file_open_no_viewer",
     "file_open_failed",
     "if (selectionMode)",
 )
+forbid(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/FileListAdapter.kt",
+    "LocalFileIntents.viewIntent",
+    "ActivityNotFoundException",
+)
 require_order(
     "app/src/main/java/dev/laxerus/omnifiles/ui/FileListAdapter.kt",
     "private fun launchFile(file: File)",
-    "context.startActivity(intent)",
+    "LocalFileLauncher.Result.OPENED",
     "recordRecentFile(context, file)",
 )
 require(
