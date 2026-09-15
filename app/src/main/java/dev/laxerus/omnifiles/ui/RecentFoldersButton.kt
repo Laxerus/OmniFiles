@@ -1,6 +1,7 @@
 package dev.laxerus.omnifiles.ui
 
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.util.AttributeSet
 import android.widget.Toast
@@ -127,6 +128,14 @@ class RecentFoldersButton @JvmOverloads constructor(
             return
         }
 
+        val navigator = findNavigator()
+        if (navigator != null) {
+            if (!navigator.navigateToDirectory(safeFolder)) {
+                Toast.makeText(context, R.string.recent_folders_unavailable, Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
         val intent = Intent(context, FileBrowserActivity::class.java)
             .putExtra(FileBrowserActivity.EXTRA_START_PATH, safeFolder.canonicalPath)
         runCatching { context.startActivity(intent) }
@@ -153,6 +162,17 @@ class RecentFoldersButton @JvmOverloads constructor(
             .onFailure {
                 Toast.makeText(context, R.string.recent_file_open_failed, Toast.LENGTH_SHORT).show()
             }
+    }
+
+    private fun findNavigator(): BrowserDirectoryNavigator? {
+        var current: Context = context
+        while (current is ContextWrapper) {
+            if (current is BrowserDirectoryNavigator) return current
+            val next = current.baseContext
+            if (next === current) break
+            current = next
+        }
+        return current as? BrowserDirectoryNavigator
     }
 
     private fun quickLabel(kind: QuickFolderPolicy.Kind): String = context.getString(
