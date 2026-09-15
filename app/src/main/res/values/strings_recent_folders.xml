@@ -21,7 +21,9 @@
     <string name="quick_folder_documents">Belgeler</string>
     <string name="quick_folder_pictures">Resimler</string>
     <string name="quick_folder_camera">Kamera / DCIM</string>
+    <string name="quick_folder_screenshots">Ekran görüntüleri</string>
     <string name="quick_folder_videos">Videolar</string>
+    <string name="quick_folder_recordings">Ekran kayıtları</string>
     <string name="quick_folder_music">Müzik</string>
     <string name="quick_folder_android_media">Android medya</string>
 </resources>
