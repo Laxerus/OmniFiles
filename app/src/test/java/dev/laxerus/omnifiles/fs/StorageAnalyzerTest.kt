@@ -2,9 +2,11 @@ package dev.laxerus.omnifiles.fs
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.nio.file.Files
 import kotlin.io.path.createTempDirectory
 
 class StorageAnalyzerTest {
@@ -165,6 +167,64 @@ class StorageAnalyzerTest {
             assertTrue(result.categories.all { it.largestFiles.size <= StorageAnalyzer.DEFAULT_CATEGORY_TOP_LIMIT })
         } finally {
             root.deleteRecursively()
+        }
+    }
+
+    @Test fun verifyUnchangedFileAcceptsScannedFileAndRejectsDirectories() {
+        val root = createTempDirectory("omnifiles-analyzer-verify-").toFile()
+        try {
+            val folder = File(root, "folder").apply { mkdir() }
+            val file = File(folder, "large.bin").apply { writeBytes(ByteArray(128)) }
+            val result = StorageAnalyzer.scan(root, maxEntries = 100, topLimit = 5)
+            val fileEntry = result.largestFiles.single()
+            val directoryEntry = result.largestDirectories.first { it.name == "folder" }
+
+            assertEquals(file.canonicalPath, StorageAnalyzer.verifyUnchangedFile(fileEntry, root)?.canonicalPath)
+            assertNull(StorageAnalyzer.verifyUnchangedFile(directoryEntry, root))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun verifyUnchangedFileRejectsChangedSizeAndTimestamp() {
+        val root = createTempDirectory("omnifiles-analyzer-verify-change-").toFile()
+        try {
+            val file = File(root, "large.bin").apply { writeBytes(ByteArray(128)) }
+            val firstEntry = StorageAnalyzer.scan(root, maxEntries = 100, topLimit = 5).largestFiles.single()
+
+            file.writeBytes(ByteArray(129))
+            assertNull(StorageAnalyzer.verifyUnchangedFile(firstEntry, root))
+
+            file.writeBytes(ByteArray(128))
+            val secondEntry = StorageAnalyzer.scan(root, maxEntries = 100, topLimit = 5).largestFiles.single()
+            assertTrue(file.setLastModified(secondEntry.modifiedAt + 10_000L))
+            assertNull(StorageAnalyzer.verifyUnchangedFile(secondEntry, root))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun verifyUnchangedFileRejectsSymlinkThatEscapesRoot() {
+        val root = createTempDirectory("omnifiles-analyzer-verify-root-").toFile()
+        val outside = createTempDirectory("omnifiles-analyzer-verify-outside-").toFile()
+        try {
+            val outsideFile = File(outside, "outside.bin").apply { writeBytes(ByteArray(64)) }
+            val link = root.toPath().resolve("linked.bin")
+            val symlinkCreated = runCatching { Files.createSymbolicLink(link, outsideFile.toPath()) }.isSuccess
+            if (!symlinkCreated) return
+
+            val entry = StorageAnalyzer.Entry(
+                path = link.toFile().path,
+                name = "linked.bin",
+                sizeBytes = outsideFile.length(),
+                modifiedAt = outsideFile.lastModified().coerceAtLeast(0L),
+                isDirectory = false,
+            )
+
+            assertNull(StorageAnalyzer.verifyUnchangedFile(entry, root))
+        } finally {
+            root.deleteRecursively()
+            outside.deleteRecursively()
         }
     }
 
