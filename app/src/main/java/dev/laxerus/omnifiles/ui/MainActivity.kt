@@ -13,6 +13,7 @@ import dev.laxerus.omnifiles.access.SystemSettingsNavigator
 import dev.laxerus.omnifiles.adb.AdbSessionManager
 import dev.laxerus.omnifiles.databinding.ActivityMainBinding
 import dev.laxerus.omnifiles.fs.TrashManager
+import dev.laxerus.omnifiles.maintenance.AutoCleanupManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -185,6 +186,7 @@ class MainActivity : OmniActivity() {
 
     private fun renderStatus() {
         val state = AccessSnapshot.read(this)
+        val autoCleanupEnabled = AutoCleanupManager.state(this).enabled
 
         binding.storageStatusChip.setText(
             if (state.sharedStorage) R.string.settings_status_storage_ready
@@ -203,8 +205,11 @@ class MainActivity : OmniActivity() {
             else R.string.settings_storage_access_required_summary
         )
         binding.junkCleanerButton.setSummary(
-            if (state.sharedStorage) R.string.settings_junk_cleaner_summary
-            else R.string.settings_junk_cleaner_needs_access
+            when {
+                !state.sharedStorage -> R.string.settings_junk_cleaner_needs_access
+                autoCleanupEnabled -> R.string.settings_junk_cleaner_auto_enabled_summary
+                else -> R.string.settings_junk_cleaner_summary
+            }
         )
         binding.storageAnalyzerButton.setSummary(
             if (state.sharedStorage) R.string.settings_analyzer_summary
