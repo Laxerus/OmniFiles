@@ -63,6 +63,7 @@ class RecentFoldersButton @JvmOverloads constructor(
             }
 
         val quickPaths = quickFolders.mapTo(linkedSetOf()) { it.directory.canonicalPath }
+        val visibleRecentFolders = recentFolders.filterNot { it.canonicalPath in quickPaths }
         val menuEntries = buildList {
             quickFolders.forEach { entry ->
                 add(
@@ -73,17 +74,15 @@ class RecentFoldersButton @JvmOverloads constructor(
                     )
                 )
             }
-            recentFolders.asSequence()
-                .filterNot { it.canonicalPath in quickPaths }
-                .forEach { folder ->
-                    add(
-                        MenuEntry(
-                            label = context.getString(R.string.quick_access_recent_item, displayPath(folder, sharedRoot)),
-                            target = folder,
-                            type = EntryType.FOLDER,
-                        )
+            visibleRecentFolders.forEach { folder ->
+                add(
+                    MenuEntry(
+                        label = context.getString(R.string.quick_access_recent_item, displayPath(folder, sharedRoot)),
+                        target = folder,
+                        type = EntryType.FOLDER,
                     )
-                }
+                )
+            }
             recentFiles.forEach { file ->
                 add(
                     MenuEntry(
@@ -101,6 +100,14 @@ class RecentFoldersButton @JvmOverloads constructor(
 
         val builder = MaterialAlertDialogBuilder(context)
             .setTitle(R.string.quick_access_title)
+            .setMessage(
+                context.getString(
+                    R.string.quick_access_summary,
+                    quickFolders.size,
+                    visibleRecentFolders.size,
+                    recentFiles.size,
+                )
+            )
             .setItems(menuEntries.map { it.label }.toTypedArray()) { _, index ->
                 when (menuEntries[index].type) {
                     EntryType.FOLDER -> openFolder(menuEntries[index].target, sharedRoot)
