@@ -1,16 +1,20 @@
 package dev.laxerus.omnifiles.fs
 
 import java.io.File
+import java.io.RandomAccessFile
 import java.security.MessageDigest
 import java.util.ArrayDeque
 import java.util.Locale
 
 object DuplicateFinder {
     const val DEFAULT_MAX_ENTRIES = 30_000
+    const val DEFAULT_MAX_FINGERPRINTED_FILES = 12_000
     const val DEFAULT_MAX_HASHED_FILES = 4_000
     const val DEFAULT_MAX_GROUPS = 100
     const val DEFAULT_MIN_FILE_SIZE_BYTES = 64L * 1024L
+    const val DEFAULT_MAX_HASHED_BYTES = 16L * 1024L * 1024L * 1024L
     private const val BUFFER_BYTES = 64 * 1024
+    private const val SAMPLE_BYTES = 64 * 1024
 
     data class DuplicateFile(
         val path: String,
@@ -31,7 +35,9 @@ object DuplicateFinder {
         val scannedEntries: Int,
         val fileCount: Int,
         val candidateFiles: Int,
+        val fingerprintedFiles: Int,
         val hashedFiles: Int,
+        val hashedBytes: Long,
         val skippedEntries: Int,
         val groups: List<DuplicateGroup>,
         val reclaimableBytes: Long,
@@ -48,13 +54,17 @@ object DuplicateFinder {
     fun scan(
         root: File,
         maxEntries: Int = DEFAULT_MAX_ENTRIES,
+        maxFingerprintedFiles: Int = DEFAULT_MAX_FINGERPRINTED_FILES,
         maxHashedFiles: Int = DEFAULT_MAX_HASHED_FILES,
+        maxHashedBytes: Long = DEFAULT_MAX_HASHED_BYTES,
         maxGroups: Int = DEFAULT_MAX_GROUPS,
         minFileSizeBytes: Long = DEFAULT_MIN_FILE_SIZE_BYTES,
         isCancelled: () -> Boolean = { false },
     ): Result {
         require(maxEntries > 0) { "Tarama öğe sınırı pozitif olmalı" }
+        require(maxFingerprintedFiles > 0) { "Örnek parmak izi sınırı pozitif olmalı" }
         require(maxHashedFiles > 0) { "Hash dosya sınırı pozitif olmalı" }
+        require(maxHashedBytes > 0L) { "Hash bayt sınırı pozitif olmalı" }
         require(maxGroups > 0) { "Grup sınırı pozitif olmalı" }
         require(minFileSizeBytes >= 0L) { "Minimum dosya boyutu negatif olamaz" }
 
@@ -130,7 +140,9 @@ object DuplicateFinder {
                 scannedEntries = scannedEntries,
                 fileCount = fileCount,
                 candidateFiles = 0,
+                fingerprintedFiles = 0,
                 hashedFiles = 0,
+                hashedBytes = 0L,
                 skippedEntries = skippedEntries,
                 groups = emptyList(),
                 reclaimableBytes = 0L,
@@ -141,10 +153,52 @@ object DuplicateFinder {
 
         val candidateBuckets = sizeBuckets.values.filter { it.size > 1 }
         val candidateFiles = candidateBuckets.sumOf { it.size }
-        val byFingerprint = linkedMapOf<Pair<Long, String>, MutableList<DuplicateFile>>()
-        var hashedFiles = 0
+        val sampledBuckets = linkedMapOf<Pair<Long, String>, MutableList<Snapshot>>()
+        var fingerprintedFiles = 0
 
-        hashLoop@ for (bucket in candidateBuckets) {
+        fingerprintLoop@ for (bucket in candidateBuckets) {
+            for (snapshot in bucket) {
+                if (isCancelled()) {
+                    cancelled = true
+                    break@fingerprintLoop
+                }
+                if (fingerprintedFiles >= maxFingerprintedFiles) {
+                    truncated = true
+                    break@fingerprintLoop
+                }
+
+                val safe = revalidate(snapshot, safeRoot)
+                if (safe == null) {
+                    skippedEntries++
+                    continue
+                }
+
+                val fingerprint = try {
+                    sampledFingerprint(safe, snapshot.sizeBytes, isCancelled)
+                } catch (_: ScanCancelledException) {
+                    cancelled = true
+                    break@fingerprintLoop
+                } catch (_: Throwable) {
+                    skippedEntries++
+                    continue
+                }
+
+                if (!matchesSnapshot(safe, snapshot)) {
+                    skippedEntries++
+                    continue
+                }
+
+                fingerprintedFiles++
+                sampledBuckets.getOrPut(snapshot.sizeBytes to fingerprint) { mutableListOf() } += snapshot
+            }
+        }
+
+        val fullHashBuckets = sampledBuckets.values.filter { it.size > 1 }
+        val verifiedBuckets = linkedMapOf<Pair<Long, String>, MutableList<DuplicateFile>>()
+        var hashedFiles = 0
+        var hashedBytes = 0L
+
+        hashLoop@ for (bucket in fullHashBuckets) {
             for (snapshot in bucket) {
                 if (isCancelled()) {
                     cancelled = true
@@ -154,14 +208,13 @@ object DuplicateFinder {
                     truncated = true
                     break@hashLoop
                 }
-
-                val safe = try {
-                    FilePathPolicy.requireDirectEntry(snapshot.file, safeRoot)
-                } catch (_: Throwable) {
-                    skippedEntries++
+                if (snapshot.sizeBytes > maxHashedBytes - hashedBytes) {
+                    truncated = true
                     continue
                 }
-                if (!safe.isFile || safe.length() != snapshot.sizeBytes || safe.lastModified().coerceAtLeast(0L) != snapshot.modifiedAt) {
+
+                val safe = revalidate(snapshot, safeRoot)
+                if (safe == null) {
                     skippedEntries++
                     continue
                 }
@@ -176,14 +229,15 @@ object DuplicateFinder {
                     continue
                 }
 
-                if (safe.length() != snapshot.sizeBytes || safe.lastModified().coerceAtLeast(0L) != snapshot.modifiedAt) {
+                if (!matchesSnapshot(safe, snapshot)) {
                     skippedEntries++
                     continue
                 }
 
                 hashedFiles++
+                hashedBytes = saturatingAdd(hashedBytes, snapshot.sizeBytes)
                 val key = snapshot.sizeBytes to digest
-                byFingerprint.getOrPut(key) { mutableListOf() } += DuplicateFile(
+                verifiedBuckets.getOrPut(key) { mutableListOf() } += DuplicateFile(
                     path = safe.canonicalPath,
                     sizeBytes = snapshot.sizeBytes,
                     modifiedAt = snapshot.modifiedAt,
@@ -191,7 +245,7 @@ object DuplicateFinder {
             }
         }
 
-        val allGroups = byFingerprint.entries.asSequence()
+        val allGroups = verifiedBuckets.entries.asSequence()
             .filter { it.value.size > 1 }
             .map { (key, files) ->
                 DuplicateGroup(
@@ -216,13 +270,67 @@ object DuplicateFinder {
             scannedEntries = scannedEntries,
             fileCount = fileCount,
             candidateFiles = candidateFiles,
+            fingerprintedFiles = fingerprintedFiles,
             hashedFiles = hashedFiles,
+            hashedBytes = hashedBytes,
             skippedEntries = skippedEntries,
             groups = groups,
             reclaimableBytes = reclaimableBytes,
             truncated = truncated,
             cancelled = cancelled,
         )
+    }
+
+    private fun revalidate(snapshot: Snapshot, safeRoot: File): File? {
+        val safe = try {
+            FilePathPolicy.requireDirectEntry(snapshot.file, safeRoot)
+        } catch (_: Throwable) {
+            return null
+        }
+        return safe.takeIf { matchesSnapshot(it, snapshot) }
+    }
+
+    private fun matchesSnapshot(file: File, snapshot: Snapshot): Boolean =
+        file.isFile &&
+            file.length() == snapshot.sizeBytes &&
+            file.lastModified().coerceAtLeast(0L) == snapshot.modifiedAt
+
+    private fun sampledFingerprint(
+        file: File,
+        sizeBytes: Long,
+        isCancelled: () -> Boolean,
+    ): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        digest.update("size:$sizeBytes|".toByteArray(Charsets.UTF_8))
+        val sampleLength = minOf(SAMPLE_BYTES.toLong(), sizeBytes).toInt()
+        val maxOffset = (sizeBytes - sampleLength.toLong()).coerceAtLeast(0L)
+        val offsets = linkedSetOf(
+            0L,
+            (maxOffset / 2L).coerceAtLeast(0L),
+            maxOffset,
+        )
+        val buffer = ByteArray(sampleLength.coerceAtLeast(1))
+
+        RandomAccessFile(file, "r").use { input ->
+            offsets.forEach { offset ->
+                if (isCancelled()) throw ScanCancelledException()
+                digest.update("offset:$offset|".toByteArray(Charsets.UTF_8))
+                input.seek(offset)
+                var remaining = sampleLength
+                var cursor = 0
+                while (remaining > 0) {
+                    if (isCancelled()) throw ScanCancelledException()
+                    val read = input.read(buffer, cursor, remaining)
+                    if (read < 0) break
+                    if (read == 0) continue
+                    cursor += read
+                    remaining -= read
+                }
+                if (cursor != sampleLength) error("Dosya örneği tam okunamadı")
+                digest.update(buffer, 0, cursor)
+            }
+        }
+        return digest.digest().toHex()
     }
 
     private fun sha256(file: File, isCancelled: () -> Boolean): String {
@@ -236,8 +344,11 @@ object DuplicateFinder {
                 if (read > 0) digest.update(buffer, 0, read)
             }
         }
-        return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+        return digest.digest().toHex()
     }
+
+    private fun ByteArray.toHex(): String =
+        joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
 
     private fun saturatingAdd(left: Long, right: Long): Long {
         if (right <= 0L) return left
