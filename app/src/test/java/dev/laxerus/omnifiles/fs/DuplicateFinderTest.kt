@@ -1,0 +1,93 @@
+package dev.laxerus.omnifiles.fs
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.nio.file.Files
+
+class DuplicateFinderTest {
+    @Test
+    fun groupsOnlyFilesWithIdenticalContent() {
+        val root = Files.createTempDirectory("omnifiles-duplicates").toFile()
+        try {
+            val payload = "same-content".repeat(8_000)
+            root.resolve("one.bin").writeText(payload)
+            root.resolve("nested").mkdirs()
+            root.resolve("nested/two.bin").writeText(payload)
+            root.resolve("other.bin").writeText("x".repeat(payload.length))
+
+            val result = DuplicateFinder.scan(root, minFileSizeBytes = 1L)
+
+            assertFalse(result.cancelled)
+            assertEquals(1, result.groups.size)
+            assertEquals(2, result.groups.single().files.size)
+            assertEquals(payload.toByteArray().size.toLong(), result.groups.single().sizeBytes)
+            assertEquals(result.groups.single().sizeBytes, result.reclaimableBytes)
+            assertTrue(result.groups.single().files.any { it.path.endsWith("one.bin") })
+            assertTrue(result.groups.single().files.any { it.path.endsWith("two.bin") })
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun ignoresFilesBelowMinimumSize() {
+        val root = Files.createTempDirectory("omnifiles-duplicates-small").toFile()
+        try {
+            root.resolve("a.txt").writeText("tiny")
+            root.resolve("b.txt").writeText("tiny")
+
+            val result = DuplicateFinder.scan(root, minFileSizeBytes = 64L)
+
+            assertTrue(result.groups.isEmpty())
+            assertEquals(0, result.candidateFiles)
+            assertEquals(0, result.hashedFiles)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun respectsHashLimitAndMarksResultTruncated() {
+        val root = Files.createTempDirectory("omnifiles-duplicates-limit").toFile()
+        try {
+            val payload = "duplicate".repeat(1_000)
+            repeat(4) { index -> root.resolve("$index.bin").writeText(payload) }
+
+            val result = DuplicateFinder.scan(
+                root = root,
+                minFileSizeBytes = 1L,
+                maxHashedFiles = 2,
+            )
+
+            assertTrue(result.truncated)
+            assertEquals(2, result.hashedFiles)
+            assertEquals(1, result.groups.size)
+            assertEquals(2, result.groups.single().files.size)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun cancellationStopsHashing() {
+        val root = Files.createTempDirectory("omnifiles-duplicates-cancel").toFile()
+        try {
+            val payload = "duplicate".repeat(10_000)
+            root.resolve("a.bin").writeText(payload)
+            root.resolve("b.bin").writeText(payload)
+            var checks = 0
+
+            val result = DuplicateFinder.scan(
+                root = root,
+                minFileSizeBytes = 1L,
+                isCancelled = { ++checks > 5 },
+            )
+
+            assertTrue(result.cancelled)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+}
