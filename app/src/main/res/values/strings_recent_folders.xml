@@ -10,13 +10,13 @@
     <string name="recent_folder_stale">Bu klasör artık mevcut değil veya güvenli depolama alanının dışında.</string>
     <string name="quick_access_title">Hızlı erişim</string>
     <string name="quick_access_empty">Açılabilecek hızlı klasör veya son kullanılan öğe bulunamadı.</string>
-    <string name="quick_access_item">⚡ %1$s</string>
-    <string name="quick_access_recent_item">🕘 %1$s</string>
-    <string name="quick_access_recent_file_item">📄 %1$s</string>
+    <string name="quick_access_item">⚡ Hızlı • %1$s</string>
+    <string name="quick_access_recent_item">🕘 Son klasör • %1$s</string>
+    <string name="quick_access_recent_file_item">📄 Son dosya • %1$s</string>
     <string name="quick_access_history_cleared">Hızlı erişim geçmişi temizlendi.</string>
     <string name="recent_files_unavailable">Son dosyalar şu anda okunamıyor.</string>
     <string name="recent_file_stale">Bu dosya artık mevcut değil veya güvenli depolama alanının dışında.</string>
-    <string name="recent_file_open_failed">Bu dosyayı açabilecek bir uygulama bulunamadı.</string>
+    <string name="recent_file_open_failed">Dosya güvenli biçimde açılamadı.</string>
     <string name="quick_folder_downloads">İndirilenler</string>
     <string name="quick_folder_documents">Belgeler</string>
     <string name="quick_folder_pictures">Resimler</string>
