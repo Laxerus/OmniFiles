@@ -228,7 +228,7 @@ require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/DuplicateFinderActivity.kt",
     "DuplicateFinder.scan",
     "BrowserLaunchExtras.EXTRA_HIGHLIGHT_PATH",
-    "settings_duplicate_finder_needs_access",
+    "duplicate_finder_access_required",
     "copyGroupPaths",
 )
 require(
