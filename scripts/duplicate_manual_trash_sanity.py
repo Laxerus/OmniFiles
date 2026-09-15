@@ -29,6 +29,13 @@ else:
         "trashManager.restore(ticket)",
         "private fun refreshAfterManualTrash()",
         "lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)",
+        "val tickets: List<TrashTicket>",
+        "val tickets = mutableListOf<TrashTicket>()",
+        ".onSuccess { tickets += it }",
+        "CleanupOutcome(tickets.toList(), failed, keeperInvalidated)",
+        "private fun showGroupTrashUndo(outcome: CleanupOutcome)",
+        ".setAction(R.string.undo) { restoreTrashTickets(outcome.tickets) }",
+        "private fun restoreTrashTickets(tickets: List<TrashTicket>)",
     )
     for token in required:
         if token not in text:
@@ -52,9 +59,16 @@ else:
 
     undo_start = text.find("private fun showTrashUndo(ticket: TrashTicket)")
     restore_start = text.find("private fun restoreTrash(ticket: TrashTicket)")
+    restore_many_start = text.find("private fun restoreTrashTickets(tickets: List<TrashTicket>)")
     refresh_start = text.find("private fun refreshAfterManualTrash()")
-    if undo_start < 0 or restore_start < 0 or refresh_start < 0 or not (undo_start < restore_start < refresh_start):
-        errors.append("duplicate trash undo, restore, and refresh functions must remain ordered in the manual trash flow")
+    if (
+        undo_start < 0
+        or restore_start < 0
+        or restore_many_start < 0
+        or refresh_start < 0
+        or not (undo_start < restore_start < restore_many_start < refresh_start)
+    ):
+        errors.append("duplicate trash undo, restore, batch restore, and refresh functions must remain ordered")
     else:
         action_guard = text.find(
             "if (event == Snackbar.Callback.DISMISS_EVENT_ACTION) return",
@@ -67,6 +81,23 @@ else:
         refresh_call = text.find("refreshAfterManualTrash()", undo_start, restore_start)
         if clear_before_refresh < 0 or refresh_call < 0 or clear_before_refresh >= refresh_call:
             errors.append("normal Snackbar dismissal must clear pending undo state before refreshing")
+
+    group_start = text.find("private fun cleanGroup(")
+    group_undo_start = text.find("private fun showGroupTrashUndo(outcome: CleanupOutcome)")
+    file_actions_start = text.find("private fun showFileActions(")
+    if group_start < 0 or group_undo_start < 0 or file_actions_start < 0 or not (group_start < group_undo_start < file_actions_start):
+        errors.append("group cleanup must flow into its undo handler before file action handlers")
+    else:
+        ticket_branch = text.find("outcome.tickets.isNotEmpty() -> showGroupTrashUndo(outcome)", group_start, group_undo_start)
+        if ticket_branch < 0:
+            errors.append("successful or partial group cleanup must expose undo when tickets exist")
+        group_action_guard = text.find(
+            "if (event == Snackbar.Callback.DISMISS_EVENT_ACTION) return",
+            group_undo_start,
+            file_actions_start,
+        )
+        if group_action_guard < 0:
+            errors.append("group cleanup undo action must suppress competing rescan")
 
 if not test_path.is_file():
     errors.append(f"missing required file: {test_path.relative_to(root)}")
@@ -85,9 +116,9 @@ else:
             errors.append(f"DuplicateFinderTest.kt missing: {test_name}")
 
 if errors:
-    print("OmniFiles individual duplicate trash sanity: FAILED")
+    print("OmniFiles duplicate trash sanity: FAILED")
     for error in errors:
         print(f" - {error}")
     sys.exit(1)
 
-print("OmniFiles individual duplicate trash sanity: OK")
+print("OmniFiles duplicate trash sanity: OK")
