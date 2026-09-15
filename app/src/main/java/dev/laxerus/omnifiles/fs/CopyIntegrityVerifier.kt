@@ -16,8 +16,8 @@ object CopyIntegrityVerifier {
     private const val BUFFER_SIZE = 128 * 1024
 
     fun matches(source: File, destination: File): Boolean {
-        val safeSource = runCatching { source.canonicalFile }.getOrNull() ?: return false
-        val safeDestination = runCatching { destination.canonicalFile }.getOrNull() ?: return false
+        val safeSource = directCanonical(source) ?: return false
+        val safeDestination = directCanonical(destination) ?: return false
         if (!safeSource.exists() || !safeDestination.exists()) return false
         if (safeSource.isFile != safeDestination.isFile) return false
         if (safeSource.isDirectory != safeDestination.isDirectory) return false
@@ -29,14 +29,27 @@ object CopyIntegrityVerifier {
         }
     }
 
+    private fun directCanonical(file: File): File? = runCatching {
+        val absolute = file.absoluteFile
+        val canonical = file.canonicalFile
+        if (absolute.path != canonical.path) null else canonical
+    }.getOrNull()
+
     private fun matchingFiles(source: File, destination: File): Boolean {
         val sourceSnapshot = snapshot(source) ?: return false
         val destinationSnapshot = snapshot(destination) ?: return false
         if (sourceSnapshot.size != destinationSnapshot.size) return false
 
-        val sourceDigest = sha256(source) ?: return false
-        val destinationDigest = sha256(destination) ?: return false
-        if (!sourceDigest.contentEquals(destinationDigest)) return false
+        val sourceDigestBefore = stableSha256(source) ?: return false
+        val destinationDigestBefore = stableSha256(destination) ?: return false
+        if (!sourceDigestBefore.contentEquals(destinationDigestBefore)) return false
+
+        // Hash both files again so a mutation that races a single hash pass cannot be accepted.
+        val sourceDigestAfter = stableSha256(source) ?: return false
+        val destinationDigestAfter = stableSha256(destination) ?: return false
+        if (!sourceDigestBefore.contentEquals(sourceDigestAfter)) return false
+        if (!destinationDigestBefore.contentEquals(destinationDigestAfter)) return false
+        if (!sourceDigestAfter.contentEquals(destinationDigestAfter)) return false
 
         return snapshot(source) == sourceSnapshot && snapshot(destination) == destinationSnapshot
     }
@@ -50,7 +63,8 @@ object CopyIntegrityVerifier {
         val sourceDigestAfter = treeDigest(source) ?: return false
         val destinationDigestAfter = treeDigest(destination) ?: return false
         return sourceDigestBefore.contentEquals(sourceDigestAfter) &&
-            sourceDigestBefore.contentEquals(destinationDigestAfter)
+            destinationDigestBefore.contentEquals(destinationDigestAfter) &&
+            sourceDigestAfter.contentEquals(destinationDigestAfter)
     }
 
     private data class Snapshot(
@@ -64,6 +78,13 @@ object CopyIntegrityVerifier {
             size = file.length().coerceAtLeast(0L),
             modifiedAt = file.lastModified().coerceAtLeast(0L),
         )
+    }
+
+    private fun stableSha256(file: File): ByteArray? {
+        val before = snapshot(file) ?: return null
+        val digest = sha256(file) ?: return null
+        val after = snapshot(file) ?: return null
+        return digest.takeIf { before == after }
     }
 
     private fun sha256(file: File): ByteArray? = runCatching {
@@ -85,7 +106,7 @@ object CopyIntegrityVerifier {
     )
 
     private fun treeDigest(root: File): ByteArray? = runCatching {
-        val canonicalRoot = root.canonicalFile
+        val canonicalRoot = directCanonical(root) ?: return@runCatching null
         if (!canonicalRoot.exists() || !canonicalRoot.isDirectory) return@runCatching null
 
         val digest = MessageDigest.getInstance("SHA-256")
@@ -94,9 +115,7 @@ object CopyIntegrityVerifier {
 
         while (pending.isNotEmpty()) {
             val entry = pending.removeLast()
-            val absolute = entry.file.absoluteFile
-            val canonical = entry.file.canonicalFile
-            if (absolute.path != canonical.path) return@runCatching null
+            val canonical = directCanonical(entry.file) ?: return@runCatching null
             if (canonical.path != canonicalRoot.path && !canonical.path.startsWith(canonicalRoot.path + File.separator)) {
                 return@runCatching null
             }
@@ -120,8 +139,11 @@ object CopyIntegrityVerifier {
                 canonical.isFile -> {
                     updateByte(digest, 0x46) // F
                     updateToken(digest, entry.relativePath)
-                    updateLong(digest, canonical.length().coerceAtLeast(0L))
-                    val fileDigest = sha256(canonical) ?: return@runCatching null
+                    val before = snapshot(canonical) ?: return@runCatching null
+                    updateLong(digest, before.size)
+                    val fileDigest = stableSha256(canonical) ?: return@runCatching null
+                    val after = snapshot(canonical) ?: return@runCatching null
+                    if (before != after) return@runCatching null
                     digest.update(fileDigest)
                 }
 
