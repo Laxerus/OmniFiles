@@ -175,8 +175,78 @@ class DuplicateFinderActivity : OmniActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle(getString(R.string.duplicate_finder_group_dialog, group.files.size))
             .setItems(labels) { _, which -> showFileActions(group.files[which]) }
+            .setNeutralButton(R.string.duplicate_finder_clean_group) { _, _ -> confirmCleanGroup(group) }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    private fun chooseKeeper(group: DuplicateFinder.DuplicateGroup): DuplicateFinder.DuplicateFile =
+        group.files.sortedWith(
+            compareByDescending<DuplicateFinder.DuplicateFile> { it.modifiedAt }
+                .thenBy { it.path.length }
+                .thenBy { it.path.lowercase(Locale.ROOT) }
+        ).first()
+
+    private fun confirmCleanGroup(group: DuplicateFinder.DuplicateGroup) {
+        if (group.files.size < 2) return
+        val keeper = chooseKeeper(group)
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.duplicate_finder_clean_group_title)
+            .setMessage(
+                getString(
+                    R.string.duplicate_finder_clean_group_message,
+                    group.files.size - 1,
+                    relativePath(keeper.path),
+                    formatBytes(group.reclaimableBytes),
+                )
+            )
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.duplicate_finder_clean_group_confirm) { _, _ -> cleanGroup(group, keeper) }
+            .show()
+    }
+
+    private fun cleanGroup(
+        group: DuplicateFinder.DuplicateGroup,
+        keeper: DuplicateFinder.DuplicateFile,
+    ) {
+        if (scanJob?.isActive == true) return
+        val targets = group.files.filterNot { it.path == keeper.path }
+        if (targets.isEmpty()) return
+
+        binding.startButton.isEnabled = false
+        binding.cancelButton.isEnabled = false
+        binding.progress.visibility = View.VISIBLE
+        binding.groupsContainer.alpha = 0.55f
+        binding.summaryText.setText(R.string.duplicate_finder_group_cleaning)
+
+        lifecycleScope.launch {
+            val counts = withContext(Dispatchers.IO) {
+                var moved = 0
+                var failed = 0
+                targets.forEach { duplicate ->
+                    val safe = resolveFileSilently(duplicate)
+                    if (safe == null) {
+                        failed++
+                    } else {
+                        runCatching { trashManager.moveToTrash(safe) }
+                            .onSuccess { moved++ }
+                            .onFailure { failed++ }
+                    }
+                }
+                moved to failed
+            }
+            if (!isActive) return@launch
+
+            binding.progress.visibility = View.GONE
+            binding.groupsContainer.alpha = 1f
+            Toast.makeText(
+                this@DuplicateFinderActivity,
+                getString(R.string.duplicate_finder_clean_group_result, counts.first, counts.second),
+                if (counts.second == 0) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
+            ).show()
+            hasResult = false
+            startScan()
+        }
     }
 
     private fun showFileActions(duplicate: DuplicateFinder.DuplicateFile) {
