@@ -26,7 +26,7 @@
     <string name="duplicate_finder_action_trash">Çöp kutusuna taşı</string>
     <string name="duplicate_finder_trash_confirm_title">Bu kopya çöp kutusuna taşınsın mı?</string>
     <string name="duplicate_finder_trash_confirm">%1$s\n\nDosya kalıcı olarak silinmez; OmniFiles Çöp Kutusu üzerinden geri yüklenebilir.</string>
-    <string name="duplicate_finder_trashed">Kopya OmniFiles Çöp Kutusu'na taşındı.</string>
+    <string name="duplicate_finder_trashed">Kopya OmniFiles Çöp Kutusu’na taşındı.</string>
     <string name="duplicate_finder_trash_failed">Dosya çöp kutusuna taşınamadı; kaynak korunuyor.</string>
     <string name="duplicate_finder_entry_stale">Dosya taramadan sonra değişmiş veya kaldırılmış.</string>
     <string name="duplicate_finder_path_copied">Dosya yolu panoya kopyalandı.</string>
