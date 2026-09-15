@@ -16,10 +16,15 @@ object StorageAccessController {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
         } else {
-            ContextCompat.checkSelfPermission(
+            val readGranted = ContextCompat.checkSelfPermission(
                 context,
-                Manifest.permission.READ_EXTERNAL_STORAGE
+                Manifest.permission.READ_EXTERNAL_STORAGE,
             ) == PackageManager.PERMISSION_GRANTED
+            val writeGranted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            ) == PackageManager.PERMISSION_GRANTED
+            readGranted && writeGranted
         }
     }
 
@@ -27,13 +32,16 @@ object StorageAccessController {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             return SystemSettingsNavigator.open(
                 activity,
-                SystemSettingsNavigator.Destination.ALL_FILES_ACCESS
+                SystemSettingsNavigator.Destination.ALL_FILES_ACCESS,
             )
         }
         ActivityCompat.requestPermissions(
             activity,
-            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE),
-            LEGACY_STORAGE_REQUEST
+            arrayOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            ),
+            LEGACY_STORAGE_REQUEST,
         )
         return true
     }
