@@ -1,0 +1,4 @@
+<resources>
+    <string name="trash_restore_conflict">Orijinal konumda aynı adda başka bir öğe var. OmniFiles mevcut öğenin üzerine yazmaz; geri yüklemek için önce bu çakışmayı çöz.</string>
+    <string name="trash_restore_conflict_short">⚠ Geri yükleme çakışması • %1$s</string>
+</resources>
