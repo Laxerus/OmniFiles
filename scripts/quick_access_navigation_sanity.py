@@ -10,13 +10,14 @@ if not path.is_file():
     errors.append(f"missing required file: {path.relative_to(root)}")
 else:
     text = path.read_text(encoding="utf-8")
+    finish_token = "browserHost?.takeUnless { it.isFinishing || it.isDestroyed }?.finish()"
     required = (
         "FilePathPolicy.requireDirectEntry(folder, sharedRoot)",
         "it.exists() && it.isDirectory && it.canRead()",
         "val browserHost = findActivity(context) as? FileBrowserActivity",
         "context.startActivity(intent)",
         "recentFolderStore.record(safeFolder, sharedRoot)",
-        "browserHost?.finish()",
+        finish_token,
         "private fun findActivity(start: Context): Activity?",
         "ContextWrapper",
     )
@@ -27,7 +28,7 @@ else:
     section = text.find("private fun openFolder(folder: File, sharedRoot: File)")
     start = text.find("context.startActivity(intent)", section)
     record = text.find("recentFolderStore.record(safeFolder, sharedRoot)", section)
-    finish = text.find("browserHost?.finish()", section)
+    finish = text.find(finish_token, section)
     failure = text.find(".onFailure", section)
     if section < 0 or start < 0 or record < 0 or finish < 0:
         errors.append("quick access folder navigation section is incomplete")
