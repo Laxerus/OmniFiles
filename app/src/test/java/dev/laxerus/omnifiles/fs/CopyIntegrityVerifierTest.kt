@@ -88,4 +88,38 @@ class CopyIntegrityVerifierTest {
             root.deleteRecursively()
         }
     }
+
+    @Test
+    fun rejectsSymlinkedRootFile() {
+        val root = Files.createTempDirectory("omnifiles-copy-integrity-root-file-link").toFile()
+        try {
+            val realSource = root.resolve("real-source.bin").apply { writeBytes(byteArrayOf(5, 4, 3, 2, 1)) }
+            val destination = root.resolve("destination.bin").apply { writeBytes(realSource.readBytes()) }
+            val sourceLink = root.resolve("source-link.bin").toPath()
+            val linked = runCatching { Files.createSymbolicLink(sourceLink, realSource.toPath()) }.isSuccess
+            if (!linked) return
+
+            assertFalse(CopyIntegrityVerifier.matches(sourceLink.toFile(), destination))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun rejectsSymlinkedRootDirectory() {
+        val root = Files.createTempDirectory("omnifiles-copy-integrity-root-dir-link").toFile()
+        try {
+            val realSource = root.resolve("real-source").apply { mkdirs() }
+            realSource.resolve("a.txt").writeText("alpha")
+            val destination = root.resolve("destination")
+            assertTrue(realSource.copyRecursively(destination, overwrite = false))
+            val sourceLink = root.resolve("source-link").toPath()
+            val linked = runCatching { Files.createSymbolicLink(sourceLink, realSource.toPath()) }.isSuccess
+            if (!linked) return
+
+            assertFalse(CopyIntegrityVerifier.matches(sourceLink.toFile(), destination))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
 }
