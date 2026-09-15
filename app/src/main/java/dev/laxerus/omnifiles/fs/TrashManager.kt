@@ -72,7 +72,8 @@ class TrashManager(private val context: Context) {
 
     fun listEntries(): List<TrashEntry> {
         ensureMetadataRoot()
-        cleanupOrphanMetadata()
+        recoverInterruptedTransactions()
+        cleanupStaleTempMetadata()
         return trashRoot.listFiles()
             ?.asSequence()
             ?.filter { it.name != METADATA_DIR }
@@ -143,7 +144,7 @@ class TrashManager(private val context: Context) {
                 .onSuccess { deleted++ }
                 .onFailure { failed++ }
         }
-        cleanupOrphanMetadata()
+        cleanupStaleTempMetadata()
         return TrashCleanupResult(deleted = deleted, failed = failed)
     }
 
@@ -250,21 +251,50 @@ class TrashManager(private val context: Context) {
         return File(metadataRoot, "${safe.name}.json")
     }
 
-    private fun cleanupOrphanMetadata() {
+    private fun recoverInterruptedTransactions() {
         ensureMetadataRoot()
-        val liveNames = trashRoot.listFiles()
+        val now = System.currentTimeMillis()
+        val sharedRoot = StorageAccessController.sharedRoot()
+        metadataRoot.listFiles()
             ?.asSequence()
-            ?.filter { it.name != METADATA_DIR }
-            ?.map { "${it.name}.json" }
-            ?.toSet()
-            .orEmpty()
+            ?.filter { it.isFile && it.name.endsWith(".json") }
+            ?.forEach { metadata ->
+                val storedName = metadata.name.removeSuffix(".json")
+                if (storedName.isBlank() || storedName == metadata.name) return@forEach
+
+                val plannedTrash = runCatching {
+                    requireTrashSlot(File(trashRoot, storedName), mustExist = false)
+                }.getOrNull() ?: return@forEach
+
+                val json = runCatching {
+                    JSONObject(metadata.readText(Charsets.UTF_8))
+                }.getOrNull() ?: return@forEach
+                val originalPath = json.optString(KEY_ORIGINAL_PATH).takeIf { it.isNotBlank() }
+                    ?: return@forEach
+                val original = runCatching {
+                    FilePathPolicy.requireMutableTarget(File(originalPath), sharedRoot)
+                }.getOrNull() ?: return@forEach
+
+                val action = TrashRecoveryPolicy.decide(
+                    metadataModifiedAt = metadata.lastModified(),
+                    now = now,
+                    trashExists = plannedTrash.exists(),
+                    originalExists = original.exists(),
+                )
+                if (action == TrashRecoveryAction.DELETE_METADATA) {
+                    metadata.delete()
+                }
+            }
+    }
+
+    private fun cleanupStaleTempMetadata() {
+        ensureMetadataRoot()
         val now = System.currentTimeMillis()
         metadataRoot.listFiles()?.forEach { metadata ->
             if (
-                TrashMetadataPolicy.shouldDeleteOrphan(
+                TrashMetadataPolicy.shouldDeleteStaleTemp(
                     name = metadata.name,
                     modifiedAt = metadata.lastModified(),
-                    liveMetadataNames = liveNames,
                     now = now,
                 )
             ) {
