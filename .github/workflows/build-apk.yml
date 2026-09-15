@@ -40,8 +40,8 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android 37 platform
-        run: sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;36.0.0"
+      - name: Install Android 17 platform
+        run: sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0"
 
       - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
