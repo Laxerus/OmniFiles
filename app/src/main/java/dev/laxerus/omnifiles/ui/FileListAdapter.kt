@@ -1,6 +1,7 @@
 package dev.laxerus.omnifiles.ui
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.ContextWrapper
 import android.view.LayoutInflater
@@ -130,13 +131,18 @@ class FileListAdapter(
             }
             binding.root.setOnClickListener {
                 if (highlighted) clearHighlight()
-                if (!selectionMode) {
-                    when {
-                        file.isDirectory -> recordRecentDirectory(binding.root.context, file)
-                        file.isFile -> recordRecentFile(binding.root.context, file)
-                    }
+                if (selectionMode) {
+                    onClick(file)
+                    return@setOnClickListener
                 }
-                onClick(file)
+                when {
+                    file.isDirectory -> {
+                        recordRecentDirectory(binding.root.context, file)
+                        onClick(file)
+                    }
+                    file.isFile -> launchFile(file)
+                    else -> onClick(file)
+                }
             }
             binding.root.setOnLongClickListener {
                 if (highlighted) clearHighlight()
@@ -147,6 +153,25 @@ class FileListAdapter(
             binding.checksumButton.setOnClickListener { launchChecksum(file) }
             binding.moreButton.contentDescription = binding.root.context.getString(R.string.more_actions)
             binding.moreButton.setOnClickListener { onMoreClick(file) }
+        }
+
+        private fun launchFile(file: File) {
+            val context = binding.root.context
+            val intent = runCatching { LocalFileIntents.viewIntent(context, file) }
+                .getOrElse {
+                    Toast.makeText(context, R.string.file_open_invalid, Toast.LENGTH_LONG).show()
+                    return
+                }
+            try {
+                context.startActivity(intent)
+            } catch (_: ActivityNotFoundException) {
+                Toast.makeText(context, R.string.file_open_no_viewer, Toast.LENGTH_SHORT).show()
+                return
+            } catch (_: SecurityException) {
+                Toast.makeText(context, R.string.file_open_failed, Toast.LENGTH_LONG).show()
+                return
+            }
+            recordRecentFile(context, file)
         }
 
         private fun launchChecksum(file: File) {
