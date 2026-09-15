@@ -11,7 +11,7 @@
     <string name="duplicate_finder_cancelling">Tarama iptal ediliyor…</string>
     <string name="duplicate_finder_access_required">Depolama erişimi gerekli. Ayarlar ve Araçlar ekranından erişimi etkinleştir.</string>
     <string name="duplicate_finder_failed">Yinelenen dosya taraması tamamlanamadı.</string>
-    <string name="duplicate_finder_summary">%1$d dosya incelendi • %2$d aday hash'lendi • %3$d yinelenen grup • yaklaşık %4$s kazanılabilir</string>
+    <string name="duplicate_finder_summary">%1$d dosya incelendi • %2$d aday için hash hesaplandı • %3$d yinelenen grup • yaklaşık %4$s kazanılabilir</string>
     <string name="duplicate_finder_skipped">%1$d öğe güvenli biçimde atlandı.</string>
     <string name="duplicate_finder_partial_cancelled">Tarama iptal edildi; gösterilen sonuçlar kısmi olabilir.</string>
     <string name="duplicate_finder_partial_limit">Güvenli performans sınırına ulaşıldı; sonuçlar kısmi olabilir.</string>
