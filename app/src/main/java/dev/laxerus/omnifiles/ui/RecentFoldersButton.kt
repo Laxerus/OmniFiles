@@ -143,7 +143,7 @@ class RecentFoldersButton @JvmOverloads constructor(
         runCatching { context.startActivity(intent) }
             .onSuccess {
                 runCatching { recentFolderStore.record(safeFolder, sharedRoot) }
-                browserHost?.finish()
+                browserHost?.takeUnless { it.isFinishing || it.isDestroyed }?.finish()
             }
             .onFailure {
                 Toast.makeText(context, R.string.recent_folders_unavailable, Toast.LENGTH_SHORT).show()
