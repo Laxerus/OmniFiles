@@ -75,6 +75,11 @@ class MainActivity : OmniActivity() {
             R.string.settings_analyzer_summary,
             R.drawable.ic_storage_24,
         )
+        binding.duplicateFinderButton.bind(
+            R.string.duplicate_finder_title,
+            R.string.settings_duplicate_finder_summary,
+            R.drawable.ic_content_copy_24,
+        )
         binding.trashButton.bind(
             R.string.trash_bin,
             R.string.settings_trash_summary,
@@ -124,6 +129,9 @@ class MainActivity : OmniActivity() {
         }
         binding.storageAnalyzerButton.setOnClickListener {
             openStorageTool(StorageAnalyzerActivity::class.java)
+        }
+        binding.duplicateFinderButton.setOnClickListener {
+            openStorageTool(DuplicateFinderActivity::class.java)
         }
         binding.trashButton.setOnClickListener {
             startActivity(Intent(this, TrashActivity::class.java))
@@ -201,6 +209,10 @@ class MainActivity : OmniActivity() {
         binding.storageAnalyzerButton.setSummary(
             if (state.sharedStorage) R.string.settings_analyzer_summary
             else R.string.settings_analyzer_needs_access
+        )
+        binding.duplicateFinderButton.setSummary(
+            if (state.sharedStorage) R.string.settings_duplicate_finder_summary
+            else R.string.settings_duplicate_finder_needs_access
         )
         binding.adbFilesCard.setSummary(
             if (state.adbEndpointConfigured) R.string.settings_adb_browser_summary
