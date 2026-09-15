@@ -10,7 +10,7 @@ SDK="$CACHE_ROOT/android-sdk"
 GRADLE_USER_HOME="$CACHE_ROOT/gradle-user-home"
 PUBLIC="$ROOT/public"
 GRADLE_VERSION="9.3.1"
-ANDROID_PLATFORM="37"
+ANDROID_PLATFORM_PACKAGE="37.0"
 BUILD_TOOLS="36.0.0"
 CMDLINE_TOOLS_REV="15859902"
 
@@ -76,7 +76,7 @@ export ANDROID_HOME="$SDK"
 CMDLINE_LATEST="$SDK/cmdline-tools/latest"
 CMDLINE_MARKER="$CMDLINE_LATEST/.omnifiles-revision"
 INSTALLED_CMDLINE_REV="$(cat "$CMDLINE_MARKER" 2>/dev/null || true)"
-if [[ ! -x "$CMDLINE_LATEST/bin/android" || "$INSTALLED_CMDLINE_REV" != "$CMDLINE_TOOLS_REV" ]]; then
+if [[ ! -x "$CMDLINE_LATEST/bin/sdkmanager" || "$INSTALLED_CMDLINE_REV" != "$CMDLINE_TOOLS_REV" ]]; then
   log "Android command-line tools $CMDLINE_TOOLS_REV indiriliyor"
   rm -rf "$SDK/cmdline-tools" "$TOOLS/android-tools.zip"
   mkdir -p "$SDK/cmdline-tools"
@@ -90,14 +90,17 @@ else
 fi
 export PATH="$CMDLINE_LATEST/bin:$SDK/platform-tools:$PATH"
 
-if [[ ! -f "$SDK/platforms/android-$ANDROID_PLATFORM/android.jar" || ! -x "$SDK/build-tools/$BUILD_TOOLS/aapt2" || ! -x "$SDK/platform-tools/adb" ]]; then
-  log "Android SDK kataloğu inceleniyor"
-  android sdk list '.*' --all --all-versions --canary --no-metrics > "$TOOLS/android-sdk-catalog.txt"
-  grep -Ei 'cinnamon|android.?17|api.?37|platform|build.?tools' "$TOOLS/android-sdk-catalog.txt" | tail -n 240 || true
-  echo "Android SDK katalog teşhisi tamamlandı; build kasıtlı durduruluyor." >&2
-  exit 86
+log "Android SDK lisansları kabul ediliyor"
+yes | sdkmanager --licenses >/dev/null 2>&1 || true
+
+if [[ ! -f "$SDK/platforms/android-$ANDROID_PLATFORM_PACKAGE/android.jar" || ! -x "$SDK/build-tools/$BUILD_TOOLS/aapt2" || ! -x "$SDK/platform-tools/adb" ]]; then
+  log "Android SDK Platform $ANDROID_PLATFORM_PACKAGE kuruluyor"
+  sdkmanager \
+    "platform-tools" \
+    "platforms;android-${ANDROID_PLATFORM_PACKAGE}" \
+    "build-tools;${BUILD_TOOLS}"
 else
-  log "Android SDK API $ANDROID_PLATFORM build cache'ten kullanılıyor"
+  log "Android SDK Platform $ANDROID_PLATFORM_PACKAGE build cache'ten kullanılıyor"
 fi
 
 log "Kaynak sanity kontrolü"
