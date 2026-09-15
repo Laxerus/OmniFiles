@@ -11,7 +11,8 @@
     <string name="duplicate_finder_cancelling">Tarama iptal ediliyor…</string>
     <string name="duplicate_finder_access_required">Depolama erişimi gerekli. Ayarlar ve Araçlar ekranından erişimi etkinleştir.</string>
     <string name="duplicate_finder_failed">Yinelenen dosya taraması tamamlanamadı.</string>
-    <string name="duplicate_finder_summary">%1$d dosya incelendi • %2$d aday için tam hash hesaplandı • %3$d yinelenen grup • yaklaşık %4$s kazanılabilir</string>
+    <string name="duplicate_finder_summary">%1$d dosya bulundu • %2$d doğrulanmış yinelenen grup • yaklaşık %3$s kazanılabilir</string>
+    <string name="duplicate_finder_pipeline_summary">%1$d öğe tarandı • %2$d boyut adayı • %3$d örnek parmak izi • %4$d tam SHA-256 • %5$s tam hash okuması</string>
     <string name="duplicate_finder_skipped">%1$d öğe güvenli biçimde atlandı.</string>
     <string name="duplicate_finder_partial_cancelled">Tarama iptal edildi; gösterilen sonuçlar kısmi olabilir.</string>
     <string name="duplicate_finder_partial_limit">Güvenli performans sınırına ulaşıldı; sonuçlar kısmi olabilir.</string>
@@ -26,6 +27,8 @@
     <string name="duplicate_finder_clean_group_confirm">Kopyaları çöpe taşı</string>
     <string name="duplicate_finder_group_cleaning">Kopyalar güvenli biçimde OmniFiles Çöp Kutusu’na taşınıyor…</string>
     <string name="duplicate_finder_clean_group_result">%1$d kopya taşındı • %2$d öğe atlandı veya taşınamadı</string>
+    <string name="duplicate_finder_keeper_stale">Korunacak dosya taramadan sonra değişmiş veya kaldırılmış. Güvenlik için grup temizliği durduruldu.</string>
+    <string name="duplicate_finder_keeper_changed_during_cleanup">Korunacak dosya işlem sırasında değişti veya kaldırıldı. Kalan kopyalara dokunulmadı; daha önce taşınanlar Çöp Kutusu’ndan geri yüklenebilir.</string>
     <string name="duplicate_finder_file_actions_title">Kopya işlemleri</string>
     <string name="duplicate_finder_action_open">Konumuna git</string>
     <string name="duplicate_finder_action_copy_path">Yolu kopyala</string>
