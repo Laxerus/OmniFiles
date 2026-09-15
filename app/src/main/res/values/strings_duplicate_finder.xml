@@ -2,7 +2,7 @@
 <resources>
     <string name="duplicate_finder_title">Yinelenen Dosyalar</string>
     <string name="duplicate_finder_toolbar">Yinelenen dosyaları bul</string>
-    <string name="duplicate_finder_intro">Aynı boyuttaki dosyalar SHA-256 ile doğrulanır. OmniFiles hiçbir kopyayı otomatik silmez; sonuçlardan dosyanın bulunduğu klasöre gidebilir veya onaylayarak bir kopyayı çöp kutusuna taşıyabilirsin.</string>
+    <string name="duplicate_finder_intro">Aynı boyuttaki dosyalar önce küçük örneklerle elenir; yalnız olası eşleşmeler tam SHA-256 ile doğrulanır. Bu yaklaşım büyük klasörlerde gereksiz okumayı azaltır. OmniFiles hiçbir kopyayı otomatik silmez; sonuçlardan dosyanın bulunduğu klasöre gidebilir veya onaylayarak bir kopyayı çöp kutusuna taşıyabilirsin.</string>
     <string name="duplicate_finder_start">Taramayı başlat</string>
     <string name="duplicate_finder_rescan">Yeniden tara</string>
     <string name="duplicate_finder_cancel">İptal et</string>
@@ -11,7 +11,7 @@
     <string name="duplicate_finder_cancelling">Tarama iptal ediliyor…</string>
     <string name="duplicate_finder_access_required">Depolama erişimi gerekli. Ayarlar ve Araçlar ekranından erişimi etkinleştir.</string>
     <string name="duplicate_finder_failed">Yinelenen dosya taraması tamamlanamadı.</string>
-    <string name="duplicate_finder_summary">%1$d dosya incelendi • %2$d aday için hash hesaplandı • %3$d yinelenen grup • yaklaşık %4$s kazanılabilir</string>
+    <string name="duplicate_finder_summary">%1$d dosya incelendi • %2$d aday için tam hash hesaplandı • %3$d yinelenen grup • yaklaşık %4$s kazanılabilir</string>
     <string name="duplicate_finder_skipped">%1$d öğe güvenli biçimde atlandı.</string>
     <string name="duplicate_finder_partial_cancelled">Tarama iptal edildi; gösterilen sonuçlar kısmi olabilir.</string>
     <string name="duplicate_finder_partial_limit">Güvenli performans sınırına ulaşıldı; sonuçlar kısmi olabilir.</string>
@@ -31,6 +31,6 @@
     <string name="duplicate_finder_entry_stale">Dosya taramadan sonra değişmiş veya kaldırılmış.</string>
     <string name="duplicate_finder_path_copied">Dosya yolu panoya kopyalandı.</string>
     <string name="duplicate_finder_paths_copied">Grubun dosya yolları panoya kopyalandı.</string>
-    <string name="settings_duplicate_finder_summary">Aynı boyuttaki dosyaları SHA-256 ile doğrula ve gereksiz kopyaların kapladığı alanı gör.</string>
+    <string name="settings_duplicate_finder_summary">Aynı boyuttaki dosyaları örnek parmak iziyle hızlıca ele, olası eşleşmeleri tam SHA-256 ile doğrula ve gereksiz kopyaların kapladığı alanı gör.</string>
     <string name="settings_duplicate_finder_needs_access">Yinelenen dosyaları taramak için depolama erişimi gerekli.</string>
 </resources>
