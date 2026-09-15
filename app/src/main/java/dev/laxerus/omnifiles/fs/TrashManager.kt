@@ -101,18 +101,18 @@ class TrashManager(private val context: Context) {
 
         if (source.isDirectory) {
             val copied = source.copyRecursively(destination, overwrite = false)
-            if (!copied || !destination.exists()) {
+            if (!copied || !destination.exists() || !CopyIntegrityVerifier.matches(source, destination)) {
                 if (destination.exists()) destination.deleteRecursively()
-                error("Klasör eski konumuna geri yüklenemedi; çöp kopyası korundu")
+                error("Klasör eski konumuna içerik doğrulamasıyla geri yüklenemedi; çöp kopyası korundu")
             }
             if (!source.deleteRecursively()) {
-                error("Öğe geri yüklendi ancak çöp kopyası temizlenemedi")
+                error("Öğe geri yüklendi ancak çöp kopyası tamamen temizlenemedi")
             }
         } else {
             source.copyTo(destination, overwrite = false)
-            if (!destination.exists() || destination.length() != source.length()) {
-                destination.delete()
-                error("Dosya geri yükleme doğrulamasından geçmedi; çöp kopyası korundu")
+            if (!CopyIntegrityVerifier.matches(source, destination)) {
+                if (destination.exists()) destination.delete()
+                error("Dosya geri yükleme içerik doğrulamasından geçmedi; çöp kopyası korundu")
             }
             if (!source.delete()) {
                 error("Öğe geri yüklendi ancak çöp kopyası temizlenemedi")
@@ -146,17 +146,21 @@ class TrashManager(private val context: Context) {
 
         if (source.isDirectory) {
             val copied = source.copyRecursively(destination, overwrite = false)
-            check(copied && destination.exists()) { "Klasör güvenli biçimde kopyalanamadı; kaynak korunuyor" }
+            if (!copied || !destination.exists() || !CopyIntegrityVerifier.matches(source, destination)) {
+                if (destination.exists()) destination.deleteRecursively()
+                error("Klasör güvenli biçimde kopyalanıp doğrulanamadı; kaynak korunuyor")
+            }
             check(source.deleteRecursively()) {
-                "Kopya oluşturuldu ancak kaynak temizlenemedi; iki kopya da korunuyor"
+                "Doğrulanmış çöp kopyası oluşturuldu ancak kaynak tamamen temizlenemedi"
             }
         } else {
             source.copyTo(destination, overwrite = false)
-            check(destination.exists() && destination.length() == source.length()) {
-                "Dosya doğrulanamadı; kaynak korunuyor"
+            if (!CopyIntegrityVerifier.matches(source, destination)) {
+                if (destination.exists()) destination.delete()
+                error("Dosya içerik doğrulamasından geçmedi; kaynak korunuyor")
             }
             check(source.delete()) {
-                "Kopya oluşturuldu ancak kaynak temizlenemedi; iki kopya da korunuyor"
+                "Doğrulanmış çöp kopyası oluşturuldu ancak kaynak temizlenemedi"
             }
         }
     }
