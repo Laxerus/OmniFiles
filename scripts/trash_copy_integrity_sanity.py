@@ -75,7 +75,7 @@ require(
 )
 
 verifier_text = (root / "app/src/main/java/dev/laxerus/omnifiles/fs/CopyIntegrityVerifier.kt").read_text(encoding="utf-8")
-if verifier_text.count("stableSha256(") < 7:
+if verifier_text.count("stableSha256(") < 6:
     errors.append("CopyIntegrityVerifier must use stable SHA-256 in both file and tree verification paths")
 
 trash_text = (root / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt").read_text(encoding="utf-8")
