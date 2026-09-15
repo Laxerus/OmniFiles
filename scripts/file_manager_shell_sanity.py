@@ -29,6 +29,8 @@ if manifest.is_file():
         errors.append("manifest must expose exactly one launcher entry")
     if 'android:name=".ui.JunkCleanerActivity" android:exported="false"' not in text:
         errors.append("JunkCleanerActivity must remain internal")
+    if 'android:name=".ui.DuplicateFinderActivity" android:exported="false"' not in text:
+        errors.append("DuplicateFinderActivity must remain internal")
 else:
     errors.append("missing AndroidManifest.xml")
 
@@ -38,6 +40,7 @@ require(
     "R.id.actionSettingsTools -> MainActivity::class.java",
     "R.id.actionJunkCleaner -> JunkCleanerActivity::class.java",
     "R.id.actionStorageAnalyzer -> StorageAnalyzerActivity::class.java",
+    "R.id.actionDuplicateFinder -> DuplicateFinderActivity::class.java",
     "R.id.actionTrash -> TrashActivity::class.java",
     "R.id.actionChecksum -> ChecksumActivity::class.java",
     "R.id.actionWirelessAdb -> AdbPairingActivity::class.java",
@@ -59,10 +62,12 @@ require(
     '@+id/actionSettingsTools',
     '@+id/actionJunkCleaner',
     '@+id/actionStorageAnalyzer',
+    '@+id/actionDuplicateFinder',
     '@+id/actionTrash',
     '@+id/actionChecksum',
     '@+id/actionWirelessAdb',
     '@drawable/ic_settings_24',
+    '@drawable/ic_content_copy_24',
 )
 
 require(
@@ -120,6 +125,8 @@ require(
     "binding.appDetailsCard.setOnClickListener",
     "binding.junkCleanerButton.setOnClickListener",
     "binding.storageAnalyzerButton.setOnClickListener",
+    "binding.duplicateFinderButton.setOnClickListener",
+    "DuplicateFinderActivity::class.java",
     "binding.trashButton.setOnClickListener",
     "binding.checksumButton.setOnClickListener",
     "binding.adbCard.setOnClickListener",
@@ -148,6 +155,7 @@ require(
     '@+id/appDetailsCard',
     '@+id/junkCleanerButton',
     '@+id/storageAnalyzerButton',
+    '@+id/duplicateFinderButton',
     '@+id/trashButton',
     '@+id/checksumButton',
     '@+id/adbCard',
@@ -206,12 +214,57 @@ require(
     "settings_junk_cleaner_summary",
     "toolbar_junk_cleaner",
 )
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/DuplicateFinder.kt",
+    "object DuplicateFinder",
+    "DEFAULT_MAX_ENTRIES",
+    "DEFAULT_MAX_HASHED_FILES",
+    "FilePathPolicy.requireDirectEntry",
+    "MessageDigest.getInstance(\"SHA-256\")",
+    "reclaimableBytes",
+    "isCancelled",
+)
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/DuplicateFinderActivity.kt",
+    "DuplicateFinder.scan",
+    "BrowserLaunchExtras.EXTRA_HIGHLIGHT_PATH",
+    "settings_duplicate_finder_needs_access",
+    "copyGroupPaths",
+)
+require(
+    "app/src/main/res/layout/activity_duplicate_finder.xml",
+    '@+id/startButton',
+    '@+id/cancelButton',
+    '@+id/progress',
+    '@+id/groupsContainer',
+)
+require(
+    "app/src/main/res/values/strings_duplicate_finder.xml",
+    "duplicate_finder_title",
+    "settings_duplicate_finder_summary",
+    "settings_duplicate_finder_needs_access",
+)
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/maintenance/StartupMaintenance.kt",
+    "object StartupMaintenance",
+    'Rule("adb-preview"',
+    'Rule("adb-checksum"',
+    'Rule("sqlite-studio"',
+    "DEFAULT_MAX_ENTRIES",
+    "safeEntry",
+)
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/OmniFilesApp.kt",
+    "StartupMaintenance.prune(cacheDir)",
+    '"omnifiles-startup-maintenance"',
+)
 
 for drawable in (
     "ic_chevron_right_24.xml",
     "ic_security_24.xml",
     "ic_search_24.xml",
     "ic_database_24.xml",
+    "ic_content_copy_24.xml",
 ):
     if not (root / "app/src/main/res/drawable" / drawable).is_file():
         errors.append(f"missing modern settings drawable: {drawable}")
