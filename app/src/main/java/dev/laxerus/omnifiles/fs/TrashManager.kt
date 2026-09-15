@@ -25,6 +25,8 @@ data class TrashCleanupResult(
 )
 
 class TrashManager(private val context: Context) {
+    private class VerifiedTrashCopyRetainedException(message: String) : IllegalStateException(message)
+
     private val trashRoot: File by lazy {
         val base = context.getExternalFilesDir(null) ?: context.filesDir
         File(base, "trash").apply {
@@ -46,27 +48,31 @@ class TrashManager(private val context: Context) {
         val destination = File(trashRoot, "$trashedAt-${UUID.randomUUID()}-${safeTarget.name}")
         require(!destination.exists()) { "Çöp hedefi zaten var" }
 
-        moveIntoTrash(safeTarget, destination)
-        val ticket = TrashTicket(destination.canonicalFile, originalFile)
+        val ticket = TrashTicket(requireTrashSlot(destination, mustExist = false), originalFile)
+        writeMetadata(ticket, safeTarget.name, trashedAt)
 
-        runCatching {
-            writeMetadata(ticket, safeTarget.name, trashedAt)
-        }.onFailure { metadataFailure ->
-            val rollback = runCatching { restore(ticket) }
-            if (rollback.isSuccess) {
-                throw IllegalStateException("Çöp kaydı oluşturulamadı; işlem güvenli biçimde geri alındı", metadataFailure)
-            }
+        try {
+            moveIntoTrash(safeTarget, ticket.trashedFile)
+        } catch (retained: VerifiedTrashCopyRetainedException) {
             throw IllegalStateException(
-                "Öğe çöpe taşındı ancak kalıcı geri yükleme bilgisi yazılamadı; öğe çöpte korundu",
-                metadataFailure
+                "Öğe tamamen taşınamadı; doğrulanmış çöp kopyası ve geri yükleme bilgisi korunuyor",
+                retained
             )
+        } catch (failure: Throwable) {
+            removeMetadata(ticket.trashedFile)
+            throw failure
         }
 
+        check(ticket.trashedFile.exists()) {
+            removeMetadata(ticket.trashedFile)
+            "Çöp hedefi taşıma sonrasında bulunamadı; kaynak korunuyor"
+        }
         return ticket
     }
 
     fun listEntries(): List<TrashEntry> {
         ensureMetadataRoot()
+        cleanupOrphanMetadata()
         return trashRoot.listFiles()
             ?.asSequence()
             ?.filter { it.name != METADATA_DIR }
@@ -150,8 +156,10 @@ class TrashManager(private val context: Context) {
                 if (destination.exists()) destination.deleteRecursively()
                 error("Klasör güvenli biçimde kopyalanıp doğrulanamadı; kaynak korunuyor")
             }
-            check(source.deleteRecursively()) {
-                "Doğrulanmış çöp kopyası oluşturuldu ancak kaynak tamamen temizlenemedi"
+            if (!source.deleteRecursively()) {
+                throw VerifiedTrashCopyRetainedException(
+                    "Doğrulanmış çöp kopyası oluşturuldu ancak kaynak tamamen temizlenemedi"
+                )
             }
         } else {
             source.copyTo(destination, overwrite = false)
@@ -159,8 +167,10 @@ class TrashManager(private val context: Context) {
                 if (destination.exists()) destination.delete()
                 error("Dosya içerik doğrulamasından geçmedi; kaynak korunuyor")
             }
-            check(source.delete()) {
-                "Doğrulanmış çöp kopyası oluşturuldu ancak kaynak temizlenemedi"
+            if (!source.delete()) {
+                throw VerifiedTrashCopyRetainedException(
+                    "Doğrulanmış çöp kopyası oluşturuldu ancak kaynak temizlenemedi"
+                )
             }
         }
     }
@@ -198,8 +208,8 @@ class TrashManager(private val context: Context) {
 
     private fun writeMetadata(ticket: TrashTicket, displayName: String, trashedAt: Long) {
         ensureMetadataRoot()
-        val source = requireTrashEntry(ticket.trashedFile)
-        val destination = metadataFileFor(source)
+        val plannedTrashFile = requireTrashSlot(ticket.trashedFile, mustExist = false)
+        val destination = metadataFileFor(plannedTrashFile)
         require(!destination.exists()) { "Çöp metadata kaydı zaten var" }
         val temp = File(metadataRoot, "${destination.name}.${UUID.randomUUID()}.tmp")
         val expectedOriginalPath = ticket.originalFile.canonicalPath
@@ -236,7 +246,8 @@ class TrashManager(private val context: Context) {
 
     private fun metadataFileFor(source: File): File {
         ensureMetadataRoot()
-        return File(metadataRoot, "${source.name}.json")
+        val safe = requireTrashSlot(source, mustExist = false)
+        return File(metadataRoot, "${safe.name}.json")
     }
 
     private fun cleanupOrphanMetadata() {
@@ -247,8 +258,18 @@ class TrashManager(private val context: Context) {
             ?.map { "${it.name}.json" }
             ?.toSet()
             .orEmpty()
+        val now = System.currentTimeMillis()
         metadataRoot.listFiles()?.forEach { metadata ->
-            if (metadata.name !in liveNames) metadata.delete()
+            if (
+                TrashMetadataPolicy.shouldDeleteOrphan(
+                    name = metadata.name,
+                    modifiedAt = metadata.lastModified(),
+                    liveMetadataNames = liveNames,
+                    now = now,
+                )
+            ) {
+                metadata.delete()
+            }
         }
     }
 
@@ -256,13 +277,17 @@ class TrashManager(private val context: Context) {
         metadataRoot
     }
 
-    private fun requireTrashEntry(candidate: File): File {
+    private fun requireTrashSlot(candidate: File, mustExist: Boolean): File {
+        val absolute = candidate.absoluteFile
         val safe = candidate.canonicalFile
+        require(absolute.path == safe.path) { "Geçersiz çöp yolu" }
         require(safe.parentFile?.canonicalPath == trashRoot.path) { "Geçersiz çöp kaydı" }
         require(safe.name != METADATA_DIR) { "Geçersiz çöp kaydı" }
-        require(safe.exists()) { "Çöp kaydı artık mevcut değil" }
+        if (mustExist) require(safe.exists()) { "Çöp kaydı artık mevcut değil" }
         return safe
     }
+
+    private fun requireTrashEntry(candidate: File): File = requireTrashSlot(candidate, mustExist = true)
 
     private fun parseTimestamp(name: String): Long? = name.substringBefore('-').toLongOrNull()
 
