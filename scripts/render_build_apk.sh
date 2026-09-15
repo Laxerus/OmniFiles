@@ -110,6 +110,7 @@ python3 scripts/file_manager_shell_sanity.py
 python3 scripts/feature_regression_sanity.py
 python3 scripts/duplicate_manual_trash_sanity.py
 python3 scripts/quick_access_navigation_sanity.py
+python3 scripts/trash_copy_integrity_sanity.py
 
 log "Unit test + Android Lint + Debug APK"
 gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
