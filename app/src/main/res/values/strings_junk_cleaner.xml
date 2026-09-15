@@ -24,12 +24,25 @@
     <string name="junk_cleaner_confirm_message">%1$d aday (%2$s) silme anında tekrar doğrulanacak. Taramadan sonra değişen öğeler atlanacak. Uygun adayların silinmesi geri alınamaz.</string>
     <string name="junk_cleaner_done">%1$d öğe silindi • %2$d atlandı/başarısız • %3$s alan açıldı</string>
     <string name="junk_cleaner_clean_failed">Temizlik tamamlanamadı.</string>
+
+    <string name="junk_cleaner_auto_title">Günlük güvenli otomatik temizlik</string>
+    <string name="junk_cleaner_auto_help">Açıldığında OmniFiles, uygulama başlatılırken en fazla 24 saatte bir aynı düşük riskli kurallarla tarama yapar. Yalnız tarama anında yeniden doğrulanan adaylar silinir.</string>
+    <string name="junk_cleaner_auto_disabled">Kapalı • hiçbir dosya arka planda otomatik silinmez.</string>
+    <string name="junk_cleaner_auto_waiting">Açık • ilk uygun çalıştırma için hazır.</string>
+    <string name="junk_cleaner_auto_running">Güvenli otomatik temizlik çalışıyor…</string>
+    <string name="junk_cleaner_auto_access_required">Otomatik temizlik için önce tüm dosyalara erişim gerekli.</string>
+    <string name="junk_cleaner_auto_last_run">Son çalışma: %1$s • %2$d silindi • %3$d atlandı • %4$s alan açıldı</string>
+    <string name="junk_cleaner_auto_partial">Tarama güvenlik sınırında tamamlandı; bulunan güvenli adaylar işlendi.</string>
+    <string name="junk_cleaner_auto_enabled">Günlük güvenli otomatik temizlik açıldı.</string>
+    <string name="junk_cleaner_auto_disabled_toast">Günlük otomatik temizlik kapatıldı.</string>
+    <string name="junk_cleaner_auto_failed">Otomatik temizlik bu kez tamamlanamadı; daha sonra tekrar denenecek.</string>
+
     <string name="junk_kind_temp">Eski geçici dosya</string>
     <string name="junk_kind_partial">Yarım/eski indirme</string>
     <string name="junk_kind_metadata">Metadata artığı</string>
     <string name="junk_kind_empty_cache">Boş cache/temp klasörü</string>
     <string name="junk_kind_empty_log">Eski boş log</string>
-    <string name="settings_junk_cleaner_summary">Gereksiz dosyaları güvenli kurallarla tara ve doğrulanan adayları tek dokunuşla sil.</string>
+    <string name="settings_junk_cleaner_summary">Gereksiz dosyaları güvenli kurallarla tara; istersen günlük otomatik temizliği aç.</string>
     <string name="settings_junk_cleaner_needs_access">Temizlik için önce tüm dosyalara erişim gerekli.</string>
     <string name="toolbar_junk_cleaner">Gereksiz dosya temizliği</string>
 </resources>
