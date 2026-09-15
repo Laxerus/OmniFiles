@@ -22,4 +22,6 @@
     <string name="duplicate_finder_group_dialog">%1$d doğrulanmış kopya</string>
     <string name="duplicate_finder_entry_stale">Dosya taramadan sonra değişmiş veya kaldırılmış.</string>
     <string name="duplicate_finder_paths_copied">Grubun dosya yolları panoya kopyalandı.</string>
+    <string name="settings_duplicate_finder_summary">Aynı boyuttaki dosyaları SHA-256 ile doğrula ve gereksiz kopyaların kapladığı alanı gör.</string>
+    <string name="settings_duplicate_finder_needs_access">Yinelenen dosyaları taramak için depolama erişimi gerekli.</string>
 </resources>
