@@ -12,8 +12,10 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.color.MaterialColors
 import dev.laxerus.omnifiles.R
+import dev.laxerus.omnifiles.access.StorageAccessController
 import dev.laxerus.omnifiles.databinding.RowFileBinding
 import dev.laxerus.omnifiles.fs.BrowserHighlightPolicy
+import dev.laxerus.omnifiles.fs.RecentFolderStore
 import java.io.File
 import java.text.DateFormat
 import java.util.Locale
@@ -127,6 +129,7 @@ class FileListAdapter(
             }
             binding.root.setOnClickListener {
                 if (highlighted) clearHighlight()
+                if (!selectionMode && file.isDirectory) recordRecentDirectory(binding.root.context, file)
                 onClick(file)
             }
             binding.root.setOnLongClickListener {
@@ -151,6 +154,15 @@ class FileListAdapter(
                 .onFailure {
                     Toast.makeText(context, "SHA-256 ekranı açılamadı", Toast.LENGTH_SHORT).show()
                 }
+        }
+
+        private fun recordRecentDirectory(context: Context, directory: File) {
+            runCatching {
+                RecentFolderStore(context.applicationContext).record(
+                    directory = directory,
+                    sharedRoot = StorageAccessController.sharedRoot()
+                )
+            }
         }
     }
 
