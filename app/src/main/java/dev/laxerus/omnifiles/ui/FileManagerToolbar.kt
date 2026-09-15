@@ -19,6 +19,7 @@ class FileManagerToolbar @JvmOverloads constructor(
                 R.id.actionSettingsTools -> MainActivity::class.java
                 R.id.actionJunkCleaner -> JunkCleanerActivity::class.java
                 R.id.actionStorageAnalyzer -> StorageAnalyzerActivity::class.java
+                R.id.actionDuplicateFinder -> DuplicateFinderActivity::class.java
                 R.id.actionTrash -> TrashActivity::class.java
                 R.id.actionChecksum -> ChecksumActivity::class.java
                 R.id.actionWirelessAdb -> AdbPairingActivity::class.java
