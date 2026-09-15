@@ -8,6 +8,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.StorageAccessController
+import dev.laxerus.omnifiles.fs.FilePathPolicy
 import dev.laxerus.omnifiles.fs.QuickFolderPolicy
 import dev.laxerus.omnifiles.fs.RecentFileStore
 import dev.laxerus.omnifiles.fs.RecentFolderStore
@@ -119,9 +120,9 @@ class RecentFoldersButton @JvmOverloads constructor(
     }
 
     private fun openFolder(folder: File, sharedRoot: File) {
-        val safeFolder = runCatching {
-            recentFolderStore.record(folder, sharedRoot).firstOrNull()
-        }.getOrNull()
+        val safeFolder = runCatching { FilePathPolicy.requireDirectEntry(folder, sharedRoot) }
+            .getOrNull()
+            ?.takeIf { it.exists() && it.isDirectory }
         if (safeFolder == null) {
             Toast.makeText(context, R.string.recent_folder_stale, Toast.LENGTH_SHORT).show()
             return
@@ -130,15 +131,18 @@ class RecentFoldersButton @JvmOverloads constructor(
         val intent = Intent(context, FileBrowserActivity::class.java)
             .putExtra(FileBrowserActivity.EXTRA_START_PATH, safeFolder.canonicalPath)
         runCatching { context.startActivity(intent) }
+            .onSuccess {
+                runCatching { recentFolderStore.record(safeFolder, sharedRoot) }
+            }
             .onFailure {
                 Toast.makeText(context, R.string.recent_folders_unavailable, Toast.LENGTH_SHORT).show()
             }
     }
 
     private fun openFile(file: File, sharedRoot: File) {
-        val safeFile = runCatching {
-            recentFileStore.record(file, sharedRoot).firstOrNull()
-        }.getOrNull()
+        val safeFile = runCatching { FilePathPolicy.requireDirectEntry(file, sharedRoot) }
+            .getOrNull()
+            ?.takeIf { it.exists() && it.isFile }
         if (safeFile == null) {
             Toast.makeText(context, R.string.recent_file_stale, Toast.LENGTH_SHORT).show()
             return
@@ -150,6 +154,9 @@ class RecentFoldersButton @JvmOverloads constructor(
                 return
             }
         runCatching { context.startActivity(intent) }
+            .onSuccess {
+                runCatching { recentFileStore.record(safeFile, sharedRoot) }
+            }
             .onFailure {
                 Toast.makeText(context, R.string.recent_file_open_failed, Toast.LENGTH_SHORT).show()
             }
