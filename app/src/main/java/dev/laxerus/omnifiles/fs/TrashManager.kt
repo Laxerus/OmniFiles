@@ -202,16 +202,24 @@ class TrashManager(private val context: Context) {
         val destination = metadataFileFor(source)
         require(!destination.exists()) { "Çöp metadata kaydı zaten var" }
         val temp = File(metadataRoot, "${destination.name}.${UUID.randomUUID()}.tmp")
+        val expectedOriginalPath = ticket.originalFile.canonicalPath
         val json = JSONObject()
-            .put(KEY_ORIGINAL_PATH, ticket.originalFile.canonicalPath)
+            .put(KEY_ORIGINAL_PATH, expectedOriginalPath)
             .put(KEY_DISPLAY_NAME, displayName)
             .put(KEY_TRASHED_AT, trashedAt)
 
-        try {
-            temp.writeText(json.toString(), Charsets.UTF_8)
-            check(temp.renameTo(destination)) { "Çöp metadata kaydı tamamlanamadı" }
-        } finally {
-            if (temp.exists()) temp.delete()
+        DurableFileWriter.writeNewUtf8(temp, destination, json.toString())
+        val persisted = runCatching { JSONObject(destination.readText(Charsets.UTF_8)) }
+            .getOrElse { error ->
+                destination.delete()
+                throw IllegalStateException("Çöp metadata kaydı JSON doğrulamasından geçmedi", error)
+            }
+        val valid = persisted.optString(KEY_ORIGINAL_PATH) == expectedOriginalPath &&
+            persisted.optString(KEY_DISPLAY_NAME) == displayName &&
+            persisted.optLong(KEY_TRASHED_AT, Long.MIN_VALUE) == trashedAt
+        if (!valid) {
+            destination.delete()
+            error("Çöp metadata kaydı alan doğrulamasından geçmedi")
         }
     }
 
