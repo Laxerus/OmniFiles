@@ -56,9 +56,25 @@ require(
     "RecentFileStore",
     "recentFolderStore.clear()",
     "recentFileStore.clear()",
+    "FilePathPolicy.requireDirectEntry",
     "LocalFileIntents.viewIntent",
+    "context.startActivity(intent)",
+    "recentFolderStore.record(safeFolder, sharedRoot)",
+    "recentFileStore.record(safeFile, sharedRoot)",
     "QuickFolderPolicy.Kind.SCREENSHOTS",
     "QuickFolderPolicy.Kind.RECORDINGS",
+)
+require_order(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/RecentFoldersButton.kt",
+    "private fun openFolder(folder: File, sharedRoot: File)",
+    "context.startActivity(intent)",
+    "recentFolderStore.record(safeFolder, sharedRoot)",
+)
+require_order(
+    "app/src/main/java/dev/laxerus/omnifiles/ui/RecentFoldersButton.kt",
+    "private fun openFile(file: File, sharedRoot: File)",
+    "context.startActivity(intent)",
+    "recentFileStore.record(safeFile, sharedRoot)",
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/fs/RecentFolderStore.kt",
