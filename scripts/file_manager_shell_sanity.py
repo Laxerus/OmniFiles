@@ -85,6 +85,9 @@ require(
 require(
     "app/src/main/java/dev/laxerus/omnifiles/access/StorageAccessController.kt",
     "SystemSettingsNavigator.Destination.ALL_FILES_ACCESS",
+    "Manifest.permission.READ_EXTERNAL_STORAGE",
+    "Manifest.permission.WRITE_EXTERNAL_STORAGE",
+    "readGranted && writeGranted",
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/AdbPairingActivity.kt",
@@ -179,6 +182,11 @@ require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/JunkCleanerActivity.kt",
     "JunkCleaner.scan",
     "JunkCleaner.clean",
+    "AutoCleanupManager",
+    "runAutomaticCleanupNow",
+    "renderAutoCleanupStatus",
+    "binding.autoCleanupSwitch",
+    "binding.autoCleanupStatus",
     "MaterialAlertDialogBuilder",
     "TrashActivity::class.java",
 )
@@ -189,6 +197,8 @@ require(
     '@+id/openTrashButton',
     '@+id/summaryText',
     '@+id/detailsText',
+    '@+id/autoCleanupSwitch',
+    '@+id/autoCleanupStatus',
 )
 require(
     "app/src/main/res/values/strings_settings_hub.xml",
@@ -211,8 +221,36 @@ require(
     "junk_cleaner_title",
     "junk_cleaner_clean_now",
     "junk_cleaner_safety_note",
+    "junk_cleaner_auto_title",
+    "junk_cleaner_auto_help",
+    "junk_cleaner_auto_last_run",
     "settings_junk_cleaner_summary",
     "toolbar_junk_cleaner",
+)
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/maintenance/AutoCleanupSchedule.kt",
+    "object AutoCleanupSchedule",
+    "NORMAL_INTERVAL_MS",
+    "RETRY_INTERVAL_MS",
+    "fun shouldRun(",
+    "if (!enabled || !hasStorageAccess) return false",
+)
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/maintenance/AutoCleanupManager.kt",
+    "object AutoCleanupManager",
+    "fun state(context: Context)",
+    "fun setEnabled(context: Context, enabled: Boolean)",
+    "fun runIfDue(",
+    "AutoCleanupSchedule.shouldRun",
+    "JunkCleaner.scan",
+    "JunkCleaner.clean",
+)
+require(
+    "app/src/test/java/dev/laxerus/omnifiles/maintenance/AutoCleanupScheduleTest.kt",
+    "firstRunIsImmediatelyDue",
+    "successfulRunIsLimitedToOncePerDay",
+    "failedAttemptWaitsAtLeastOneHourBeforeRetry",
+    "forceBypassesTimeWindowsButNotSafetyGates",
 )
 require(
     "app/src/main/java/dev/laxerus/omnifiles/fs/DuplicateFinder.kt",
@@ -230,6 +268,8 @@ require(
     "BrowserLaunchExtras.EXTRA_HIGHLIGHT_PATH",
     "duplicate_finder_access_required",
     "copyGroupPaths",
+    "TrashManager",
+    "moveToTrash",
 )
 require(
     "app/src/main/res/layout/activity_duplicate_finder.xml",
@@ -256,6 +296,7 @@ require(
 require(
     "app/src/main/java/dev/laxerus/omnifiles/OmniFilesApp.kt",
     "StartupMaintenance.prune(cacheDir)",
+    "AutoCleanupManager.runIfDue(this@OmniFilesApp)",
     '"omnifiles-startup-maintenance"',
 )
 
