@@ -26,9 +26,13 @@ object DurableFileWriter {
                 "Geçici metadata içeriği doğrulanamadı"
             }
             check(temp.renameTo(destination)) { "Metadata kaydı atomik olarak tamamlanamadı" }
-            if (!destination.isFile || destination.length() != bytes.size.toLong() ||
-                !destination.readBytes().contentEquals(bytes)
-            ) {
+
+            val persistedMatches = runCatching {
+                destination.isFile &&
+                    destination.length() == bytes.size.toLong() &&
+                    destination.readBytes().contentEquals(bytes)
+            }.getOrDefault(false)
+            if (!persistedMatches) {
                 destination.delete()
                 error("Kalıcı metadata içeriği doğrulanamadı")
             }
