@@ -76,7 +76,7 @@ export ANDROID_HOME="$SDK"
 CMDLINE_LATEST="$SDK/cmdline-tools/latest"
 CMDLINE_MARKER="$CMDLINE_LATEST/.omnifiles-revision"
 INSTALLED_CMDLINE_REV="$(cat "$CMDLINE_MARKER" 2>/dev/null || true)"
-if [[ ! -x "$CMDLINE_LATEST/bin/sdkmanager" || "$INSTALLED_CMDLINE_REV" != "$CMDLINE_TOOLS_REV" ]]; then
+if [[ ! -x "$CMDLINE_LATEST/bin/android" || "$INSTALLED_CMDLINE_REV" != "$CMDLINE_TOOLS_REV" ]]; then
   log "Android command-line tools $CMDLINE_TOOLS_REV indiriliyor"
   rm -rf "$SDK/cmdline-tools" "$TOOLS/android-tools.zip"
   mkdir -p "$SDK/cmdline-tools"
@@ -90,12 +90,12 @@ else
 fi
 export PATH="$CMDLINE_LATEST/bin:$SDK/platform-tools:$PATH"
 
-log "Android SDK lisansları kabul ediliyor"
-yes | sdkmanager --licenses >/dev/null 2>&1 || true
-
 if [[ ! -f "$SDK/platforms/android-$ANDROID_PLATFORM/android.jar" || ! -x "$SDK/build-tools/$BUILD_TOOLS/aapt2" || ! -x "$SDK/platform-tools/adb" ]]; then
   log "Android SDK API $ANDROID_PLATFORM kuruluyor"
-  sdkmanager --channel=3 "platform-tools" "platforms;android-${ANDROID_PLATFORM}" "build-tools;${BUILD_TOOLS}"
+  yes | android sdk install --canary \
+    "platforms/android-${ANDROID_PLATFORM}" \
+    "build-tools/${BUILD_TOOLS}" \
+    "platform-tools"
 else
   log "Android SDK API $ANDROID_PLATFORM build cache'ten kullanılıyor"
 fi
