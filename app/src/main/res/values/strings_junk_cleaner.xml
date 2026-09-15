@@ -43,6 +43,7 @@
     <string name="junk_kind_empty_cache">Boş cache/temp klasörü</string>
     <string name="junk_kind_empty_log">Eski boş log</string>
     <string name="settings_junk_cleaner_summary">Gereksiz dosyaları güvenli kurallarla tara; istersen günlük otomatik temizliği aç.</string>
+    <string name="settings_junk_cleaner_auto_enabled_summary">Günlük güvenli otomatik temizlik açık; düşük riskli artıklar uygulama başlatılırken en fazla 24 saatte bir işlenir.</string>
     <string name="settings_junk_cleaner_needs_access">Temizlik için önce tüm dosyalara erişim gerekli.</string>
     <string name="toolbar_junk_cleaner">Gereksiz dosya temizliği</string>
 </resources>
