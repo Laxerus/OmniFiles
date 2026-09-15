@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="duplicate_finder_title">Yinelenen Dosyalar</string>
+    <string name="duplicate_finder_toolbar">Yinelenen dosyaları bul</string>
+    <string name="duplicate_finder_intro">Aynı boyuttaki dosyalar SHA-256 ile doğrulanır. OmniFiles hiçbir kopyayı otomatik silmez; sonuçlardan dosyanın bulunduğu klasöre gidebilirsin.</string>
+    <string name="duplicate_finder_start">Taramayı başlat</string>
+    <string name="duplicate_finder_rescan">Yeniden tara</string>
+    <string name="duplicate_finder_cancel">İptal et</string>
+    <string name="duplicate_finder_idle">Taramaya hazır.</string>
+    <string name="duplicate_finder_scanning">Depolama taranıyor ve eşleşmeler doğrulanıyor…</string>
+    <string name="duplicate_finder_cancelling">Tarama iptal ediliyor…</string>
+    <string name="duplicate_finder_access_required">Depolama erişimi gerekli. Ayarlar ve Araçlar ekranından erişimi etkinleştir.</string>
+    <string name="duplicate_finder_failed">Yinelenen dosya taraması tamamlanamadı.</string>
+    <string name="duplicate_finder_summary">%1$d dosya incelendi • %2$d aday hash'lendi • %3$d yinelenen grup • yaklaşık %4$s kazanılabilir</string>
+    <string name="duplicate_finder_skipped">%1$d öğe güvenli biçimde atlandı.</string>
+    <string name="duplicate_finder_partial_cancelled">Tarama iptal edildi; gösterilen sonuçlar kısmi olabilir.</string>
+    <string name="duplicate_finder_partial_limit">Güvenli performans sınırına ulaşıldı; sonuçlar kısmi olabilir.</string>
+    <string name="duplicate_finder_none">Doğrulanmış yinelenen dosya bulunamadı.</string>
+    <string name="duplicate_finder_results_title">Doğrulanmış eşleşmeler</string>
+    <string name="duplicate_finder_group_title">%1$d aynı dosya • %2$s</string>
+    <string name="duplicate_finder_group_meta">%1$s kazanılabilir • SHA-256 %2$s…</string>
+    <string name="duplicate_finder_group_dialog">%1$d doğrulanmış kopya</string>
+    <string name="duplicate_finder_entry_stale">Dosya taramadan sonra değişmiş veya kaldırılmış.</string>
+    <string name="duplicate_finder_paths_copied">Grubun dosya yolları panoya kopyalandı.</string>
+</resources>
