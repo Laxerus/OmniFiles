@@ -19,6 +19,7 @@ import dev.laxerus.omnifiles.access.StorageAccessController
 import dev.laxerus.omnifiles.databinding.ActivityStorageAnalyzerBinding
 import dev.laxerus.omnifiles.fs.FilePathPolicy
 import dev.laxerus.omnifiles.fs.StorageAnalyzer
+import dev.laxerus.omnifiles.fs.TrashManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -32,8 +33,14 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 class StorageAnalyzerActivity : OmniActivity() {
+    private data class TrashOutcome(
+        val moved: Boolean,
+        val stale: Boolean,
+    )
+
     private lateinit var binding: ActivityStorageAnalyzerBinding
     private val sharedRoot: File by lazy { StorageAccessController.sharedRoot().canonicalFile }
+    private val trashManager: TrashManager by lazy { TrashManager(this) }
     private val cancelRequested = AtomicBoolean(false)
     private var scanJob: Job? = null
     private var hasResult = false
@@ -268,6 +275,7 @@ class StorageAnalyzerActivity : OmniActivity() {
                 add(R.string.storage_analyzer_open_file)
                 add(R.string.share)
                 add(R.string.storage_analyzer_sha256)
+                add(R.string.storage_analyzer_move_to_trash)
             }
             add(R.string.copy_path)
         }
@@ -281,10 +289,88 @@ class StorageAnalyzerActivity : OmniActivity() {
                     R.string.storage_analyzer_open_file -> openFile(safe)
                     R.string.share -> shareFile(safe)
                     R.string.storage_analyzer_sha256 -> openChecksum(safe)
+                    R.string.storage_analyzer_move_to_trash -> confirmMoveToTrash(entry)
                     R.string.copy_path -> copyEntryPath(entry)
                 }
             }
             .show()
+    }
+
+    private fun confirmMoveToTrash(entry: StorageAnalyzer.Entry) {
+        val safe = StorageAnalyzer.verifyUnchangedFile(entry, sharedRoot)
+        if (safe == null) {
+            Toast.makeText(this, R.string.storage_analyzer_entry_stale, Toast.LENGTH_LONG).show()
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.storage_analyzer_trash_confirm_title)
+            .setMessage(
+                getString(
+                    R.string.storage_analyzer_trash_confirm,
+                    safe.name,
+                    formatBytes(entry.sizeBytes),
+                )
+            )
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.storage_analyzer_move_to_trash) { _, _ ->
+                moveToTrash(entry)
+            }
+            .show()
+    }
+
+    private fun moveToTrash(entry: StorageAnalyzer.Entry) {
+        if (scanJob?.isActive == true) return
+        binding.startButton.isEnabled = false
+        binding.cancelButton.isEnabled = false
+        binding.progress.visibility = View.VISIBLE
+        binding.summaryText.setText(R.string.storage_analyzer_trash_moving)
+
+        lifecycleScope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                val safe = StorageAnalyzer.verifyUnchangedFile(entry, sharedRoot)
+                    ?: return@withContext TrashOutcome(moved = false, stale = true)
+                runCatching { trashManager.moveToTrash(safe) }
+                    .fold(
+                        onSuccess = { TrashOutcome(moved = true, stale = false) },
+                        onFailure = { TrashOutcome(moved = false, stale = false) },
+                    )
+            }
+            if (!isActive) return@launch
+
+            binding.progress.visibility = View.GONE
+            when {
+                outcome.moved -> {
+                    Toast.makeText(
+                        this@StorageAnalyzerActivity,
+                        R.string.storage_analyzer_trashed,
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                    hasResult = false
+                    startScan()
+                }
+
+                outcome.stale -> {
+                    Toast.makeText(
+                        this@StorageAnalyzerActivity,
+                        R.string.storage_analyzer_entry_stale,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    hasResult = false
+                    startScan()
+                }
+
+                else -> {
+                    binding.startButton.isEnabled = AccessSnapshot.read(this@StorageAnalyzerActivity).sharedStorage
+                    binding.cancelButton.isEnabled = false
+                    Toast.makeText(
+                        this@StorageAnalyzerActivity,
+                        R.string.storage_analyzer_trash_failed,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    renderAccessState()
+                }
+            }
+        }
     }
 
     private fun resolveEntry(entry: StorageAnalyzer.Entry): File? {
