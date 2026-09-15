@@ -17,14 +17,14 @@ Geliştirme sürümü yayınlanana kadar **`0.8.0-dev`** olarak sabittir.
 - Güvenli kopyalama/taşıma, yeniden adlandırma, paylaşma ve klasör oluşturma.
 - Geri yüklenebilir **OmniFiles Çöp Kutusu** ve muhafazakâr **Gereksiz Dosya Temizliği**.
 - **Depolama Analizi** ile en büyük dosya, klasör ve dosya türlerini görme.
-- **Yinelenen Dosyalar** ile aynı boyuttaki adayları SHA-256 üzerinden doğrulayıp kazanılabilecek alanı görme.
+- **Yinelenen Dosyalar** ile aynı boyuttaki adayları SHA-256 üzerinden doğrulama, kazanılabilecek alanı görme ve onaylanan kopyaları geri yüklenebilir çöp kutusuna taşıma.
 - SHA-256 hesaplama ve beklenen hash ile doğrulama.
 - Dahili Kablosuz ADB, Save Scout ve SQLite Studio araçları.
 - Material 3 ve Android 15/16 edge-to-edge uyumlu arayüz.
 
 ## Güvenlik
 
-Dosya işlemleri canonical yol kontrolleriyle sınırlandırılır; sembolik/dolaylı yollar ve kritik Android klasörlerinin kendisi korunur. Temizlik araçları kullanıcı medyasını yalnız adına bakarak gereksiz kabul etmez. Yinelenen dosya bulucu sonuçları otomatik silmez.
+Dosya işlemleri canonical yol kontrolleriyle sınırlandırılır; sembolik/dolaylı yollar ve kritik Android klasörlerinin kendisi korunur. Temizlik araçları kullanıcı medyasını yalnız adına bakarak gereksiz kabul etmez. Yinelenen dosya bulucu hiçbir dosyayı otomatik silmez; kullanıcı tarafından seçilen kopyalar önce geri yüklenebilir OmniFiles Çöp Kutusu'na taşınır.
 
 OmniFiles ayrıca önceki oturumlardan kalmış kendi geçici ADB önizleme, checksum ve SQLite çalışma dosyalarını uygulama başlangıcında sınırlandırılmış bir bakım işlemiyle temizler.
 
