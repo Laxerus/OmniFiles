@@ -8,8 +8,10 @@ import android.os.Bundle
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.snackbar.Snackbar
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.access.AccessSnapshot
 import dev.laxerus.omnifiles.access.StorageAccessController
@@ -17,6 +19,7 @@ import dev.laxerus.omnifiles.databinding.ActivityDuplicateFinderBinding
 import dev.laxerus.omnifiles.fs.DuplicateFinder
 import dev.laxerus.omnifiles.fs.FilePathPolicy
 import dev.laxerus.omnifiles.fs.TrashManager
+import dev.laxerus.omnifiles.fs.TrashTicket
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -346,13 +349,44 @@ class DuplicateFinderActivity : OmniActivity() {
                 }
             }
             if (!isActive) return@launch
-            result.onSuccess {
-                Toast.makeText(this@DuplicateFinderActivity, R.string.duplicate_finder_trashed, Toast.LENGTH_SHORT).show()
-                startScan()
+            result.onSuccess { ticket ->
+                showTrashUndo(ticket)
             }.onFailure {
                 binding.startButton.isEnabled = AccessSnapshot.read(this@DuplicateFinderActivity).sharedStorage
                 Toast.makeText(this@DuplicateFinderActivity, R.string.duplicate_finder_trash_failed, Toast.LENGTH_LONG).show()
             }
+        }
+    }
+
+    private fun showTrashUndo(ticket: TrashTicket) {
+        Snackbar.make(binding.root, R.string.duplicate_finder_trashed, Snackbar.LENGTH_LONG)
+            .setAction(R.string.undo) { restoreTrash(ticket) }
+            .addCallback(object : Snackbar.Callback() {
+                override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                    if (event == DISMISS_EVENT_ACTION) return
+                    hasResult = false
+                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && !isFinishing && !isDestroyed) {
+                        startScan()
+                    }
+                }
+            })
+            .show()
+    }
+
+    private fun restoreTrash(ticket: TrashTicket) {
+        binding.startButton.isEnabled = false
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { trashManager.restore(ticket) }
+            }
+            if (!isActive) return@launch
+            hasResult = false
+            result.onSuccess {
+                Toast.makeText(this@DuplicateFinderActivity, R.string.trash_restored, Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                Toast.makeText(this@DuplicateFinderActivity, R.string.trash_restore_failed, Toast.LENGTH_LONG).show()
+            }
+            startScan()
         }
     }
 
