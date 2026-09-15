@@ -116,7 +116,7 @@ class FileListAdapter(
             binding.root.setStrokeColor(
                 MaterialColors.getColor(
                     binding.root,
-                    if (highlighted) com.google.android.material.R.attr.colorPrimary
+                    if (highlighted) androidx.appcompat.R.attr.colorPrimary
                     else com.google.android.material.R.attr.colorOutlineVariant,
                 )
             )
