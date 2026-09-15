@@ -12,7 +12,7 @@ PUBLIC="$ROOT/public"
 GRADLE_VERSION="9.3.1"
 ANDROID_PLATFORM="37"
 BUILD_TOOLS="36.0.0"
-CMDLINE_TOOLS_REV="11076708"
+CMDLINE_TOOLS_REV="15859902"
 
 export GRADLE_USER_HOME
 mkdir -p "$TOOLS" "$SDK" "$GRADLE_USER_HOME" "$PUBLIC"
@@ -74,16 +74,19 @@ export PATH="$GRADLE_HOME/bin:$PATH"
 export ANDROID_SDK_ROOT="$SDK"
 export ANDROID_HOME="$SDK"
 CMDLINE_LATEST="$SDK/cmdline-tools/latest"
-if [[ ! -x "$CMDLINE_LATEST/bin/sdkmanager" ]]; then
-  log "Android command-line tools indiriliyor"
-  rm -rf "$SDK/cmdline-tools"
+CMDLINE_MARKER="$CMDLINE_LATEST/.omnifiles-revision"
+INSTALLED_CMDLINE_REV="$(cat "$CMDLINE_MARKER" 2>/dev/null || true)"
+if [[ ! -x "$CMDLINE_LATEST/bin/sdkmanager" || "$INSTALLED_CMDLINE_REV" != "$CMDLINE_TOOLS_REV" ]]; then
+  log "Android command-line tools $CMDLINE_TOOLS_REV indiriliyor"
+  rm -rf "$SDK/cmdline-tools" "$TOOLS/android-tools.zip"
   mkdir -p "$SDK/cmdline-tools"
   fetch "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_REV}_latest.zip" "$TOOLS/android-tools.zip"
   unzip -q "$TOOLS/android-tools.zip" -d "$SDK/cmdline-tools"
   mv "$SDK/cmdline-tools/cmdline-tools" "$CMDLINE_LATEST"
+  printf '%s\n' "$CMDLINE_TOOLS_REV" > "$CMDLINE_MARKER"
   rm -f "$TOOLS/android-tools.zip"
 else
-  log "Android command-line tools build cache'ten kullanılıyor"
+  log "Android command-line tools $CMDLINE_TOOLS_REV build cache'ten kullanılıyor"
 fi
 export PATH="$CMDLINE_LATEST/bin:$SDK/platform-tools:$PATH"
 
@@ -92,7 +95,7 @@ yes | sdkmanager --licenses >/dev/null 2>&1 || true
 
 if [[ ! -f "$SDK/platforms/android-$ANDROID_PLATFORM/android.jar" || ! -x "$SDK/build-tools/$BUILD_TOOLS/aapt2" || ! -x "$SDK/platform-tools/adb" ]]; then
   log "Android SDK API $ANDROID_PLATFORM kuruluyor"
-  sdkmanager "platform-tools" "platforms;android-${ANDROID_PLATFORM}" "build-tools;${BUILD_TOOLS}"
+  sdkmanager --channel=3 "platform-tools" "platforms;android-${ANDROID_PLATFORM}" "build-tools;${BUILD_TOOLS}"
 else
   log "Android SDK API $ANDROID_PLATFORM build cache'ten kullanılıyor"
 fi
