@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recent_folders">Son klasörler</string>
+    <string name="recent_folders_count">Son klasörler • %1$d</string>
+    <string name="recent_folders_empty">Henüz son klasör kaydı yok.</string>
+    <string name="recent_folders_clear">Geçmişi temizle</string>
+    <string name="recent_folders_cleared">Son klasör geçmişi temizlendi.</string>
+    <string name="recent_folders_need_access">Son klasörlere gitmek için depolama erişimi gerekli.</string>
+    <string name="recent_folders_unavailable">Son klasörler şu anda açılamıyor.</string>
+    <string name="recent_folder_stale">Bu klasör artık mevcut değil veya güvenli depolama alanının dışında.</string>
+</resources>
