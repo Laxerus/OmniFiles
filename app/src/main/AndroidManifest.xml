@@ -29,6 +29,7 @@
 
         <activity android:name=".ui.JunkCleanerActivity" android:exported="false" />
         <activity android:name=".ui.StorageAnalyzerActivity" android:exported="false" />
+        <activity android:name=".ui.DuplicateFinderActivity" android:exported="false" />
         <activity android:name=".ui.AdbChecksumActivity" android:exported="false" />
         <activity android:name=".ui.ChecksumActivity" android:exported="false" />
         <activity android:name=".ui.SqliteStudioActivity" android:exported="false" />
