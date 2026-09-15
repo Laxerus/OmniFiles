@@ -18,13 +18,17 @@ else:
         "DuplicateFinder.verifyDuplicate(",
         "expectedSha256 = expectedSha256",
         "trashManager.moveToTrash(safe)",
+        "private var manualTrashUndoPending = false",
+        "if (manualTrashUndoPending || scanJob?.isActive == true) return",
         "private fun showTrashUndo(ticket: TrashTicket)",
+        "manualTrashUndoPending = true",
         "Snackbar.make(binding.root, R.string.duplicate_finder_trashed, Snackbar.LENGTH_LONG)",
         ".setAction(R.string.undo) { restoreTrash(ticket) }",
         "Snackbar.Callback.DISMISS_EVENT_ACTION",
         "private fun restoreTrash(ticket: TrashTicket)",
         "trashManager.restore(ticket)",
-        "lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)",
+        "private fun refreshAfterManualTrash()",
+        "lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)",
     )
     for token in required:
         if token not in text:
@@ -48,12 +52,21 @@ else:
 
     undo_start = text.find("private fun showTrashUndo(ticket: TrashTicket)")
     restore_start = text.find("private fun restoreTrash(ticket: TrashTicket)")
-    if undo_start < 0 or restore_start < 0 or undo_start >= restore_start:
-        errors.append("duplicate trash undo and restore functions must remain in the manual trash flow")
+    refresh_start = text.find("private fun refreshAfterManualTrash()")
+    if undo_start < 0 or restore_start < 0 or refresh_start < 0 or not (undo_start < restore_start < refresh_start):
+        errors.append("duplicate trash undo, restore, and refresh functions must remain ordered in the manual trash flow")
     else:
-        action_guard = text.find("if (event == DISMISS_EVENT_ACTION) return", undo_start, restore_start)
+        action_guard = text.find(
+            "if (event == Snackbar.Callback.DISMISS_EVENT_ACTION) return",
+            undo_start,
+            restore_start,
+        )
         if action_guard < 0:
             errors.append("Snackbar action dismissal must not trigger a competing rescan")
+        clear_before_refresh = text.find("manualTrashUndoPending = false", undo_start, restore_start)
+        refresh_call = text.find("refreshAfterManualTrash()", undo_start, restore_start)
+        if clear_before_refresh < 0 or refresh_call < 0 or clear_before_refresh >= refresh_call:
+            errors.append("normal Snackbar dismissal must clear pending undo state before refreshing")
 
 if not test_path.is_file():
     errors.append(f"missing required file: {test_path.relative_to(root)}")
