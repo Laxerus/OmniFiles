@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.databinding.RowFileBinding
 import dev.laxerus.omnifiles.fs.TrashEntry
+import dev.laxerus.omnifiles.fs.TrashRestoreAvailability
 import java.text.DateFormat
 import java.util.Date
 
@@ -29,7 +30,14 @@ class TrashListAdapter(
             binding.name.text = entry.displayName
             val date = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
                 .format(Date(entry.trashedAt))
-            val location = entry.originalFile?.path ?: context.getString(R.string.trash_legacy_location)
+            val location = when (entry.restoreAvailability) {
+                TrashRestoreAvailability.AVAILABLE -> entry.originalFile?.path.orEmpty()
+                TrashRestoreAvailability.ORIGINAL_UNKNOWN -> context.getString(R.string.trash_legacy_location)
+                TrashRestoreAvailability.DESTINATION_OCCUPIED -> context.getString(
+                    R.string.trash_restore_conflict_short,
+                    entry.originalFile?.path.orEmpty()
+                )
+            }
             binding.meta.text = "$date • $location"
             binding.root.setOnClickListener { onAction(entry) }
             binding.root.setOnLongClickListener {
@@ -49,6 +57,7 @@ class TrashListAdapter(
             oldItem.displayName == newItem.displayName &&
                 oldItem.originalFile?.path == newItem.originalFile?.path &&
                 oldItem.trashedAt == newItem.trashedAt &&
+                oldItem.restoreAvailability == newItem.restoreAvailability &&
                 oldItem.trashedFile.exists() == newItem.trashedFile.exists()
     }
 }
