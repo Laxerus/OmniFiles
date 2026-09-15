@@ -106,10 +106,16 @@ require(
 require(
     "app/src/main/java/dev/laxerus/omnifiles/ui/StorageAnalyzerActivity.kt",
     "TrashManager",
+    "TrashTicket",
     "StorageAnalyzer.verifyUnchangedFile",
     "storage_analyzer_move_to_trash",
     "storage_analyzer_trash_moving",
     "trashManager.moveToTrash(safe)",
+    "Snackbar.make(binding.root, R.string.storage_analyzer_trashed, Snackbar.LENGTH_LONG)",
+    ".setAction(R.string.undo) { restoreTrash(ticket) }",
+    "Snackbar.Callback.DISMISS_EVENT_ACTION",
+    "trashManager.restore(ticket)",
+    "refreshAfterTrashChange()",
 )
 require(
     "app/src/test/java/dev/laxerus/omnifiles/fs/StorageAnalyzerTest.kt",
@@ -123,6 +129,7 @@ require(
     "storage_analyzer_trash_confirm",
     "storage_analyzer_trash_moving",
     "storage_analyzer_trashed",
+    "storage_analyzer_restoring",
     "storage_analyzer_trash_failed",
 )
 require(
