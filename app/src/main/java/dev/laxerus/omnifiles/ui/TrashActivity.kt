@@ -10,6 +10,7 @@ import dev.laxerus.omnifiles.R
 import dev.laxerus.omnifiles.databinding.ActivityTrashBinding
 import dev.laxerus.omnifiles.fs.TrashEntry
 import dev.laxerus.omnifiles.fs.TrashManager
+import dev.laxerus.omnifiles.fs.TrashRestoreAvailability
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -73,15 +74,17 @@ class TrashActivity : OmniActivity() {
     private fun showEntryActions(entry: TrashEntry) {
         if (busy) return
         val actions = buildList {
-            if (entry.originalFile != null) add(R.string.restore)
+            if (entry.restoreAvailability == TrashRestoreAvailability.AVAILABLE) add(R.string.restore)
             add(R.string.delete_permanently)
+        }
+        val message = when (entry.restoreAvailability) {
+            TrashRestoreAvailability.AVAILABLE -> entry.originalFile?.path.orEmpty()
+            TrashRestoreAvailability.ORIGINAL_UNKNOWN -> getString(R.string.trash_restore_unavailable)
+            TrashRestoreAvailability.DESTINATION_OCCUPIED -> getString(R.string.trash_restore_conflict)
         }
         MaterialAlertDialogBuilder(this)
             .setTitle(entry.displayName)
-            .setMessage(
-                entry.originalFile?.path
-                    ?: getString(R.string.trash_restore_unavailable)
-            )
+            .setMessage(message)
             .setItems(actions.map(::getString).toTypedArray()) { _, which ->
                 when (actions[which]) {
                     R.string.restore -> restore(entry)
@@ -92,7 +95,7 @@ class TrashActivity : OmniActivity() {
     }
 
     private fun restore(entry: TrashEntry) {
-        if (busy || entry.originalFile == null) return
+        if (busy || entry.restoreAvailability != TrashRestoreAvailability.AVAILABLE) return
         setBusy(true)
         lifecycleScope.launch {
             val result = runCatching {
