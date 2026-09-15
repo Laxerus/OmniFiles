@@ -43,6 +43,7 @@ class DuplicateFinderActivity : OmniActivity() {
     private val cancelRequested = AtomicBoolean(false)
     private var scanJob: Job? = null
     private var hasResult = false
+    private var manualTrashUndoPending = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,7 +74,12 @@ class DuplicateFinderActivity : OmniActivity() {
 
     private fun renderAccessState() {
         val ready = AccessSnapshot.read(this).sharedStorage
-        binding.startButton.isEnabled = ready
+        binding.startButton.isEnabled = ready && !manualTrashUndoPending
+        if (manualTrashUndoPending) {
+            binding.cancelButton.isEnabled = false
+            binding.summaryText.setText(R.string.duplicate_finder_trashed)
+            return
+        }
         if (!ready) {
             binding.summaryText.setText(R.string.duplicate_finder_access_required)
         } else if (!hasResult) {
@@ -82,7 +88,7 @@ class DuplicateFinderActivity : OmniActivity() {
     }
 
     private fun startScan() {
-        if (scanJob?.isActive == true) return
+        if (manualTrashUndoPending || scanJob?.isActive == true) return
         if (!AccessSnapshot.read(this).sharedStorage) {
             renderAccessState()
             return
@@ -115,7 +121,8 @@ class DuplicateFinderActivity : OmniActivity() {
                 if (isActive) {
                     binding.progress.visibility = View.GONE
                     binding.cancelButton.isEnabled = false
-                    binding.startButton.isEnabled = AccessSnapshot.read(this@DuplicateFinderActivity).sharedStorage
+                    binding.startButton.isEnabled = AccessSnapshot.read(this@DuplicateFinderActivity).sharedStorage &&
+                        !manualTrashUndoPending
                     binding.startButton.setText(
                         if (hasResult) R.string.duplicate_finder_rescan else R.string.duplicate_finder_start
                     )
@@ -229,7 +236,7 @@ class DuplicateFinderActivity : OmniActivity() {
         group: DuplicateFinder.DuplicateGroup,
         keeper: DuplicateFinder.DuplicateFile,
     ) {
-        if (scanJob?.isActive == true) return
+        if (manualTrashUndoPending || scanJob?.isActive == true) return
         val targets = group.files.filterNot { it.path == keeper.path }
         if (targets.isEmpty()) return
         if (!verifyDuplicate(keeper, group.sha256)) {
@@ -319,6 +326,7 @@ class DuplicateFinderActivity : OmniActivity() {
         group: DuplicateFinder.DuplicateGroup,
         duplicate: DuplicateFinder.DuplicateFile,
     ) {
+        if (manualTrashUndoPending) return
         val safe = resolveFile(duplicate) ?: return
         if (!verifyDuplicate(duplicate, group.sha256)) {
             Toast.makeText(this, R.string.duplicate_finder_entry_stale, Toast.LENGTH_LONG).show()
@@ -336,6 +344,7 @@ class DuplicateFinderActivity : OmniActivity() {
         group: DuplicateFinder.DuplicateGroup,
         duplicate: DuplicateFinder.DuplicateFile,
     ) {
+        if (manualTrashUndoPending) return
         binding.startButton.isEnabled = false
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -359,15 +368,18 @@ class DuplicateFinderActivity : OmniActivity() {
     }
 
     private fun showTrashUndo(ticket: TrashTicket) {
+        manualTrashUndoPending = true
+        binding.startButton.isEnabled = false
+        binding.cancelButton.isEnabled = false
+        binding.summaryText.setText(R.string.duplicate_finder_trashed)
+
         Snackbar.make(binding.root, R.string.duplicate_finder_trashed, Snackbar.LENGTH_LONG)
             .setAction(R.string.undo) { restoreTrash(ticket) }
             .addCallback(object : Snackbar.Callback() {
                 override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
-                    if (event == DISMISS_EVENT_ACTION) return
-                    hasResult = false
-                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && !isFinishing && !isDestroyed) {
-                        startScan()
-                    }
+                    if (event == Snackbar.Callback.DISMISS_EVENT_ACTION) return
+                    manualTrashUndoPending = false
+                    refreshAfterManualTrash()
                 }
             })
             .show()
@@ -375,18 +387,28 @@ class DuplicateFinderActivity : OmniActivity() {
 
     private fun restoreTrash(ticket: TrashTicket) {
         binding.startButton.isEnabled = false
+        binding.cancelButton.isEnabled = false
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching { trashManager.restore(ticket) }
             }
             if (!isActive) return@launch
-            hasResult = false
+            manualTrashUndoPending = false
             result.onSuccess {
-                Toast.makeText(this@DuplicateFinderActivity, R.string.trash_restored, Toast.LENGTH_SHORT).show()
+                Snackbar.make(binding.root, R.string.trash_restored, Snackbar.LENGTH_SHORT).show()
             }.onFailure {
                 Toast.makeText(this@DuplicateFinderActivity, R.string.trash_restore_failed, Toast.LENGTH_LONG).show()
             }
+            refreshAfterManualTrash()
+        }
+    }
+
+    private fun refreshAfterManualTrash() {
+        hasResult = false
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && !isFinishing && !isDestroyed) {
             startScan()
+        } else {
+            renderAccessState()
         }
     }
 
