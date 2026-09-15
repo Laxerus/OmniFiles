@@ -104,6 +104,7 @@ else
 fi
 
 log "Kaynak sanity kontrolü"
+python3 scripts/build_contract_sanity.py
 python3 scripts/source_sanity.py
 python3 scripts/file_manager_shell_sanity.py
 
