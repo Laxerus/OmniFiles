@@ -216,4 +216,94 @@ class DuplicateFinderTest {
             root.deleteRecursively()
         }
     }
+
+    @Test
+    fun verifyDuplicateRejectsInvalidDigestFormat() {
+        val root = Files.createTempDirectory("omnifiles-duplicates-invalid-digest").toFile()
+        try {
+            val file = root.resolve("a.bin").apply { writeText("payload") }
+
+            assertFalse(
+                DuplicateFinder.verifyDuplicate(
+                    file = file,
+                    root = root,
+                    expectedSizeBytes = file.length(),
+                    expectedModifiedAt = file.lastModified().coerceAtLeast(0L),
+                    expectedSha256 = "not-a-sha256",
+                )
+            )
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun verifyDuplicateRejectsDeletedFile() {
+        val root = Files.createTempDirectory("omnifiles-duplicates-deleted").toFile()
+        try {
+            val file = root.resolve("a.bin").apply { writeText("payload") }
+            val expectedSize = file.length()
+            val expectedModified = file.lastModified().coerceAtLeast(0L)
+            assertTrue(file.delete())
+
+            assertFalse(
+                DuplicateFinder.verifyDuplicate(
+                    file = file,
+                    root = root,
+                    expectedSizeBytes = expectedSize,
+                    expectedModifiedAt = expectedModified,
+                    expectedSha256 = "0".repeat(64),
+                )
+            )
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun verifyDuplicateRejectsChangedSize() {
+        val root = Files.createTempDirectory("omnifiles-duplicates-size-change").toFile()
+        try {
+            val file = root.resolve("a.bin").apply { writeText("payload") }
+            val expectedSize = file.length()
+            val expectedModified = file.lastModified().coerceAtLeast(0L)
+            file.appendText("-changed")
+
+            assertFalse(
+                DuplicateFinder.verifyDuplicate(
+                    file = file,
+                    root = root,
+                    expectedSizeBytes = expectedSize,
+                    expectedModifiedAt = expectedModified,
+                    expectedSha256 = "0".repeat(64),
+                )
+            )
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun verifyDuplicateRejectsSymlinkEscapingRoot() {
+        val root = Files.createTempDirectory("omnifiles-duplicates-link-root").toFile()
+        val outside = Files.createTempDirectory("omnifiles-duplicates-link-outside").toFile()
+        try {
+            val target = outside.resolve("target.bin").apply { writeText("outside-payload") }
+            val link = root.resolve("linked.bin")
+            if (runCatching { Files.createSymbolicLink(link.toPath(), target.toPath()) }.isFailure) return
+
+            assertFalse(
+                DuplicateFinder.verifyDuplicate(
+                    file = link,
+                    root = root,
+                    expectedSizeBytes = target.length(),
+                    expectedModifiedAt = target.lastModified().coerceAtLeast(0L),
+                    expectedSha256 = "0".repeat(64),
+                )
+            )
+        } finally {
+            root.deleteRecursively()
+            outside.deleteRecursively()
+        }
+    }
 }
