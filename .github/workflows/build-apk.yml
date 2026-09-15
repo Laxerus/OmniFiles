@@ -32,6 +32,7 @@ jobs:
           python3 scripts/source_sanity.py
           python3 scripts/file_manager_shell_sanity.py
           python3 scripts/feature_regression_sanity.py
+          python3 scripts/duplicate_manual_trash_sanity.py
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
