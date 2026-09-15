@@ -1,6 +1,8 @@
 package dev.laxerus.omnifiles.ui
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.util.AttributeSet
 import android.widget.Toast
@@ -129,17 +131,19 @@ class RecentFoldersButton @JvmOverloads constructor(
     private fun openFolder(folder: File, sharedRoot: File) {
         val safeFolder = runCatching { FilePathPolicy.requireDirectEntry(folder, sharedRoot) }
             .getOrNull()
-            ?.takeIf { it.exists() && it.isDirectory }
+            ?.takeIf { it.exists() && it.isDirectory && it.canRead() }
         if (safeFolder == null) {
             Toast.makeText(context, R.string.recent_folder_stale, Toast.LENGTH_SHORT).show()
             return
         }
 
+        val browserHost = findActivity(context) as? FileBrowserActivity
         val intent = Intent(context, FileBrowserActivity::class.java)
             .putExtra(FileBrowserActivity.EXTRA_START_PATH, safeFolder.canonicalPath)
         runCatching { context.startActivity(intent) }
             .onSuccess {
                 runCatching { recentFolderStore.record(safeFolder, sharedRoot) }
+                browserHost?.finish()
             }
             .onFailure {
                 Toast.makeText(context, R.string.recent_folders_unavailable, Toast.LENGTH_SHORT).show()
@@ -170,6 +174,17 @@ class RecentFoldersButton @JvmOverloads constructor(
                 Toast.makeText(context, R.string.recent_file_open_failed, Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    private fun findActivity(start: Context): Activity? {
+        var current: Context? = start
+        while (current is ContextWrapper) {
+            if (current is Activity) return current
+            val next = current.baseContext
+            if (next === current) break
+            current = next
+        }
+        return current as? Activity
     }
 
     private fun quickLabel(kind: QuickFolderPolicy.Kind): String = context.getString(
