@@ -1,7 +1,6 @@
 package dev.laxerus.omnifiles.ui
 
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.ContextWrapper
 import android.view.LayoutInflater
@@ -157,21 +156,19 @@ class FileListAdapter(
 
         private fun launchFile(file: File) {
             val context = binding.root.context
-            val intent = runCatching { LocalFileIntents.viewIntent(context, file) }
-                .getOrElse {
+            when (LocalFileLauncher.open(context, file)) {
+                LocalFileLauncher.Result.OPENED -> recordRecentFile(context, file)
+                LocalFileLauncher.Result.INVALID -> {
                     Toast.makeText(context, R.string.file_open_invalid, Toast.LENGTH_LONG).show()
-                    return
                 }
-            try {
-                context.startActivity(intent)
-            } catch (_: ActivityNotFoundException) {
-                Toast.makeText(context, R.string.file_open_no_viewer, Toast.LENGTH_SHORT).show()
-                return
-            } catch (_: SecurityException) {
-                Toast.makeText(context, R.string.file_open_failed, Toast.LENGTH_LONG).show()
-                return
+                LocalFileLauncher.Result.NO_VIEWER -> {
+                    Toast.makeText(context, R.string.file_open_no_viewer, Toast.LENGTH_SHORT).show()
+                }
+                LocalFileLauncher.Result.DENIED,
+                LocalFileLauncher.Result.FAILED -> {
+                    Toast.makeText(context, R.string.file_open_failed, Toast.LENGTH_LONG).show()
+                }
             }
-            recordRecentFile(context, file)
         }
 
         private fun launchChecksum(file: File) {
