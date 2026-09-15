@@ -24,7 +24,9 @@ class QuickFolderPolicyTest {
                 listOf(
                     QuickFolderPolicy.Kind.DOWNLOADS,
                     QuickFolderPolicy.Kind.PICTURES,
+                    QuickFolderPolicy.Kind.CAMERA,
                     QuickFolderPolicy.Kind.SCREENSHOTS,
+                    QuickFolderPolicy.Kind.VIDEOS,
                     QuickFolderPolicy.Kind.RECORDINGS,
                     QuickFolderPolicy.Kind.ANDROID_MEDIA,
                 ),
