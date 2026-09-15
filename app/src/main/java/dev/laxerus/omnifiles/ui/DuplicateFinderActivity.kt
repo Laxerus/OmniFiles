@@ -32,10 +32,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class DuplicateFinderActivity : OmniActivity() {
     private data class CleanupOutcome(
-        val moved: Int,
+        val tickets: List<TrashTicket>,
         val failed: Int,
         val keeperInvalidated: Boolean,
-    )
+    ) {
+        val moved: Int get() = tickets.size
+    }
 
     private lateinit var binding: ActivityDuplicateFinderBinding
     private val sharedRoot: File by lazy { StorageAccessController.sharedRoot().canonicalFile }
@@ -211,7 +213,7 @@ class DuplicateFinderActivity : OmniActivity() {
         ).first()
 
     private fun confirmCleanGroup(group: DuplicateFinder.DuplicateGroup) {
-        if (group.files.size < 2) return
+        if (manualTrashUndoPending || group.files.size < 2) return
         val keeper = chooseKeeper(group)
         if (!verifyDuplicate(keeper, group.sha256)) {
             Toast.makeText(this, R.string.duplicate_finder_keeper_stale, Toast.LENGTH_LONG).show()
@@ -252,7 +254,7 @@ class DuplicateFinderActivity : OmniActivity() {
 
         lifecycleScope.launch {
             val outcome = withContext(Dispatchers.IO) {
-                var moved = 0
+                val tickets = mutableListOf<TrashTicket>()
                 var failed = 0
                 var keeperInvalidated = false
 
@@ -271,31 +273,65 @@ class DuplicateFinderActivity : OmniActivity() {
                     }
 
                     runCatching { trashManager.moveToTrash(safe) }
-                        .onSuccess { moved++ }
+                        .onSuccess { tickets += it }
                         .onFailure { failed++ }
                 }
-                CleanupOutcome(moved, failed, keeperInvalidated)
+                CleanupOutcome(tickets.toList(), failed, keeperInvalidated)
             }
             if (!isActive) return@launch
 
             binding.progress.visibility = View.GONE
             binding.groupsContainer.alpha = 1f
-            if (outcome.keeperInvalidated) {
-                Toast.makeText(
-                    this@DuplicateFinderActivity,
-                    R.string.duplicate_finder_keeper_changed_during_cleanup,
-                    Toast.LENGTH_LONG,
-                ).show()
-            } else {
-                Toast.makeText(
-                    this@DuplicateFinderActivity,
-                    getString(R.string.duplicate_finder_clean_group_result, outcome.moved, outcome.failed),
-                    if (outcome.failed == 0) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
-                ).show()
+            when {
+                outcome.tickets.isNotEmpty() -> showGroupTrashUndo(outcome)
+
+                outcome.keeperInvalidated -> {
+                    Toast.makeText(
+                        this@DuplicateFinderActivity,
+                        R.string.duplicate_finder_keeper_changed_during_cleanup,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    hasResult = false
+                    startScan()
+                }
+
+                else -> {
+                    Toast.makeText(
+                        this@DuplicateFinderActivity,
+                        getString(R.string.duplicate_finder_clean_group_result, outcome.moved, outcome.failed),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    hasResult = false
+                    startScan()
+                }
             }
-            hasResult = false
-            startScan()
         }
+    }
+
+    private fun showGroupTrashUndo(outcome: CleanupOutcome) {
+        manualTrashUndoPending = true
+        binding.startButton.isEnabled = false
+        binding.cancelButton.isEnabled = false
+        val message = getString(R.string.duplicate_finder_clean_group_result, outcome.moved, outcome.failed)
+        binding.summaryText.text = message
+        if (outcome.keeperInvalidated) {
+            Toast.makeText(
+                this,
+                R.string.duplicate_finder_keeper_changed_during_cleanup,
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+
+        Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG)
+            .setAction(R.string.undo) { restoreTrashTickets(outcome.tickets) }
+            .addCallback(object : Snackbar.Callback() {
+                override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                    if (event == Snackbar.Callback.DISMISS_EVENT_ACTION) return
+                    manualTrashUndoPending = false
+                    refreshAfterManualTrash()
+                }
+            })
+            .show()
     }
 
     private fun showFileActions(
@@ -399,6 +435,37 @@ class DuplicateFinderActivity : OmniActivity() {
             }.onFailure {
                 Toast.makeText(this@DuplicateFinderActivity, R.string.trash_restore_failed, Toast.LENGTH_LONG).show()
             }
+            refreshAfterManualTrash()
+        }
+    }
+
+    private fun restoreTrashTickets(tickets: List<TrashTicket>) {
+        if (tickets.isEmpty()) return
+        binding.startButton.isEnabled = false
+        binding.cancelButton.isEnabled = false
+        lifecycleScope.launch {
+            val counts = withContext(Dispatchers.IO) {
+                var restored = 0
+                var failed = 0
+                tickets.forEach { ticket ->
+                    runCatching { trashManager.restore(ticket) }
+                        .onSuccess { restored++ }
+                        .onFailure { failed++ }
+                }
+                restored to failed
+            }
+            if (!isActive) return@launch
+            manualTrashUndoPending = false
+            val message = if (counts.second == 0) {
+                getString(R.string.batch_restore_done, counts.first)
+            } else {
+                getString(R.string.batch_restore_partial, counts.first, counts.second)
+            }
+            Toast.makeText(
+                this@DuplicateFinderActivity,
+                message,
+                if (counts.second == 0) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
+            ).show()
             refreshAfterManualTrash()
         }
     }
