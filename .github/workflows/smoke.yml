@@ -13,10 +13,10 @@ permissions:
 
 jobs:
   slim:
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     steps:
       - name: Runner probe
         run: |
-          echo "runner=ubuntu-slim"
+          echo "runner=ubuntu-latest"
           uname -a
           free -h || true
