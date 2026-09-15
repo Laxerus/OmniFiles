@@ -18,6 +18,13 @@ else:
         "DuplicateFinder.verifyDuplicate(",
         "expectedSha256 = expectedSha256",
         "trashManager.moveToTrash(safe)",
+        "private fun showTrashUndo(ticket: TrashTicket)",
+        "Snackbar.make(binding.root, R.string.duplicate_finder_trashed, Snackbar.LENGTH_LONG)",
+        ".setAction(R.string.undo) { restoreTrash(ticket) }",
+        "Snackbar.Callback.DISMISS_EVENT_ACTION",
+        "private fun restoreTrash(ticket: TrashTicket)",
+        "trashManager.restore(ticket)",
+        "lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)",
     )
     for token in required:
         if token not in text:
@@ -33,8 +40,20 @@ else:
     else:
         verify_at = text.find(verification, move_start)
         trash_at = text.find("trashManager.moveToTrash(safe)", move_start)
+        undo_at = text.find("showTrashUndo(ticket)", move_start)
         if verify_at < 0 or trash_at < 0 or verify_at >= trash_at:
             errors.append("moveToTrash must reverify SHA-256 before TrashManager receives the file")
+        if undo_at < trash_at:
+            errors.append("trash undo must only be exposed after TrashManager returns a ticket")
+
+    undo_start = text.find("private fun showTrashUndo(ticket: TrashTicket)")
+    restore_start = text.find("private fun restoreTrash(ticket: TrashTicket)")
+    if undo_start < 0 or restore_start < 0 or undo_start >= restore_start:
+        errors.append("duplicate trash undo and restore functions must remain in the manual trash flow")
+    else:
+        action_guard = text.find("if (event == DISMISS_EVENT_ACTION) return", undo_start, restore_start)
+        if action_guard < 0:
+            errors.append("Snackbar action dismissal must not trigger a competing rescan")
 
 if not test_path.is_file():
     errors.append(f"missing required file: {test_path.relative_to(root)}")
