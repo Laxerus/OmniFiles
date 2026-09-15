@@ -34,6 +34,7 @@ jobs:
           python3 scripts/feature_regression_sanity.py
           python3 scripts/duplicate_manual_trash_sanity.py
           python3 scripts/quick_access_navigation_sanity.py
+          python3 scripts/trash_copy_integrity_sanity.py
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
