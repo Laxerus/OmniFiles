@@ -47,6 +47,7 @@ class FileBrowserActivity : OmniActivity() {
     private lateinit var adapter: FileListAdapter
     private val sharedRoot: File by lazy { StorageAccessController.sharedRoot().canonicalFile }
     private val favoriteStore: FavoriteStore by lazy { FavoriteStore(this) }
+    private val browserPreferences: FileBrowserPreferences by lazy { FileBrowserPreferences(this) }
     private var currentDir: File = StorageAccessController.sharedRoot()
     private var allEntries: List<File> = emptyList()
     private var sortMode = SortMode.NAME
@@ -88,6 +89,7 @@ class FileBrowserActivity : OmniActivity() {
         binding.searchInput.doAfterTextChanged { renderEntries() }
         binding.hiddenSwitch.setOnCheckedChangeListener { _, checked ->
             showHidden = checked
+            browserPreferences.saveShowHidden(checked)
             renderEntries()
         }
         binding.sortGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
@@ -97,6 +99,7 @@ class FileBrowserActivity : OmniActivity() {
                 R.id.sortSizeButton -> SortMode.SIZE
                 else -> SortMode.NAME
             }
+            browserPreferences.saveSortMode(sortMode.name)
             renderEntries()
         }
 
@@ -157,9 +160,11 @@ class FileBrowserActivity : OmniActivity() {
     }
 
     private fun restoreBrowserState(savedInstanceState: Bundle?) {
-        showHidden = savedInstanceState?.getBoolean(STATE_SHOW_HIDDEN, false) ?: false
+        val persisted = browserPreferences.load()
+        showHidden = savedInstanceState?.getBoolean(STATE_SHOW_HIDDEN) ?: persisted.showHidden
         sortMode = savedInstanceState?.getString(STATE_SORT_MODE)
             ?.let { runCatching { SortMode.valueOf(it) }.getOrNull() }
+            ?: runCatching { SortMode.valueOf(persisted.sortModeName) }.getOrNull()
             ?: SortMode.NAME
 
         val restoredPath = savedInstanceState?.getString(STATE_CURRENT_PATH)
@@ -266,7 +271,7 @@ class FileBrowserActivity : OmniActivity() {
         if (left.isDirectory != right.isDirectory) return if (left.isDirectory) -1 else 1
 
         val primary = when (sortMode) {
-            SortMode.NAME -> left.name.lowercase(Locale.ROOT).compareTo(right.name.lowercase(Locale.ROOT))
+            SortMode.NAME -> NaturalNameComparator.compare(left.name, right.name)
             SortMode.DATE -> right.lastModified().compareTo(left.lastModified())
             SortMode.SIZE -> {
                 if (left.isDirectory && right.isDirectory) 0
@@ -274,7 +279,7 @@ class FileBrowserActivity : OmniActivity() {
             }
         }
         return if (primary != 0) primary
-        else left.name.lowercase(Locale.ROOT).compareTo(right.name.lowercase(Locale.ROOT))
+        else NaturalNameComparator.compare(left.name, right.name)
     }
 
     private fun isHidden(file: File): Boolean = file.name.startsWith('.') || file.isHidden
