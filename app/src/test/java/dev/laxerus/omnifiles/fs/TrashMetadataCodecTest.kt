@@ -16,8 +16,9 @@ class TrashMetadataCodecTest {
             displayName = "example.txt",
             trashedAt = 123456789L,
         )
-        val decoded = assertNotNull(TrashMetadataCodec.decode(encoded))
-        decoded as TrashMetadataCodec.Record
+        val decoded = TrashMetadataCodec.decode(encoded)
+        assertNotNull(decoded)
+        requireNotNull(decoded)
         assertEquals("/storage/emulated/0/Documents/example.txt", decoded.originalPath)
         assertEquals("example.txt", decoded.displayName)
         assertEquals(123456789L, decoded.trashedAt)
@@ -52,8 +53,9 @@ class TrashMetadataCodecTest {
             .put("displayName", "a.txt")
             .put("trashedAt", 42L)
             .toString()
-        val decoded = assertNotNull(TrashMetadataCodec.decode(legacy))
-        decoded as TrashMetadataCodec.Record
+        val decoded = TrashMetadataCodec.decode(legacy)
+        assertNotNull(decoded)
+        requireNotNull(decoded)
         assertFalse(decoded.sealed)
     }
 
