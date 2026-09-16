@@ -15,16 +15,8 @@ object TrashMetadataCodec {
     )
 
     fun encode(originalPath: String, displayName: String, trashedAt: Long): String {
-        require(originalPath.isNotBlank()) { "Çöp metadata orijinal yolu boş olamaz" }
-        require(displayName.isNotBlank()) { "Çöp metadata görünen adı boş olamaz" }
-        require(trashedAt >= 0L) { "Çöp metadata zamanı geçersiz" }
-
-        val seal = sealOf(
-            schemaVersion = SCHEMA_VERSION,
-            originalPath = originalPath,
-            displayName = displayName,
-            trashedAt = trashedAt,
-        )
+        requireValidCoreFields(originalPath, displayName, trashedAt)
+        val seal = integrityFor(originalPath, displayName, trashedAt)
         return JSONObject()
             .put(KEY_SCHEMA_VERSION, SCHEMA_VERSION)
             .put(KEY_ORIGINAL_PATH, originalPath)
@@ -36,37 +28,33 @@ object TrashMetadataCodec {
 
     fun decode(text: String): Record? {
         val json = runCatching { JSONObject(text) }.getOrNull() ?: return null
-        val originalPath = json.optString(KEY_ORIGINAL_PATH).takeIf { it.isNotBlank() } ?: return null
-        val displayName = json.optString(KEY_DISPLAY_NAME).takeIf { it.isNotBlank() } ?: return null
-        val trashedAt = json.optLong(KEY_TRASHED_AT, Long.MIN_VALUE).takeIf { it >= 0L } ?: return null
-
+        val originalPath = json.optString(KEY_ORIGINAL_PATH).takeIf { it.isNotBlank() }
+        val displayName = json.optString(KEY_DISPLAY_NAME).takeIf { it.isNotBlank() }
+        val trashedAt = if (json.has(KEY_TRASHED_AT)) {
+            json.optLong(KEY_TRASHED_AT, Long.MIN_VALUE)
+        } else {
+            null
+        }
         val hasSchema = json.has(KEY_SCHEMA_VERSION)
         val hasSeal = json.has(KEY_INTEGRITY_SHA256)
-        if (!hasSchema && !hasSeal) {
-            return Record(originalPath, displayName, trashedAt, sealed = false)
-        }
-        if (!hasSchema || !hasSeal) return null
-
-        val schemaVersion = json.optInt(KEY_SCHEMA_VERSION, Int.MIN_VALUE)
-        if (schemaVersion != SCHEMA_VERSION) return null
-        val supplied = json.optString(KEY_INTEGRITY_SHA256)
-        if (!HEX_64.matches(supplied)) return null
-        val expected = sealOf(schemaVersion, originalPath, displayName, trashedAt)
-        if (!MessageDigest.isEqual(
-                supplied.lowercase().toByteArray(StandardCharsets.US_ASCII),
-                expected.toByteArray(StandardCharsets.US_ASCII),
-            )
-        ) return null
-
-        return Record(originalPath, displayName, trashedAt, sealed = true)
+        val schemaVersion = if (hasSchema) json.optInt(KEY_SCHEMA_VERSION, Int.MIN_VALUE) else null
+        val suppliedSeal = if (hasSeal) json.optString(KEY_INTEGRITY_SHA256) else null
+        return validateFields(
+            originalPath = originalPath,
+            displayName = displayName,
+            trashedAt = trashedAt,
+            schemaVersion = schemaVersion,
+            integritySha256 = suppliedSeal,
+        )
     }
 
-    private fun sealOf(
-        schemaVersion: Int,
+    internal fun integrityFor(
         originalPath: String,
         displayName: String,
         trashedAt: Long,
+        schemaVersion: Int = SCHEMA_VERSION,
     ): String {
+        requireValidCoreFields(originalPath, displayName, trashedAt)
         val payload = buildString {
             append(schemaVersion)
             append('\u0000')
@@ -79,6 +67,43 @@ object TrashMetadataCodec {
         return MessageDigest.getInstance("SHA-256")
             .digest(payload)
             .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+    }
+
+    internal fun validateFields(
+        originalPath: String?,
+        displayName: String?,
+        trashedAt: Long?,
+        schemaVersion: Int?,
+        integritySha256: String?,
+    ): Record? {
+        val path = originalPath?.takeIf { it.isNotBlank() } ?: return null
+        val name = displayName?.takeIf { it.isNotBlank() } ?: return null
+        val timestamp = trashedAt?.takeIf { it >= 0L } ?: return null
+
+        val hasSchema = schemaVersion != null
+        val hasSeal = integritySha256 != null
+        if (!hasSchema && !hasSeal) {
+            return Record(path, name, timestamp, sealed = false)
+        }
+        if (!hasSchema || !hasSeal) return null
+        if (schemaVersion != SCHEMA_VERSION) return null
+
+        val supplied = integritySha256 ?: return null
+        if (!HEX_64.matches(supplied)) return null
+        val expected = integrityFor(path, name, timestamp, schemaVersion)
+        if (!MessageDigest.isEqual(
+                supplied.lowercase().toByteArray(StandardCharsets.US_ASCII),
+                expected.toByteArray(StandardCharsets.US_ASCII),
+            )
+        ) return null
+
+        return Record(path, name, timestamp, sealed = true)
+    }
+
+    private fun requireValidCoreFields(originalPath: String, displayName: String, trashedAt: Long) {
+        require(originalPath.isNotBlank()) { "Çöp metadata orijinal yolu boş olamaz" }
+        require(displayName.isNotBlank()) { "Çöp metadata görünen adı boş olamaz" }
+        require(trashedAt >= 0L) { "Çöp metadata zamanı geçersiz" }
     }
 
     private const val KEY_SCHEMA_VERSION = "schemaVersion"
