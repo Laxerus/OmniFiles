@@ -88,7 +88,7 @@ object TrashMetadataCodec {
         if (!hasSchema || !hasSeal) return null
         if (schemaVersion != SCHEMA_VERSION) return null
 
-        val supplied = integritySha256 ?: return null
+        val supplied = integritySha256
         if (!HEX_64.matches(supplied)) return null
         val expected = integrityFor(path, name, timestamp, schemaVersion)
         if (!MessageDigest.isEqual(
