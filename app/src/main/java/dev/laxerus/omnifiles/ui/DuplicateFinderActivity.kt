@@ -39,6 +39,19 @@ class DuplicateFinderActivity : OmniActivity() {
         val moved: Int get() = tickets.size
     }
 
+    private enum class ManualTrashCheck {
+        READY,
+        ENTRY_STALE,
+        CONTENT_CHANGED,
+        NO_VERIFIED_PEER,
+    }
+
+    private sealed interface ManualTrashOutcome {
+        data class Moved(val ticket: TrashTicket) : ManualTrashOutcome
+        data class Rejected(val check: ManualTrashCheck) : ManualTrashOutcome
+        data object Failed : ManualTrashOutcome
+    }
+
     private lateinit var binding: ActivityDuplicateFinderBinding
     private val sharedRoot: File by lazy { StorageAccessController.sharedRoot().canonicalFile }
     private val trashManager: TrashManager by lazy { TrashManager(this) }
@@ -213,25 +226,36 @@ class DuplicateFinderActivity : OmniActivity() {
         ).first()
 
     private fun confirmCleanGroup(group: DuplicateFinder.DuplicateGroup) {
-        if (manualTrashUndoPending || group.files.size < 2) return
+        if (manualTrashUndoPending || group.files.size < 2 || scanJob?.isActive == true) return
         val keeper = chooseKeeper(group)
-        if (!verifyDuplicate(keeper, group.sha256)) {
-            Toast.makeText(this, R.string.duplicate_finder_keeper_stale, Toast.LENGTH_LONG).show()
-            return
-        }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.duplicate_finder_clean_group_title)
-            .setMessage(
-                getString(
-                    R.string.duplicate_finder_clean_group_message,
-                    group.files.size - 1,
-                    relativePath(keeper.path),
-                    formatBytes(group.reclaimableBytes),
+        binding.startButton.isEnabled = false
+        binding.progress.visibility = View.VISIBLE
+        lifecycleScope.launch {
+            val keeperValid = withContext(Dispatchers.IO) {
+                verifyDuplicate(keeper, group.sha256)
+            }
+            if (!isActive) return@launch
+            binding.progress.visibility = View.GONE
+            binding.startButton.isEnabled = AccessSnapshot.read(this@DuplicateFinderActivity).sharedStorage &&
+                !manualTrashUndoPending
+            if (!keeperValid) {
+                Toast.makeText(this@DuplicateFinderActivity, R.string.duplicate_finder_keeper_stale, Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            MaterialAlertDialogBuilder(this@DuplicateFinderActivity)
+                .setTitle(R.string.duplicate_finder_clean_group_title)
+                .setMessage(
+                    getString(
+                        R.string.duplicate_finder_clean_group_message,
+                        group.files.size - 1,
+                        relativePath(keeper.path),
+                        formatBytes(group.reclaimableBytes),
+                    )
                 )
-            )
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.duplicate_finder_clean_group_confirm) { _, _ -> cleanGroup(group, keeper) }
-            .show()
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.duplicate_finder_clean_group_confirm) { _, _ -> cleanGroup(group, keeper) }
+                .show()
+        }
     }
 
     private fun cleanGroup(
@@ -241,10 +265,6 @@ class DuplicateFinderActivity : OmniActivity() {
         if (manualTrashUndoPending || scanJob?.isActive == true) return
         val targets = group.files.filterNot { it.path == keeper.path }
         if (targets.isEmpty()) return
-        if (!verifyDuplicate(keeper, group.sha256)) {
-            Toast.makeText(this, R.string.duplicate_finder_keeper_stale, Toast.LENGTH_LONG).show()
-            return
-        }
 
         binding.startButton.isEnabled = false
         binding.cancelButton.isEnabled = false
@@ -362,45 +382,99 @@ class DuplicateFinderActivity : OmniActivity() {
         group: DuplicateFinder.DuplicateGroup,
         duplicate: DuplicateFinder.DuplicateFile,
     ) {
-        if (manualTrashUndoPending) return
-        val safe = resolveFile(duplicate) ?: return
-        if (!verifyDuplicate(duplicate, group.sha256)) {
-            Toast.makeText(this, R.string.duplicate_finder_entry_stale, Toast.LENGTH_LONG).show()
-            return
+        if (manualTrashUndoPending || scanJob?.isActive == true) return
+        binding.startButton.isEnabled = false
+        binding.progress.visibility = View.VISIBLE
+        lifecycleScope.launch {
+            val check = withContext(Dispatchers.IO) {
+                verifyManualTrashState(group, duplicate)
+            }
+            if (!isActive) return@launch
+            binding.progress.visibility = View.GONE
+            binding.startButton.isEnabled = AccessSnapshot.read(this@DuplicateFinderActivity).sharedStorage &&
+                !manualTrashUndoPending
+            if (check != ManualTrashCheck.READY) {
+                showManualTrashCheckFailure(check)
+                return@launch
+            }
+            val safe = resolveFile(duplicate) ?: return@launch
+            MaterialAlertDialogBuilder(this@DuplicateFinderActivity)
+                .setTitle(R.string.duplicate_finder_trash_confirm_title)
+                .setMessage(getString(R.string.duplicate_finder_trash_confirm, relativePath(safe.canonicalPath)))
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.duplicate_finder_action_trash) { _, _ -> moveToTrash(group, duplicate) }
+                .show()
         }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.duplicate_finder_trash_confirm_title)
-            .setMessage(getString(R.string.duplicate_finder_trash_confirm, relativePath(safe.canonicalPath)))
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.duplicate_finder_action_trash) { _, _ -> moveToTrash(group, duplicate) }
-            .show()
     }
 
     private fun moveToTrash(
         group: DuplicateFinder.DuplicateGroup,
         duplicate: DuplicateFinder.DuplicateFile,
     ) {
-        if (manualTrashUndoPending) return
+        if (manualTrashUndoPending || scanJob?.isActive == true) return
         binding.startButton.isEnabled = false
+        binding.progress.visibility = View.VISIBLE
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    val safe = resolveFileSilently(duplicate)
-                        ?: error("Dosya taramadan sonra değişmiş veya kaldırılmış")
-                    if (!verifyDuplicate(duplicate, group.sha256)) {
-                        error("Dosya taramadan sonra içerik olarak değişmiş")
-                    }
-                    trashManager.moveToTrash(safe)
+            val outcome = withContext(Dispatchers.IO) {
+                val check = verifyManualTrashState(group, duplicate)
+                if (check != ManualTrashCheck.READY) {
+                    return@withContext ManualTrashOutcome.Rejected(check)
                 }
+                val safe = resolveFileSilently(duplicate)
+                    ?: return@withContext ManualTrashOutcome.Rejected(ManualTrashCheck.ENTRY_STALE)
+                runCatching { trashManager.moveToTrash(safe) }
+                    .fold(
+                        onSuccess = { ticket -> ManualTrashOutcome.Moved(ticket) },
+                        onFailure = { ManualTrashOutcome.Failed },
+                    )
             }
             if (!isActive) return@launch
-            result.onSuccess { ticket ->
-                showTrashUndo(ticket)
-            }.onFailure {
-                binding.startButton.isEnabled = AccessSnapshot.read(this@DuplicateFinderActivity).sharedStorage
-                Toast.makeText(this@DuplicateFinderActivity, R.string.duplicate_finder_trash_failed, Toast.LENGTH_LONG).show()
+            binding.progress.visibility = View.GONE
+            when (outcome) {
+                is ManualTrashOutcome.Moved -> showTrashUndo(outcome.ticket)
+                is ManualTrashOutcome.Rejected -> {
+                    binding.startButton.isEnabled = AccessSnapshot.read(this@DuplicateFinderActivity).sharedStorage
+                    showManualTrashCheckFailure(outcome.check)
+                }
+                ManualTrashOutcome.Failed -> {
+                    binding.startButton.isEnabled = AccessSnapshot.read(this@DuplicateFinderActivity).sharedStorage
+                    Toast.makeText(
+                        this@DuplicateFinderActivity,
+                        R.string.duplicate_finder_trash_failed,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
             }
         }
+    }
+
+    private fun verifyManualTrashState(
+        group: DuplicateFinder.DuplicateGroup,
+        duplicate: DuplicateFinder.DuplicateFile,
+    ): ManualTrashCheck {
+        if (resolveFileSilently(duplicate) == null) return ManualTrashCheck.ENTRY_STALE
+        if (!verifyDuplicate(duplicate, group.sha256)) return ManualTrashCheck.CONTENT_CHANGED
+
+        val hasVerifiedPeer = group.files.asSequence()
+            .filterNot { peer -> peer.path == duplicate.path }
+            .any { peer ->
+                resolveFileSilently(peer) != null && verifyDuplicate(peer, group.sha256)
+            }
+        if (!hasVerifiedPeer) return ManualTrashCheck.NO_VERIFIED_PEER
+
+        if (resolveFileSilently(duplicate) == null) return ManualTrashCheck.ENTRY_STALE
+        if (!verifyDuplicate(duplicate, group.sha256)) return ManualTrashCheck.CONTENT_CHANGED
+        return ManualTrashCheck.READY
+    }
+
+    private fun showManualTrashCheckFailure(check: ManualTrashCheck) {
+        val message = when (check) {
+            ManualTrashCheck.ENTRY_STALE -> R.string.duplicate_finder_entry_stale
+            ManualTrashCheck.CONTENT_CHANGED -> R.string.duplicate_finder_entry_content_changed
+            ManualTrashCheck.NO_VERIFIED_PEER -> R.string.duplicate_finder_no_verified_peer
+            ManualTrashCheck.READY -> return
+        }
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
     private fun showTrashUndo(ticket: TrashTicket) {
