@@ -50,13 +50,22 @@ require(
 require(
     "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt",
     "!CopyIntegrityVerifier.matches(source, destination)",
-    "DurableFileWriter.writeNewUtf8(temp, destination, json.toString())",
-    "Çöp metadata kaydı JSON doğrulamasından geçmedi",
+    "TrashMetadataCodec.encode(",
+    "DurableFileWriter.writeNewUtf8(temp, destination, encoded)",
+    "TrashMetadataCodec.decode(destination.readText(Charsets.UTF_8))",
+    "Çöp metadata kaydı bütünlük doğrulamasından geçmedi",
     "Çöp metadata kaydı alan doğrulamasından geçmedi",
     "Klasör güvenli biçimde kopyalanıp doğrulanamadı; kaynak korunuyor",
     "Dosya içerik doğrulamasından geçmedi; kaynak korunuyor",
     "Klasör eski konumuna içerik doğrulamasıyla geri yüklenemedi; çöp kopyası korundu",
     "Dosya geri yükleme içerik doğrulamasından geçmedi; çöp kopyası korundu",
+)
+require(
+    "app/src/main/java/dev/laxerus/omnifiles/fs/TrashMetadataCodec.kt",
+    "object TrashMetadataCodec",
+    "KEY_INTEGRITY_SHA256",
+    "MessageDigest.getInstance(\"SHA-256\")",
+    "MessageDigest.isEqual(",
 )
 require(
     "app/src/test/java/dev/laxerus/omnifiles/fs/CopyIntegrityVerifierTest.kt",
@@ -72,6 +81,12 @@ require(
     "app/src/test/java/dev/laxerus/omnifiles/fs/DurableFileWriterTest.kt",
     "writesVerifiedUtf8AndRemovesTemp",
     "refusesToOverwriteExistingDestination",
+)
+require(
+    "app/src/test/java/dev/laxerus/omnifiles/fs/TrashMetadataCodecTest.kt",
+    "roundTripsSealedRecord",
+    "rejectsModifiedOriginalPath",
+    "acceptsLegacyUnsealedRecordForCompatibility",
 )
 
 verifier_text = (root / "app/src/main/java/dev/laxerus/omnifiles/fs/CopyIntegrityVerifier.kt").read_text(encoding="utf-8")
