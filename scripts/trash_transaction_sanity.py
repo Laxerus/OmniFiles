@@ -6,12 +6,14 @@ root = Path(__file__).resolve().parents[1]
 errors: list[str] = []
 trash_path = root / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashManager.kt"
 metadata_policy_path = root / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashMetadataPolicy.kt"
+metadata_codec_path = root / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashMetadataCodec.kt"
 recovery_policy_path = root / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashRecoveryPolicy.kt"
 restore_policy_path = root / "app/src/main/java/dev/laxerus/omnifiles/fs/TrashRestorePolicy.kt"
 trash_activity_path = root / "app/src/main/java/dev/laxerus/omnifiles/ui/TrashActivity.kt"
 trash_adapter_path = root / "app/src/main/java/dev/laxerus/omnifiles/ui/TrashListAdapter.kt"
 trash_strings_path = root / "app/src/main/res/values/strings_trash.xml"
 metadata_test_path = root / "app/src/test/java/dev/laxerus/omnifiles/fs/TrashMetadataPolicyTest.kt"
+metadata_codec_test_path = root / "app/src/test/java/dev/laxerus/omnifiles/fs/TrashMetadataCodecTest.kt"
 recovery_test_path = root / "app/src/test/java/dev/laxerus/omnifiles/fs/TrashRecoveryPolicyTest.kt"
 restore_test_path = root / "app/src/test/java/dev/laxerus/omnifiles/fs/TrashRestorePolicyTest.kt"
 
@@ -31,6 +33,9 @@ else:
         "TrashRecoveryPolicy.decide(",
         "TrashRecoveryAction.DELETE_METADATA",
         "TrashMetadataPolicy.shouldDeleteStaleTemp(",
+        "TrashMetadataCodec.encode(",
+        "TrashMetadataCodec.decode(",
+        "persisted.sealed",
         "restoreAvailability: TrashRestoreAvailability",
         "TrashRestorePolicy.availability(originalFile)",
         "entry.restoreAvailability == TrashRestoreAvailability.AVAILABLE",
@@ -80,6 +85,28 @@ else:
             errors.append(f"TrashMetadataPolicy.kt missing: {token}")
     if "endsWith(\".json\")" in policy:
         errors.append("TrashMetadataPolicy must not blindly delete stale JSON recovery metadata")
+
+if not metadata_codec_path.is_file():
+    errors.append("missing TrashMetadataCodec.kt")
+else:
+    codec = metadata_codec_path.read_text(encoding="utf-8")
+    for token in (
+        "object TrashMetadataCodec",
+        "const val SCHEMA_VERSION = 1",
+        "val sealed: Boolean",
+        "fun encode(originalPath: String, displayName: String, trashedAt: Long): String",
+        "fun decode(text: String): Record?",
+        "KEY_INTEGRITY_SHA256",
+        "MessageDigest.getInstance(\"SHA-256\")",
+        "MessageDigest.isEqual(",
+        "if (!hasSchema && !hasSeal)",
+        "sealed = false",
+        "sealed = true",
+        "if (!hasSchema || !hasSeal) return null",
+        "if (schemaVersion != SCHEMA_VERSION) return null",
+    ):
+        if token not in codec:
+            errors.append(f"TrashMetadataCodec.kt missing: {token}")
 
 if not recovery_policy_path.is_file():
     errors.append("missing TrashRecoveryPolicy.kt")
@@ -157,6 +184,23 @@ else:
     ):
         if name not in tests:
             errors.append(f"TrashMetadataPolicyTest.kt missing: {name}")
+
+if not metadata_codec_test_path.is_file():
+    errors.append("missing TrashMetadataCodecTest.kt")
+else:
+    tests = metadata_codec_test_path.read_text(encoding="utf-8")
+    for name in (
+        "roundTripsSealedRecord",
+        "rejectsModifiedOriginalPath",
+        "rejectsModifiedDisplayName",
+        "rejectsModifiedTimestamp",
+        "acceptsLegacyUnsealedRecordForCompatibility",
+        "rejectsHalfSealedRecord",
+        "rejectsUnsupportedSchemaVersion",
+        "rejectsInvalidSealEncoding",
+    ):
+        if name not in tests:
+            errors.append(f"TrashMetadataCodecTest.kt missing: {name}")
 
 if not recovery_test_path.is_file():
     errors.append("missing TrashRecoveryPolicyTest.kt")
