@@ -2,7 +2,6 @@ package dev.laxerus.omnifiles.fs
 
 import android.content.Context
 import dev.laxerus.omnifiles.access.StorageAccessController
-import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
@@ -196,19 +195,16 @@ class TrashManager(private val context: Context) {
             )
         }
 
-        val originalPath = metadata.optString(KEY_ORIGINAL_PATH).takeIf { it.isNotBlank() }
-        val displayName = metadata.optString(KEY_DISPLAY_NAME).takeIf { it.isNotBlank() } ?: fallbackName
-        val trashedAt = metadata.optLong(KEY_TRASHED_AT, fallbackTime)
-        val originalFile = originalPath
-            ?.let(::File)
-            ?.let { path -> runCatching { FilePathPolicy.requireMutableTarget(path, StorageAccessController.sharedRoot()) }.getOrNull() }
+        val originalFile = runCatching {
+            FilePathPolicy.requireMutableTarget(File(metadata.originalPath), StorageAccessController.sharedRoot())
+        }.getOrNull()
         val restoreAvailability = TrashRestorePolicy.availability(originalFile)
 
         return TrashEntry(
             trashedFile = source,
             originalFile = originalFile,
-            displayName = displayName,
-            trashedAt = trashedAt,
+            displayName = metadata.displayName.ifBlank { fallbackName },
+            trashedAt = metadata.trashedAt,
             legacy = originalFile == null,
             restoreAvailability = restoreAvailability,
         )
@@ -221,30 +217,36 @@ class TrashManager(private val context: Context) {
         require(!destination.exists()) { "Çöp metadata kaydı zaten var" }
         val temp = File(metadataRoot, "${destination.name}.${UUID.randomUUID()}.tmp")
         val expectedOriginalPath = ticket.originalFile.canonicalPath
-        val json = JSONObject()
-            .put(KEY_ORIGINAL_PATH, expectedOriginalPath)
-            .put(KEY_DISPLAY_NAME, displayName)
-            .put(KEY_TRASHED_AT, trashedAt)
+        val encoded = TrashMetadataCodec.encode(
+            originalPath = expectedOriginalPath,
+            displayName = displayName,
+            trashedAt = trashedAt,
+        )
 
-        DurableFileWriter.writeNewUtf8(temp, destination, json.toString())
-        val persisted = runCatching { JSONObject(destination.readText(Charsets.UTF_8)) }
-            .getOrElse { error ->
-                destination.delete()
-                throw IllegalStateException("Çöp metadata kaydı JSON doğrulamasından geçmedi", error)
-            }
-        val valid = persisted.optString(KEY_ORIGINAL_PATH) == expectedOriginalPath &&
-            persisted.optString(KEY_DISPLAY_NAME) == displayName &&
-            persisted.optLong(KEY_TRASHED_AT, Long.MIN_VALUE) == trashedAt
+        DurableFileWriter.writeNewUtf8(temp, destination, encoded)
+        val persisted = runCatching {
+            TrashMetadataCodec.decode(destination.readText(Charsets.UTF_8))
+                ?: error("Çöp metadata kaydı bütünlük doğrulamasından geçmedi")
+        }.getOrElse { error ->
+            destination.delete()
+            throw IllegalStateException("Çöp metadata kaydı bütünlük doğrulamasından geçmedi", error)
+        }
+        val valid = persisted.sealed &&
+            persisted.originalPath == expectedOriginalPath &&
+            persisted.displayName == displayName &&
+            persisted.trashedAt == trashedAt
         if (!valid) {
             destination.delete()
             error("Çöp metadata kaydı alan doğrulamasından geçmedi")
         }
     }
 
-    private fun readMetadata(source: File): JSONObject? {
+    private fun readMetadata(source: File): TrashMetadataCodec.Record? {
         val metadata = metadataFileFor(source)
         if (!metadata.isFile) return null
-        return runCatching { JSONObject(metadata.readText(Charsets.UTF_8)) }.getOrNull()
+        return runCatching {
+            TrashMetadataCodec.decode(metadata.readText(Charsets.UTF_8))
+        }.getOrNull()
     }
 
     private fun removeMetadata(source: File) {
@@ -273,13 +275,11 @@ class TrashManager(private val context: Context) {
                     requireTrashSlot(File(trashRoot, storedName), mustExist = false)
                 }.getOrNull() ?: return@forEach
 
-                val json = runCatching {
-                    JSONObject(metadata.readText(Charsets.UTF_8))
+                val record = runCatching {
+                    TrashMetadataCodec.decode(metadata.readText(Charsets.UTF_8))
                 }.getOrNull() ?: return@forEach
-                val originalPath = json.optString(KEY_ORIGINAL_PATH).takeIf { it.isNotBlank() }
-                    ?: return@forEach
                 val original = runCatching {
-                    FilePathPolicy.requireMutableTarget(File(originalPath), sharedRoot)
+                    FilePathPolicy.requireMutableTarget(File(record.originalPath), sharedRoot)
                 }.getOrNull() ?: return@forEach
 
                 val action = TrashRecoveryPolicy.decide(
@@ -335,9 +335,6 @@ class TrashManager(private val context: Context) {
 
     companion object {
         private const val METADATA_DIR = ".metadata"
-        private const val KEY_ORIGINAL_PATH = "originalPath"
-        private const val KEY_DISPLAY_NAME = "displayName"
-        private const val KEY_TRASHED_AT = "trashedAt"
         private val STORED_NAME_PATTERN = Regex("^\\d+-[0-9a-fA-F-]{36}-(.+)$")
     }
 }
