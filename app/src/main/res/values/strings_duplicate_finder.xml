@@ -38,6 +38,8 @@
     <string name="duplicate_finder_trashed">Kopya OmniFiles Çöp Kutusu’na taşındı.</string>
     <string name="duplicate_finder_trash_failed">Dosya çöp kutusuna taşınamadı; kaynak korunuyor.</string>
     <string name="duplicate_finder_entry_stale">Dosya taramadan sonra değişmiş veya kaldırılmış.</string>
+    <string name="duplicate_finder_entry_content_changed">Dosyanın içeriği taramadan sonra değişti. Güvenlik için işlem durduruldu; yeniden tara.</string>
+    <string name="duplicate_finder_no_verified_peer">Aynı SHA-256 değerine sahip başka bir kopya artık doğrulanamıyor. Son kopyayı korumak için işlem durduruldu; yeniden tara.</string>
     <string name="duplicate_finder_path_copied">Dosya yolu panoya kopyalandı.</string>
     <string name="duplicate_finder_paths_copied">Grubun dosya yolları panoya kopyalandı.</string>
     <string name="settings_duplicate_finder_summary">Aynı boyuttaki dosyaları örnek parmak iziyle hızlıca ele, olası eşleşmeleri tam SHA-256 ile doğrula ve gereksiz kopyaların kapladığı alanı gör.</string>
